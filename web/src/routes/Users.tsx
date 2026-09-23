@@ -1,93 +1,95 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Badge,
   Button,
+  type ColumnDef,
+  DataTable,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   Input,
   Label,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  PageHeader,
 } from "@riseaicloud/ui";
-import { Trash2 } from "lucide-react";
-import { api, type UserInput } from "@/lib/api";
+import { Plus, Users as UsersIcon } from "lucide-react";
+import { api, type User, type UserInput } from "@/lib/api";
 import { useAuth } from "@/auth";
+
+const stateBadge: Record<string, { label: string; className: string }> = {
+  Active: { label: "活跃", className: "bg-green-100 text-green-800" },
+  Disabled: { label: "禁用", className: "bg-gray-100 text-gray-800" },
+  Pending: { label: "待激活", className: "bg-yellow-100 text-yellow-800" },
+};
 
 export function Users() {
   const { me } = useAuth();
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["users"], queryFn: api.listUsers });
+  const { data, isLoading } = useQuery({ queryKey: ["users"], queryFn: api.listUsers });
+  const [createOpen, setCreateOpen] = useState(false);
 
-  const del = useMutation({
-    mutationFn: (name: string) => api.deleteUser(name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
-  });
+  const columns: ColumnDef<User>[] = [
+    { key: "name", title: "用户名", searchable: true, render: (u) => <span className="font-medium">{u.name}</span> },
+    { key: "displayName", title: "显示名", render: (u) => u.displayName || "-" },
+    { key: "email", title: "邮箱", render: (u) => u.email || "-" },
+    { key: "groups", title: "分组", render: (u) => (u.groups?.length ? u.groups.join(", ") : "-") },
+    {
+      key: "state",
+      title: "状态",
+      width: 100,
+      render: (u) => {
+        const s = stateBadge[u.state || "Active"] ?? stateBadge.Active;
+        return <Badge className={s.className}>{s.label}</Badge>;
+      },
+    },
+  ];
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">用户</h1>
-        {me?.isAdmin && <CreateUserDialog />}
-      </div>
-
-      {isLoading && <p className="text-sm text-muted-foreground">加载中…</p>}
-      {error && <p className="text-sm text-destructive">{(error as Error).message}</p>}
-
-      {data && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>用户名</TableHead>
-              <TableHead>显示名</TableHead>
-              <TableHead>邮箱</TableHead>
-              <TableHead>分组</TableHead>
-              <TableHead>状态</TableHead>
-              {me?.isAdmin && <TableHead className="w-16" />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.items.map((u) => (
-              <TableRow key={u.name}>
-                <TableCell className="font-medium">{u.name}</TableCell>
-                <TableCell>{u.displayName}</TableCell>
-                <TableCell>{u.email}</TableCell>
-                <TableCell>{u.groups?.join(", ")}</TableCell>
-                <TableCell>{u.state || "Active"}</TableCell>
-                {me?.isAdmin && (
-                  <TableCell>
-                    {u.name !== me.name && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => del.mutate(u.name)}
-                        title="删除用户"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <PageHeader
+        title="用户"
+        icon={<UsersIcon className="h-5 w-5" />}
+        extra={
+          me?.isAdmin ? (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" />
+              新建用户
+            </Button>
+          ) : null
+        }
+      />
+      <DataTable<User>
+        data={data?.items ?? []}
+        loading={isLoading}
+        rowKey="name"
+        columns={columns}
+        totalItems={data?.items.length ?? 0}
+        showRefresh
+        onRefresh={() => qc.invalidateQueries({ queryKey: ["users"] })}
+        deleteConfig={
+          me?.isAdmin
+            ? {
+                rowNameKey: "name",
+                confirmTitle: "删除用户",
+                hidden: (u) => u.name === me?.name,
+                onDelete: async (u) => {
+                  await api.deleteUser(u.name);
+                  qc.invalidateQueries({ queryKey: ["users"] });
+                },
+              }
+            : undefined
+        }
+      />
+      <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }
 
-function CreateUserDialog() {
+function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [form, setForm] = useState<UserInput>({ name: "", password: "" });
   const [err, setErr] = useState("");
 
@@ -95,7 +97,7 @@ function CreateUserDialog() {
     mutationFn: (u: UserInput) => api.createUser(u),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["users"] });
-      setOpen(false);
+      onOpenChange(false);
       setForm({ name: "", password: "" });
     },
     onError: (e) => setErr((e as Error).message),
@@ -106,15 +108,11 @@ function CreateUserDialog() {
     setErr("");
     create.mutate(form);
   };
-
   const set = (k: keyof UserInput) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [k]: e.target.value });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>新建用户</Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>

@@ -3,30 +3,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   Checkbox,
+  type ColumnDef,
+  DataTable,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   Input,
   Label,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  PageHeader,
 } from "@riseaicloud/ui";
-import { Trash2, Users as UsersIcon } from "lucide-react";
+import { Plus, ShieldCheck } from "lucide-react";
 import { api, type PolicyRule, type Role } from "@/lib/api";
 import { useAuth } from "@/auth";
 
 const IAM_GROUP = "iam.theriseunion.io";
 
-// The resources and verbs the console's RBAC covers. The permission editor is a
-// matrix over these; each checked (resource, verbs) row becomes one PolicyRule.
 const RESOURCES = [
   { key: "users", label: "用户" },
   { key: "iamroles", label: "角色" },
@@ -57,56 +51,63 @@ function summarize(rules: PolicyRule[] | undefined): string {
 export function Roles() {
   const { me } = useAuth();
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["roles"], queryFn: api.listRoles });
-  const del = useMutation({
-    mutationFn: (name: string) => api.deleteRole(name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["roles"] }),
-  });
+  const { data, isLoading } = useQuery({ queryKey: ["roles"], queryFn: api.listRoles });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [membersRole, setMembersRole] = useState<Role | null>(null);
+
+  const columns: ColumnDef<Role>[] = [
+    { key: "name", title: "名称", searchable: true, width: 220, render: (r) => <span className="font-medium">{r.name}</span> },
+    { key: "rules", title: "权限", render: (r) => <span className="text-sm text-muted-foreground">{summarize(r.rules)}</span> },
+  ];
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">角色</h1>
-        {me?.isAdmin && <CreateRoleDialog />}
-      </div>
-
-      {isLoading && <p className="text-sm text-muted-foreground">加载中…</p>}
-      {error && <p className="text-sm text-destructive">{(error as Error).message}</p>}
-
-      {data && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>名称</TableHead>
-              <TableHead>权限</TableHead>
-              {me?.isAdmin && <TableHead className="w-28" />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.items.map((role) => (
-              <TableRow key={role.name}>
-                <TableCell className="font-medium">{role.name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{summarize(role.rules)}</TableCell>
-                {me?.isAdmin && (
-                  <TableCell className="flex items-center gap-1">
-                    <MembersDialog role={role} />
-                    <Button variant="ghost" size="icon" onClick={() => del.mutate(role.name)} title="删除角色">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <PageHeader
+        title="角色"
+        icon={<ShieldCheck className="h-5 w-5" />}
+        extra={
+          me?.isAdmin ? (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" />
+              新建角色
+            </Button>
+          ) : null
+        }
+      />
+      <DataTable<Role>
+        data={data?.items ?? []}
+        loading={isLoading}
+        rowKey="name"
+        columns={columns}
+        totalItems={data?.items.length ?? 0}
+        showRefresh
+        onRefresh={() => qc.invalidateQueries({ queryKey: ["roles"] })}
+        rowActions={
+          me?.isAdmin
+            ? [{ label: "成员", onClick: (r) => setMembersRole(r) }]
+            : undefined
+        }
+        deleteConfig={
+          me?.isAdmin
+            ? {
+                rowNameKey: "name",
+                confirmTitle: "删除角色",
+                onDelete: async (r) => {
+                  await api.deleteRole(r.name);
+                  qc.invalidateQueries({ queryKey: ["roles"] });
+                },
+              }
+            : undefined
+        }
+      />
+      <CreateRoleDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <MembersDialog role={membersRole} onClose={() => setMembersRole(null)} />
     </div>
   );
 }
 
-function CreateRoleDialog() {
+function CreateRoleDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [matrix, setMatrix] = useState<Record<string, Set<string>>>({});
   const [err, setErr] = useState("");
@@ -131,7 +132,7 @@ function CreateRoleDialog() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["roles"] });
-      setOpen(false);
+      onOpenChange(false);
       setName("");
       setMatrix({});
     },
@@ -145,10 +146,7 @@ function CreateRoleDialog() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>新建角色</Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
@@ -160,11 +158,11 @@ function CreateRoleDialog() {
               <Label htmlFor="role-name">角色名</Label>
               <Input id="role-name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-md border">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-muted-foreground">
-                    <th className="p-2 text-left">资源</th>
+                  <tr className="border-b bg-muted/40 text-muted-foreground">
+                    <th className="p-2 text-left font-normal">资源</th>
                     {VERBS.map((v) => (
                       <th key={v.key} className="p-2 font-normal">
                         {v.label}
@@ -204,25 +202,26 @@ function CreateRoleDialog() {
 
 // MembersDialog manages which users hold a role, as IAMRoleBindings named
 // `<role>--<user>`. Checking a user creates the binding; unchecking deletes it.
-function MembersDialog({ role }: { role: Role }) {
+function MembersDialog({ role, onClose }: { role: Role | null; onClose: () => void }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const open = role !== null;
   const users = useQuery({ queryKey: ["users"], queryFn: api.listUsers, enabled: open });
   const bindings = useQuery({ queryKey: ["bindings"], queryFn: api.listBindings, enabled: open });
 
   const boundUsers = useMemo(() => {
     const set = new Set<string>();
     for (const b of bindings.data?.items ?? []) {
-      if (b.role !== role.name) continue;
+      if (b.role !== role?.name) continue;
       for (const s of b.subjects) if (s.kind === "User") set.add(s.name);
     }
     return set;
-  }, [bindings.data, role.name]);
+  }, [bindings.data, role]);
 
-  const bindingName = (user: string) => `${role.name}--${user}`;
+  const bindingName = (user: string) => `${role?.name}--${user}`;
 
   const toggle = useMutation({
     mutationFn: async ({ user, checked }: { user: string; checked: boolean }) => {
+      if (!role) return;
       if (checked) {
         await api.createBinding({ name: bindingName(user), role: role.name, subjects: [{ kind: "User", name: user }] });
       } else {
@@ -233,20 +232,15 @@ function MembersDialog({ role }: { role: Role }) {
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" title="成员">
-          <UsersIcon className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{role.name} · 成员</DialogTitle>
+          <DialogTitle>{role?.name} · 成员</DialogTitle>
           <DialogDescription>勾选拥有该角色的用户。</DialogDescription>
         </DialogHeader>
-        <div className="max-h-80 space-y-2 overflow-y-auto py-2">
+        <div className="max-h-80 space-y-1 overflow-y-auto py-2">
           {users.data?.items.map((u) => (
-            <label key={u.name} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent/50">
+            <label key={u.name} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent">
               <Checkbox
                 checked={boundUsers.has(u.name)}
                 onCheckedChange={(c) => toggle.mutate({ user: u.name, checked: c === true })}
