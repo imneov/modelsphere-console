@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Colour variables (:root and .dark) are injected by the @riseaicloud/tokens
+   Tailwind preset — do not redeclare them here or they fight the preset. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface-page text-foreground;
+}

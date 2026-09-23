@@ -1,0 +1,62 @@
+{
+  "name": "@riseaicloud/tokens",
+  "version": "1.2.0",
+  "description": "Design tokens for Edge Design System — colors, typography, spacing, motion, themes",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./tailwind-preset": {
+      "import": {
+        "types": "./dist/tailwind-preset.d.ts",
+        "default": "./dist/tailwind-preset.js"
+      },
+      "require": {
+        "types": "./dist/tailwind-preset.d.cts",
+        "default": "./dist/tailwind-preset.cjs"
+      }
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "src"
+  ],
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "tailwindcss": ">=3.3.0"
+  },
+  "peerDependenciesMeta": {
+    "tailwindcss": {
+      "optional": true
+    }
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/riseaicloud/edge-desgin.git",
+    "directory": "packages/tokens"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  }
+}
