@@ -17,6 +17,7 @@ import (
 
 	"github.com/modelsphere/console/internal/cluster"
 	"github.com/modelsphere/console/internal/config"
+	"github.com/modelsphere/console/internal/iam"
 	"github.com/modelsphere/console/internal/server"
 	"github.com/modelsphere/console/internal/version"
 	"github.com/modelsphere/console/web"
@@ -74,6 +75,12 @@ func run(configPath, addr, logLevel, webDir string) error {
 	defer stop()
 
 	srv := server.New(cfg, kube, log, version.Version)
+
+	// Identity kernel: users and roles live as CRDs, tokens are HS256, both
+	// wire-compatible with Rise Global.
+	store := iam.NewStore(kube.Dynamic())
+	signer := iam.NewSigner(cfg.Server.Auth.Issuer, cfg.Server.Auth.JWTSecret, cfg.Server.Auth.TokenTTL)
+	srv.SetIAM(store, signer, iam.NewAuthenticator(store, signer, log))
 
 	if webDir != "" {
 		f, err := server.WebFromDir(webDir)

@@ -1,0 +1,40 @@
+{{- if .Values.admin.username }}
+# Platform-admin ClusterRole + binding for the seeded admin, carrying the
+# managed/scope/scope-value labels the authorizer (P3) walks. Not needed for the
+# system:masters short-circuit, but it keeps the admin fully authorized once the
+# real authorizer lands, and matches how Global grants platform scope — so an
+# upgrade finds an equivalent binding already present.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "console.fullname" . }}-platform-admin
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+    iam.theriseunion.io/managed: "true"
+    iam.theriseunion.io/scope: platform
+    iam.theriseunion.io/scope-value: global
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+  - nonResourceURLs: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "console.fullname" . }}-admin-platform-admin
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+    iam.theriseunion.io/managed: "true"
+    iam.theriseunion.io/scope: platform
+    iam.theriseunion.io/scope-value: global
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "console.fullname" . }}-platform-admin
+subjects:
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: {{ .Values.admin.username }}
+{{- end }}

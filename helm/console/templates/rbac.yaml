@@ -1,0 +1,33 @@
+{{- if .Values.rbac.create }}
+# consoled's own permissions: full CRUD on the iam CRDs it owns, and read on the
+# native ClusterRoles/ClusterRoleBindings the authorizer resolves (P3). Cluster
+# scope because Users and the roles are cluster-scoped.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "console.fullname" . }}
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["iam.theriseunion.io"]
+    resources: ["users", "users/status", "iamroles", "iamrolebindings", "loginrecords"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "console.fullname" . }}
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "console.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "console.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

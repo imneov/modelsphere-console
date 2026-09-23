@@ -9,11 +9,11 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/modelsphere/console/internal/cluster"
 	"github.com/modelsphere/console/internal/config"
+	"github.com/modelsphere/console/internal/iam"
 )
 
 type Server struct {
@@ -22,6 +22,10 @@ type Server struct {
 	log     *slog.Logger
 	version string
 	web     fs.FS
+
+	authn  *iam.Authenticator
+	signer *iam.Signer
+	store  *iam.Store
 }
 
 func New(cfg *config.Config, kube *cluster.Kube, log *slog.Logger, version string) *Server {
@@ -31,6 +35,13 @@ func New(cfg *config.Config, kube *cluster.Kube, log *slog.Logger, version strin
 // SetWeb installs the SPA filesystem. Without one, consoled is API only.
 func (s *Server) SetWeb(f fs.FS) { s.web = f }
 
+// SetIAM installs the identity kernel: the user store, the token signer, and
+// the login authenticator. Without it, /oauth and /api/iam are unavailable and
+// every /api/* request is rejected.
+func (s *Server) SetIAM(store *iam.Store, signer *iam.Signer, authn *iam.Authenticator) {
+	s.store, s.signer, s.authn = store, signer, authn
+}
+
 // Handler builds the mux and wraps it in the middleware chain. Auth runs inside
 // logging and recovery, so an auth rejection is still logged and a panic in it
 // cannot take the process down.
@@ -39,7 +50,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /readyz", s.handleHealthz)
 
-	// Identity endpoints (wired in P1): /oauth/token, /api/iam/*, /api/me.
+	if s.authn != nil {
+		mux.HandleFunc("POST /oauth/token", s.handleToken)
+		mux.HandleFunc("GET /api/me", s.handleMe)
+		mux.HandleFunc("GET /api/iam/users", s.handleListUsers)
+		mux.HandleFunc("POST /api/iam/users", s.handleCreateUser)
+		mux.HandleFunc("GET /api/iam/users/{name}", s.handleGetUser)
+		mux.HandleFunc("PUT /api/iam/users/{name}", s.handleUpdateUser)
+		mux.HandleFunc("DELETE /api/iam/users/{name}", s.handleDeleteUser)
+	}
 	// Federation to backends (wired in P4): everything under a backend prefix.
 
 	if s.web != nil {
@@ -71,33 +90,6 @@ func (s *Server) Run(ctx context.Context) error {
 		defer cancel()
 		return srv.Shutdown(down)
 	}
-}
-
-// authenticate guards /api/* and passes public paths through. Token
-// verification is wired in P1; until then it is a pass-through so the scaffold
-// serves health and static assets.
-func (s *Server) authenticate(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isPublic(r.URL.Path) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		// TODO(P1): verify Bearer/cookie token; 401 JSON on failure for /api/*.
-		next.ServeHTTP(w, r)
-	})
-}
-
-func isPublic(path string) bool {
-	switch {
-	case path == "/healthz", path == "/readyz", path == "/login":
-		return true
-	case path == "/oauth/token", strings.HasPrefix(path, "/.well-known/"):
-		return true
-	case !strings.HasPrefix(path, "/api/"):
-		// SPA routes and static assets.
-		return true
-	}
-	return false
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {

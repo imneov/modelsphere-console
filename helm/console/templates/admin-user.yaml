@@ -1,0 +1,21 @@
+{{- if .Values.admin.username }}
+# Zero-config login: seed the admin User CRD directly. consoled authenticates
+# against spec.encryptedPassword (bcrypt) — there is no controller that hashes a
+# plaintext, so the hash is baked here. Default password is `P@88w0rd`; override
+# .Values.admin.encryptedPassword with your own (htpasswd -bnBC 12 "" '<pw>').
+#
+# groups:[system:masters] makes the authorizer allow everything, so the admin
+# has full access the moment the chart is installed.
+apiVersion: iam.theriseunion.io/v1alpha1
+kind: User
+metadata:
+  name: {{ .Values.admin.username }}
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+spec:
+  email: "admin@modelsphere.local"
+  description: "Platform administrator"
+  groups:
+    - system:masters
+  encryptedPassword: {{ .Values.admin.encryptedPassword | default "$2b$12$Q44Y0B99hoByZY.6v30jl.D83rXFbSpOfh8iWLbndLZBEjFAZwaeO" | quote }}
+{{- end }}

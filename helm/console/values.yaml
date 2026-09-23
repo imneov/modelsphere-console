@@ -21,7 +21,9 @@ auth:
 # first login. groups:[system:masters] makes the authorizer allow everything.
 admin:
   username: admin
-  encryptedPassword: ""   # bcrypt of the default password; set by P1
+  # bcrypt of the default password `P@88w0rd`. Change on first login, or set a
+  # different hash here: htpasswd -bnBC 12 "" '<pw>' | tr -d ':\n'
+  encryptedPassword: "$2b$12$Q44Y0B99hoByZY.6v30jl.D83rXFbSpOfh8iWLbndLZBEjFAZwaeO"
 
 # Backends federated behind the portal. Each prefix is reverse-proxied to url.
 backends:
