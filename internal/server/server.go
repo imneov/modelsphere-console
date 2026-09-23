@@ -26,6 +26,7 @@ type Server struct {
 	authn  *iam.Authenticator
 	signer *iam.Signer
 	store  *iam.Store
+	authz  *iam.Authorizer
 }
 
 func New(cfg *config.Config, kube *cluster.Kube, log *slog.Logger, version string) *Server {
@@ -38,8 +39,8 @@ func (s *Server) SetWeb(f fs.FS) { s.web = f }
 // SetIAM installs the identity kernel: the user store, the token signer, and
 // the login authenticator. Without it, /oauth and /api/iam are unavailable and
 // every /api/* request is rejected.
-func (s *Server) SetIAM(store *iam.Store, signer *iam.Signer, authn *iam.Authenticator) {
-	s.store, s.signer, s.authn = store, signer, authn
+func (s *Server) SetIAM(store *iam.Store, signer *iam.Signer, authn *iam.Authenticator, authz *iam.Authorizer) {
+	s.store, s.signer, s.authn, s.authz = store, signer, authn, authz
 }
 
 // Handler builds the mux and wraps it in the middleware chain. Auth runs inside
@@ -58,6 +59,16 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /api/iam/users/{name}", s.handleGetUser)
 		mux.HandleFunc("PUT /api/iam/users/{name}", s.handleUpdateUser)
 		mux.HandleFunc("DELETE /api/iam/users/{name}", s.handleDeleteUser)
+
+		mux.HandleFunc("GET /api/iam/roles", s.handleListRoles)
+		mux.HandleFunc("POST /api/iam/roles", s.handleCreateRole)
+		mux.HandleFunc("GET /api/iam/roles/{name}", s.handleGetRole)
+		mux.HandleFunc("PUT /api/iam/roles/{name}", s.handleUpdateRole)
+		mux.HandleFunc("DELETE /api/iam/roles/{name}", s.handleDeleteRole)
+
+		mux.HandleFunc("GET /api/iam/rolebindings", s.handleListRoleBindings)
+		mux.HandleFunc("POST /api/iam/rolebindings", s.handleCreateRoleBinding)
+		mux.HandleFunc("DELETE /api/iam/rolebindings/{name}", s.handleDeleteRoleBinding)
 	}
 	// Federation to backends (wired in P4): everything under a backend prefix.
 

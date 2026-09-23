@@ -8,6 +8,7 @@ import { Layout } from "@/components/Layout";
 import { Login } from "@/routes/Login";
 import { Home } from "@/routes/Home";
 import { Users } from "@/routes/Users";
+import { Roles } from "@/routes/Roles";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ createRoot(document.getElementById("root")!).render(
             <Route element={<RequireAuth />}>
               <Route path="/" element={<Home />} />
               <Route path="/users" element={<Users />} />
+              <Route path="/roles" element={<Roles />} />
             </Route>
           </Routes>
         </BrowserRouter>

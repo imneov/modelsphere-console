@@ -93,6 +93,31 @@ export async function login(username: string, password: string): Promise<void> {
   setToken(tok.access_token);
 }
 
+export interface PolicyRule {
+  verbs: string[];
+  apiGroups: string[];
+  resources: string[];
+  resourceNames?: string[];
+}
+
+export interface Role {
+  name: string;
+  rules: PolicyRule[];
+  uiPermissions?: string[];
+}
+
+export interface Subject {
+  kind: string;
+  name: string;
+  apiGroup?: string;
+}
+
+export interface Binding {
+  name: string;
+  role: string;
+  subjects: Subject[];
+}
+
 export const api = {
   me: () => request<Me>("GET", "/api/me"),
   listUsers: () => request<{ items: User[] }>("GET", "/api/iam/users"),
@@ -100,4 +125,14 @@ export const api = {
   createUser: (u: UserInput) => request<User>("POST", "/api/iam/users", u),
   updateUser: (name: string, u: UserInput) => request<User>("PUT", `/api/iam/users/${name}`, u),
   deleteUser: (name: string) => request<void>("DELETE", `/api/iam/users/${name}`),
+
+  listRoles: () => request<{ items: Role[] }>("GET", "/api/iam/roles"),
+  createRole: (r: { name: string; rules: PolicyRule[]; uiPermissions?: string[] }) =>
+    request<Role>("POST", "/api/iam/roles", r),
+  deleteRole: (name: string) => request<void>("DELETE", `/api/iam/roles/${name}`),
+
+  listBindings: () => request<{ items: Binding[] }>("GET", "/api/iam/rolebindings"),
+  createBinding: (b: { name: string; role: string; subjects: Subject[] }) =>
+    request<Binding>("POST", "/api/iam/rolebindings", b),
+  deleteBinding: (name: string) => request<void>("DELETE", `/api/iam/rolebindings/${name}`),
 };

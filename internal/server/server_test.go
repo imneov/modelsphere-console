@@ -36,14 +36,19 @@ func testServer(t *testing.T) *Server {
 		}}
 	}
 	dyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(),
-		map[schema.GroupVersionResource]string{iam.UsersGVR: "UserList"},
+		map[schema.GroupVersionResource]string{
+			iam.UsersGVR:        "UserList",
+			iam.RolesGVR:        "IAMRoleList",
+			iam.RoleBindingsGVR: "IAMRoleBindingList",
+		},
 		user("admin", adminHash, "system:masters"),
 		user("bob", bobHash),
 	)
 	store := iam.NewStore(dyn)
 	signer := iam.NewSigner("https://issuer.test", "secret", time.Hour)
-	srv := New(&config.Config{}, nil, slog.New(slog.DiscardHandler), "test")
-	srv.SetIAM(store, signer, iam.NewAuthenticator(store, signer, slog.New(slog.DiscardHandler)))
+	log := slog.New(slog.DiscardHandler)
+	srv := New(&config.Config{}, nil, log, "test")
+	srv.SetIAM(store, signer, iam.NewAuthenticator(store, signer, log), iam.NewAuthorizer(store))
 	return srv
 }
 
@@ -119,6 +124,36 @@ func TestGuardsAPI(t *testing.T) {
 	token := login(t, h, "admin", "admin-pw")
 	if rec := do(h, "GET", "/api/iam/users", token, ""); rec.Code != http.StatusOK {
 		t.Fatalf("authenticated list: %d", rec.Code)
+	}
+}
+
+func TestRBACGrantsViaRole(t *testing.T) {
+	h := testServer(t).Handler()
+	admin := login(t, h, "admin", "admin-pw")
+	bob := login(t, h, "bob", "bob-pw")
+
+	// Before any grant, bob cannot list users.
+	if rec := do(h, "GET", "/api/iam/users", bob, ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("bob list before grant: expected 403, got %d", rec.Code)
+	}
+
+	// Admin creates a read-only role over users and binds bob to it.
+	role := `{"name":"user-viewer","rules":[{"verbs":["list","get"],"apiGroups":["iam.theriseunion.io"],"resources":["users"]}]}`
+	if rec := do(h, "POST", "/api/iam/roles", admin, role); rec.Code != http.StatusCreated {
+		t.Fatalf("create role: %d, %s", rec.Code, rec.Body.String())
+	}
+	binding := `{"name":"bob-viewer","role":"user-viewer","subjects":[{"kind":"User","name":"bob"}]}`
+	if rec := do(h, "POST", "/api/iam/rolebindings", admin, binding); rec.Code != http.StatusCreated {
+		t.Fatalf("create binding: %d, %s", rec.Code, rec.Body.String())
+	}
+
+	// Now bob can list users, but still cannot create them (no create verb).
+	if rec := do(h, "GET", "/api/iam/users", bob, ""); rec.Code != http.StatusOK {
+		t.Fatalf("bob list after grant: expected 200, got %d", rec.Code)
+	}
+	body := `{"name":"eve","password":"x"}`
+	if rec := do(h, "POST", "/api/iam/users", bob, body); rec.Code != http.StatusForbidden {
+		t.Fatalf("bob create after grant: expected 403, got %d", rec.Code)
 	}
 }
 

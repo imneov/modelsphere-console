@@ -63,6 +63,9 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	if !s.authorize(w, r, "list", "users", "") {
+		return
+	}
 	users, err := s.store.ListUsers(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -76,6 +79,9 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetUser(w http.ResponseWriter, r *http.Request) {
+	if !s.authorize(w, r, "get", "users", r.PathValue("name")) {
+		return
+	}
 	u, err := s.store.GetUser(r.Context(), r.PathValue("name"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "user not found")
@@ -85,7 +91,7 @@ func (s *Server) handleGetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.authorize(w, r, "create", "users", "") {
 		return
 	}
 	var in userInput
@@ -117,10 +123,10 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	name := r.PathValue("name")
+	if !s.authorize(w, r, "update", "users", name) {
 		return
 	}
-	name := r.PathValue("name")
 	var in userInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
@@ -154,7 +160,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.authorize(w, r, "delete", "users", r.PathValue("name")) {
 		return
 	}
 	if err := s.store.DeleteUser(r.Context(), r.PathValue("name")); err != nil {
@@ -164,13 +170,18 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// requireAdmin is the coarse gate until the full authorizer lands in P3: user
-// management writes require system:masters. Reads only require authentication,
-// enforced by the middleware.
-func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	id := identityFrom(r.Context())
-	if id == nil || !id.IsSystemMaster() {
-		writeError(w, http.StatusForbidden, "requires admin (system:masters)")
+// authorize checks the caller against the iam RBAC for one action on one
+// resource. system:masters passes everything (the seeded admin); anyone else
+// needs a role binding that grants it.
+func (s *Server) authorize(w http.ResponseWriter, r *http.Request, verb, resource, name string) bool {
+	ok, err := s.authz.Authorize(r.Context(), identityFrom(r.Context()),
+		iam.Attributes{Verb: verb, APIGroup: iam.Group, Resource: resource, Name: name})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return false
+	}
+	if !ok {
+		writeError(w, http.StatusForbidden, "forbidden")
 		return false
 	}
 	return true

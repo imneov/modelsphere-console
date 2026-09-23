@@ -11,12 +11,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@riseaicloud/ui";
-import { LogOut, Users as UsersIcon, LayoutDashboard } from "lucide-react";
+import { LogOut, Users as UsersIcon, LayoutDashboard, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/auth";
 
 const nav = [
   { to: "/", label: "概览", icon: LayoutDashboard, end: true },
   { to: "/users", label: "用户", icon: UsersIcon, end: false },
+  { to: "/roles", label: "角色", icon: ShieldCheck, end: false },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

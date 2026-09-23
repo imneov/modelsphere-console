@@ -80,7 +80,7 @@ func run(configPath, addr, logLevel, webDir string) error {
 	// wire-compatible with Rise Global.
 	store := iam.NewStore(kube.Dynamic())
 	signer := iam.NewSigner(cfg.Server.Auth.Issuer, cfg.Server.Auth.JWTSecret, cfg.Server.Auth.TokenTTL)
-	srv.SetIAM(store, signer, iam.NewAuthenticator(store, signer, log))
+	srv.SetIAM(store, signer, iam.NewAuthenticator(store, signer, log), iam.NewAuthorizer(store))
 
 	if webDir != "" {
 		f, err := server.WebFromDir(webDir)
