@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "console.fullname" . }}
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+data:
+  console.yaml: |
+    server:
+      addr: ":8080"
+      auth:
+        issuer: {{ .Values.auth.issuer | quote }}
+        tokenTTL: {{ .Values.auth.tokenTTL | quote }}
+        # jwtSecret is injected from the Secret via env, not rendered here.
+    backends:
+      {{- range .Values.backends }}
+      - name: {{ .name | quote }}
+        prefix: {{ .prefix | quote }}
+        url: {{ .url | quote }}
+      {{- end }}

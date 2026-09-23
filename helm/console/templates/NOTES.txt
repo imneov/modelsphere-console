@@ -1,0 +1,11 @@
+consoled is installed as {{ include "console.fullname" . }}.
+
+Reach it (ClusterIP by default):
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "console.fullname" . }} 8080:{{ .Values.service.port }}
+
+Then open http://localhost:8080/.
+
+Default login (change the password on first sign-in): admin / (see values.admin).
+The signing secret lives in the Secret {{ include "console.fullname" . }}; share
+it with Rise Global to upgrade this install in place.

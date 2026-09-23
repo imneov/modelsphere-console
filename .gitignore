@@ -1,0 +1,13 @@
+/consoled
+/console.yaml
+/console.local.yaml
+*.db
+*.db-*
+
+# Frontend build artefacts (web/dist ships a placeholder; real builds overwrite it)
+/web/node_modules/
+/web/.next/
+/web/out/
+
+# Local npm auth for the private @riseaicloud/* registry — never commit
+.npmrc

@@ -1,0 +1,22 @@
+# consoled configuration. One document; see internal/config for the schema.
+
+cluster:
+  # Empty means in-cluster. On a laptop, point at a kubeconfig:
+  # kubeconfig: ~/.kube/config
+  # context: kind-modelsphere
+
+server:
+  addr: ":8080"
+  auth:
+    # HS256 signing key. In a cluster this comes from a Secret via env; never
+    # commit a real one. Shared with Rise Global on upgrade.
+    jwtSecret: "dev-only-change-me"
+    issuer: "https://console.modelsphere.local"
+    tokenTTL: 24h
+
+# Everything not owned by consoled is federated to a backend, carrying the
+# caller's token. Requests under prefix are reverse-proxied to url.
+backends:
+  - name: swiss
+    prefix: /api/deploy
+    url: http://swissd.swiss.svc:8080

@@ -1,0 +1,39 @@
+image:
+  repository: swr.cn-east-3.myhuaweicloud.com/risecloud/consoled
+  tag: ""            # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# Identity signing. jwtSecret is generated on first install if left empty, and
+# kept in a Secret. Share it with Rise Global to make an upgrade seamless.
+auth:
+  jwtSecret: ""       # empty => generated once and stored in the Secret
+  issuer: "https://console.modelsphere.local"
+  tokenTTL: 24h
+
+# Zero-config login: helm seeds this admin User CRD (P1). encryptedPassword is a
+# bcrypt hash baked at packaging time; the operator changes the password on
+# first login. groups:[system:masters] makes the authorizer allow everything.
+admin:
+  username: admin
+  encryptedPassword: ""   # bcrypt of the default password; set by P1
+
+# Backends federated behind the portal. Each prefix is reverse-proxied to url.
+backends:
+  - name: swiss
+    prefix: /api/deploy
+    url: http://swissd.swiss.svc:8080
+
+# RBAC for the iam CRDs and native cluster roles/bindings the authorizer reads.
+rbac:
+  create: true
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
