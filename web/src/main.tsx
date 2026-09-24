@@ -9,6 +9,7 @@ import { Login } from "@/routes/Login";
 import { Home } from "@/routes/Home";
 import { Users } from "@/routes/Users";
 import { Roles } from "@/routes/Roles";
+import { LoginHistory } from "@/routes/LoginHistory";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/" element={<Home />} />
               <Route path="/users" element={<Users />} />
               <Route path="/roles" element={<Roles />} />
+              <Route path="/login-history" element={<LoginHistory />} />
             </Route>
           </Routes>
         </BrowserRouter>

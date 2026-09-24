@@ -11,12 +11,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@riseaicloud/ui";
-import { LogOut, Users as UsersIcon, LayoutDashboard, ShieldCheck, Boxes } from "lucide-react";
+import { LogOut, Users as UsersIcon, LayoutDashboard, ShieldCheck, Boxes, History } from "lucide-react";
 import { useAuth } from "@/auth";
 
 const nav = [
   { to: "/", label: "概览", icon: LayoutDashboard, end: true },
   { to: "/users", label: "用户", icon: UsersIcon, end: false },
+  { to: "/login-history", label: "登录历史", icon: History, end: false },
   { to: "/roles", label: "角色", icon: ShieldCheck, end: false },
 ];
 
