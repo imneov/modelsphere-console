@@ -54,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	if s.authn != nil {
 		mux.HandleFunc("POST /oauth/token", s.handleToken)
 		mux.HandleFunc("GET /api/me", s.handleMe)
+		mux.HandleFunc("POST /api/me/password", s.handleChangeOwnPassword)
 		mux.HandleFunc("GET /api/iam/users", s.handleListUsers)
 		mux.HandleFunc("POST /api/iam/users", s.handleCreateUser)
 		mux.HandleFunc("GET /api/iam/users/{name}", s.handleGetUser)

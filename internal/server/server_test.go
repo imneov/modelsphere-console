@@ -38,6 +38,8 @@ func testServer(t *testing.T) *Server {
 			"spec":       map[string]any{"groups": gs, "encryptedPassword": hash},
 		}}
 	}
+	admin := user("admin", adminHash, "system:masters")
+	admin.SetAnnotations(map[string]string{iam.RequirePasswordResetAnnotation: "true"})
 	dyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{
 			iam.UsersGVR:        "UserList",
@@ -45,7 +47,7 @@ func testServer(t *testing.T) *Server {
 			iam.RoleBindingsGVR: "IAMRoleBindingList",
 			iam.LoginRecordsGVR: "LoginRecordList",
 		},
-		user("admin", adminHash, "system:masters"),
+		admin,
 		user("bob", bobHash),
 	)
 	nextRecord := 0
@@ -119,16 +121,45 @@ func TestLoginAndMe(t *testing.T) {
 		t.Fatalf("me: %d", rec.Code)
 	}
 	var me struct {
-		Name        string   `json:"name"`
-		IsAdmin     bool     `json:"isAdmin"`
-		Permissions []string `json:"permissions"`
+		Name                 string   `json:"name"`
+		IsAdmin              bool     `json:"isAdmin"`
+		Permissions          []string `json:"permissions"`
+		RequirePasswordReset bool     `json:"requirePasswordReset"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &me); err != nil {
 		t.Fatal(err)
 	}
-	if me.Name != "admin" || !me.IsAdmin || len(me.Permissions) != 1 || me.Permissions[0] != "*" {
+	if me.Name != "admin" || !me.IsAdmin || len(me.Permissions) != 1 || me.Permissions[0] != "*" || !me.RequirePasswordReset {
 		t.Fatalf("bad me: %v", me)
 	}
+}
+
+func TestChangeOwnPassword(t *testing.T) {
+	srv := testServer(t)
+	h := srv.Handler()
+	token := login(t, h, "admin", "admin-pw")
+
+	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"wrong","newPassword":"NewPass1!"}`); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong old password: expected 401, got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"admin-pw","newPassword":"weak"}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("weak new password: expected 400, got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"admin-pw","newPassword":"NewPass1!"}`); rec.Code != http.StatusOK {
+		t.Fatalf("change password: expected 200, got %d (body %s)", rec.Code, rec.Body.String())
+	}
+
+	u, err := srv.store.GetUser(t.Context(), "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !iam.VerifyPassword("NewPass1!", u.Spec.EncryptedPassword) {
+		t.Fatal("new password was not stored")
+	}
+	if u.RequiresPasswordReset() || u.Annotations[iam.RequirePasswordResetAnnotation] != "" {
+		t.Fatalf("require-password-reset annotation was not cleared: %v", u.Annotations)
+	}
+	_ = login(t, h, "admin", "NewPass1!")
 }
 
 func TestMePermissionsFromBoundRoles(t *testing.T) {
@@ -342,7 +373,7 @@ func TestRBACGrantsViaRole(t *testing.T) {
 
 func TestUserCRUDRequiresAdmin(t *testing.T) {
 	h := testServer(t).Handler()
-	body := `{"name":"carol","password":"carol-pw","displayName":"Carol"}`
+	body := `{"name":"carol","password":"Carol1!x","displayName":"Carol"}`
 
 	// A non-admin (bob) is forbidden from creating users.
 	bob := login(t, h, "bob", "bob-pw")
@@ -360,5 +391,5 @@ func TestUserCRUDRequiresAdmin(t *testing.T) {
 		t.Fatalf("response leaked password material: %s", rec.Body.String())
 	}
 	// New user can log in with the password admin set.
-	_ = login(t, h, "carol", "carol-pw")
+	_ = login(t, h, "carol", "Carol1!x")
 }

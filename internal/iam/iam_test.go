@@ -26,6 +26,42 @@ func TestPasswordRoundtrip(t *testing.T) {
 	}
 }
 
+func TestValidateComplexity(t *testing.T) {
+	tests := []struct {
+		name     string
+		password string
+		wantErr  bool
+	}{
+		{name: "empty", password: "", wantErr: true},
+		{name: "seven characters", password: "Aa1!aaa", wantErr: true},
+		{name: "missing uppercase", password: "aa1!aaaa", wantErr: true},
+		{name: "missing lowercase", password: "AA1!AAAA", wantErr: true},
+		{name: "missing digit", password: "Aa!aaaaa", wantErr: true},
+		{name: "missing special", password: "Aa1aaaaa", wantErr: true},
+		{name: "whitespace is not special", password: "Aa1 aaaa", wantErr: true},
+		{name: "exactly eight characters", password: "Aa1!aaaa"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateComplexity(tt.password)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateComplexity(%q) error = %v, wantErr %v", tt.password, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestRequiresPasswordReset(t *testing.T) {
+	u := &User{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{RequirePasswordResetAnnotation: "true"}}}
+	if !u.RequiresPasswordReset() {
+		t.Fatal("require-password-reset annotation was ignored")
+	}
+	u.Annotations[RequirePasswordResetAnnotation] = "false"
+	if u.RequiresPasswordReset() {
+		t.Fatal("false annotation was treated as enabled")
+	}
+}
+
 func TestTokenRoundtrip(t *testing.T) {
 	s := NewSigner("https://issuer.test", "secret-key", time.Hour)
 	u := &User{
