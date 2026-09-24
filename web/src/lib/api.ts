@@ -56,6 +56,7 @@ export interface Me {
   groups: string[];
   email?: string;
   isAdmin: boolean;
+  permissions: string[];
 }
 
 export interface User {

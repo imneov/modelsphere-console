@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./index.css";
 import { AuthProvider, useAuth } from "@/auth";
 import { Layout } from "@/components/Layout";
+import { PermissionGuard, PermissionsProvider } from "@/permissions";
 import { Login } from "@/routes/Login";
 import { Home } from "@/routes/Home";
 import { Users } from "@/routes/Users";
@@ -27,16 +28,32 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route element={<RequireAuth />}>
-              <Route path="/" element={<Home />} />
-              <Route path="/users" element={<Users />} />
-              <Route path="/roles" element={<Roles />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+        <PermissionsProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route element={<RequireAuth />}>
+                <Route path="/" element={<Home />} />
+                <Route
+                  path="/users"
+                  element={
+                    <PermissionGuard permission="users.view">
+                      <Users />
+                    </PermissionGuard>
+                  }
+                />
+                <Route
+                  path="/roles"
+                  element={
+                    <PermissionGuard permission="roles.view">
+                      <Roles />
+                    </PermissionGuard>
+                  }
+                />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </PermissionsProvider>
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,

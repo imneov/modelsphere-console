@@ -97,10 +97,61 @@ func TestLoginAndMe(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("me: %d", rec.Code)
 	}
-	var me map[string]any
-	json.Unmarshal(rec.Body.Bytes(), &me)
-	if me["name"] != "admin" || me["isAdmin"] != true {
+	var me struct {
+		Name        string   `json:"name"`
+		IsAdmin     bool     `json:"isAdmin"`
+		Permissions []string `json:"permissions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &me); err != nil {
+		t.Fatal(err)
+	}
+	if me.Name != "admin" || !me.IsAdmin || len(me.Permissions) != 1 || me.Permissions[0] != "*" {
 		t.Fatalf("bad me: %v", me)
+	}
+}
+
+func TestMePermissionsFromBoundRoles(t *testing.T) {
+	h := testServer(t).Handler()
+	admin := login(t, h, "admin", "admin-pw")
+	bob := login(t, h, "bob", "bob-pw")
+
+	roles := []string{
+		`{"name":"user-viewer","rules":[],"uiPermissions":["users.view","shared.view"]}`,
+		`{"name":"role-viewer","rules":[],"uiPermissions":["roles.view","shared.view"]}`,
+	}
+	for _, role := range roles {
+		if rec := do(h, "POST", "/api/iam/roles", admin, role); rec.Code != http.StatusCreated {
+			t.Fatalf("create role: %d, %s", rec.Code, rec.Body.String())
+		}
+	}
+	bindings := []string{
+		`{"name":"bob-users","role":"user-viewer","subjects":[{"kind":"User","name":"bob"}]}`,
+		`{"name":"bob-roles","role":"role-viewer","subjects":[{"kind":"User","name":"bob"}]}`,
+	}
+	for _, binding := range bindings {
+		if rec := do(h, "POST", "/api/iam/rolebindings", admin, binding); rec.Code != http.StatusCreated {
+			t.Fatalf("create binding: %d, %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	rec := do(h, "GET", "/api/me", bob, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("me: %d, %s", rec.Code, rec.Body.String())
+	}
+	var me struct {
+		Permissions []string `json:"permissions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &me); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"roles.view", "shared.view", "users.view"}
+	if len(me.Permissions) != len(want) {
+		t.Fatalf("permissions = %v, want %v", me.Permissions, want)
+	}
+	for i := range want {
+		if me.Permissions[i] != want[i] {
+			t.Fatalf("permissions = %v, want %v", me.Permissions, want)
+		}
 	}
 }
 
