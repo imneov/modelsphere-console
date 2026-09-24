@@ -189,6 +189,9 @@ func TestChangeOwnPassword(t *testing.T) {
 	if u.RequiresPasswordReset() || u.Annotations[iam.RequirePasswordResetAnnotation] != "" {
 		t.Fatalf("require-password-reset annotation was not cleared: %v", u.Annotations)
 	}
+	if rec := do(h, "GET", "/api/iam/users", token, ""); rec.Code != http.StatusOK {
+		t.Fatalf("same token after password change: expected 200, got %d (body %s)", rec.Code, rec.Body.String())
+	}
 	_ = login(t, h, "admin", "NewPass1!")
 }
 
