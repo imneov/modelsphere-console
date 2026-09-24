@@ -1,4 +1,5 @@
 consoled is installed as {{ include "console.fullname" . }}.
+{{- $defaultPasswordHash := "$2b$12$Q44Y0B99hoByZY.6v30jl.D83rXFbSpOfh8iWLbndLZBEjFAZwaeO" }}
 
 Reach it (ClusterIP by default):
 
@@ -6,8 +7,21 @@ Reach it (ClusterIP by default):
 
 Access URL: http://localhost:8080/
 
+{{- if not .Values.admin.username }}
+No administrator user was seeded. Configure an administrator before signing in.
+{{- else if and (eq .Values.admin.username "admin") (or (not .Values.admin.encryptedPassword) (eq .Values.admin.encryptedPassword $defaultPasswordHash)) }}
 Default login: admin / P@88w0rd
+{{- if .Values.admin.requirePasswordReset }}
 首次登录将要求设置新密码。
+{{- else }}
+Change the default password immediately after signing in.
+{{- end }}
+{{- else }}
+Administrator user {{ .Values.admin.username | quote }} was seeded. Sign in with the password matching admin.encryptedPassword.
+{{- if .Values.admin.requirePasswordReset }}
+首次登录将要求设置新密码。
+{{- end }}
+{{- end }}
 
 The signing secret lives in the Secret {{ include "console.fullname" . }}; share
 it with Rise Global to upgrade this install in place.
