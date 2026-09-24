@@ -10,7 +10,7 @@ export const PASSWORD_REQUIREMENTS: PasswordRequirement[] = [
   { id: "length", label: "至少 8 个字符", test: (password) => Array.from(password).length >= 8 },
   { id: "uppercase", label: "包含大写字母", test: (password) => /\p{Lu}/u.test(password) },
   { id: "lowercase", label: "包含小写字母", test: (password) => /\p{Ll}/u.test(password) },
-  { id: "number", label: "包含数字", test: (password) => /\p{N}/u.test(password) },
+  { id: "number", label: "包含数字", test: (password) => /\d/.test(password) },
   { id: "special", label: "包含特殊字符", test: (password) => /[\p{P}\p{S}]/u.test(password) },
 ];
 
