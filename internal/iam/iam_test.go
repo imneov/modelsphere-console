@@ -3,6 +3,7 @@ package iam
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,6 +41,8 @@ func TestValidateComplexity(t *testing.T) {
 		{name: "missing special", password: "Aa1aaaaa", wantErr: true},
 		{name: "whitespace is not special", password: "Aa1 aaaa", wantErr: true},
 		{name: "exactly eight characters", password: "Aa1!aaaa"},
+		{name: "exactly 72 bytes", password: "Aa1!" + strings.Repeat("a", 68)},
+		{name: "more than 72 bytes", password: "Aa1!" + strings.Repeat("a", 69), wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -48,6 +51,9 @@ func TestValidateComplexity(t *testing.T) {
 				t.Fatalf("ValidateComplexity(%q) error = %v, wantErr %v", tt.password, err, tt.wantErr)
 			}
 		})
+	}
+	if err := ValidateComplexity("Aa1!" + strings.Repeat("a", 69)); err == nil || err.Error() != "密码不能超过 72 个字节" {
+		t.Fatalf("overlong password error = %v, want 72-byte limit", err)
 	}
 }
 

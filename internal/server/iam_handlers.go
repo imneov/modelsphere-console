@@ -58,7 +58,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := s.store.GetUser(r.Context(), id.Name)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
 	permissions, err := s.authz.PermissionsFor(r.Context(), id)
@@ -193,13 +193,21 @@ func (s *Server) handleChangeOwnPassword(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
+	if in.OldPassword == "" || in.NewPassword == "" {
+		writeError(w, http.StatusBadRequest, "当前密码和新密码不能为空")
+		return
+	}
 	u, err := s.store.GetUser(r.Context(), id.Name)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
 	if !iam.VerifyPassword(in.OldPassword, u.Spec.EncryptedPassword) {
 		writeError(w, http.StatusUnauthorized, "当前密码错误")
+		return
+	}
+	if iam.VerifyPassword(in.NewPassword, u.Spec.EncryptedPassword) {
+		writeError(w, http.StatusBadRequest, "新密码不能与当前密码相同")
 		return
 	}
 	if err := iam.ValidateComplexity(in.NewPassword); err != nil {

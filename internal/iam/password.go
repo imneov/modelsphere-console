@@ -9,6 +9,9 @@ import (
 )
 
 func ValidateComplexity(password string) error {
+	if len(password) > 72 {
+		return errors.New("密码不能超过 72 个字节")
+	}
 	if utf8.RuneCountInString(password) < 8 {
 		return errors.New("密码至少需要 8 个字符")
 	}

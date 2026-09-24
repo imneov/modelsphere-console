@@ -39,7 +39,6 @@ func testServer(t *testing.T) *Server {
 		}}
 	}
 	admin := user("admin", adminHash, "system:masters")
-	admin.SetAnnotations(map[string]string{iam.RequirePasswordResetAnnotation: "true"})
 	dyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{
 			iam.UsersGVR:        "UserList",
@@ -73,6 +72,25 @@ func testServer(t *testing.T) *Server {
 	srv := New(&config.Config{}, nil, log, "test")
 	srv.SetIAM(store, signer, iam.NewAuthenticator(store, signer, log), iam.NewAuthorizer(store))
 	return srv
+}
+
+func setRequirePasswordReset(t *testing.T, srv *Server, required bool) {
+	t.Helper()
+	u, err := srv.store.GetUser(t.Context(), "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Annotations == nil {
+		u.Annotations = map[string]string{}
+	}
+	if required {
+		u.Annotations[iam.RequirePasswordResetAnnotation] = "true"
+	} else {
+		delete(u.Annotations, iam.RequirePasswordResetAnnotation)
+	}
+	if _, err := srv.store.UpdateUser(t.Context(), u); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func login(t *testing.T, h http.Handler, user, pw string) string {
@@ -113,7 +131,9 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestLoginAndMe(t *testing.T) {
-	h := testServer(t).Handler()
+	srv := testServer(t)
+	setRequirePasswordReset(t, srv, true)
+	h := srv.Handler()
 	token := login(t, h, "admin", "admin-pw")
 
 	rec := do(h, "GET", "/api/me", token, "")
@@ -136,14 +156,24 @@ func TestLoginAndMe(t *testing.T) {
 
 func TestChangeOwnPassword(t *testing.T) {
 	srv := testServer(t)
+	setRequirePasswordReset(t, srv, true)
 	h := srv.Handler()
 	token := login(t, h, "admin", "admin-pw")
 
+	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"","newPassword":"NewPass1!"}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty old password: expected 400, got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"admin-pw","newPassword":""}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty new password: expected 400, got %d (body %s)", rec.Code, rec.Body.String())
+	}
 	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"wrong","newPassword":"NewPass1!"}`); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("wrong old password: expected 401, got %d (body %s)", rec.Code, rec.Body.String())
 	}
 	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"admin-pw","newPassword":"weak"}`); rec.Code != http.StatusBadRequest {
 		t.Fatalf("weak new password: expected 400, got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"admin-pw","newPassword":"admin-pw"}`); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "新密码不能与当前密码相同") {
+		t.Fatalf("reused password: expected explicit 400, got %d (body %s)", rec.Code, rec.Body.String())
 	}
 	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"admin-pw","newPassword":"NewPass1!"}`); rec.Code != http.StatusOK {
 		t.Fatalf("change password: expected 200, got %d (body %s)", rec.Code, rec.Body.String())
@@ -338,6 +368,47 @@ func TestGuardsAPI(t *testing.T) {
 	token := login(t, h, "admin", "admin-pw")
 	if rec := do(h, "GET", "/api/iam/users", token, ""); rec.Code != http.StatusOK {
 		t.Fatalf("authenticated list: %d", rec.Code)
+	}
+}
+
+func TestPasswordResetGuardUsesLiveUserState(t *testing.T) {
+	srv := testServer(t)
+	h := srv.Handler()
+	token := login(t, h, "admin", "admin-pw")
+	setRequirePasswordReset(t, srv, true)
+
+	rec := do(h, "GET", "/api/iam/users", token, "")
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "请先修改初始密码") {
+		t.Fatalf("reset-required list: expected explicit 403, got %d (body %s)", rec.Code, rec.Body.String())
+	}
+
+	setRequirePasswordReset(t, srv, false)
+	if rec := do(h, "GET", "/api/iam/users", token, ""); rec.Code != http.StatusOK {
+		t.Fatalf("same token after reset cleared: expected 200, got %d (body %s)", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeletedTokenUserIsUnauthenticated(t *testing.T) {
+	srv := testServer(t)
+	h := srv.Handler()
+	token := login(t, h, "admin", "admin-pw")
+	if err := srv.store.DeleteUser(t.Context(), "admin"); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, request := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: "GET", path: "/api/me"},
+		{method: "POST", path: "/api/me/password", body: `{"oldPassword":"admin-pw","newPassword":"NewPass1!"}`},
+		{method: "GET", path: "/api/iam/users"},
+	} {
+		rec := do(h, request.method, request.path, token, request.body)
+		if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\n  \"error\": \"unauthenticated\"\n}\n" {
+			t.Fatalf("%s %s: expected fixed 401, got %d (body %s)", request.method, request.path, rec.Code, rec.Body.String())
+		}
 	}
 }
 
