@@ -69,6 +69,8 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /api/iam/rolebindings", s.handleListRoleBindings)
 		mux.HandleFunc("POST /api/iam/rolebindings", s.handleCreateRoleBinding)
 		mux.HandleFunc("DELETE /api/iam/rolebindings/{name}", s.handleDeleteRoleBinding)
+
+		mux.HandleFunc("GET /api/iam/loginrecords", s.handleListLoginRecords)
 	}
 	// Federation to backends (wired in P4): everything under a backend prefix.
 

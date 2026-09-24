@@ -11,6 +11,23 @@ import (
 // invalid_grant, so an attacker learns nothing about which users exist.
 var ErrAuth = errors.New("invalid username or password")
 
+type authFailure struct {
+	reason string
+}
+
+func (e *authFailure) Error() string { return ErrAuth.Error() }
+func (e *authFailure) Unwrap() error { return ErrAuth }
+
+func newAuthFailure(reason string) error { return &authFailure{reason: reason} }
+
+func AuthFailureReason(err error) string {
+	var failure *authFailure
+	if errors.As(err, &failure) {
+		return failure.reason
+	}
+	return "authentication failed"
+}
+
 // Authenticator turns a username and password into a token, verifying against
 // the User CRD and stamping the last-login time.
 type Authenticator struct {
@@ -25,17 +42,17 @@ func NewAuthenticator(store *Store, signer *Signer, log *slog.Logger) *Authentic
 
 func (a *Authenticator) Login(ctx context.Context, username, password string) (*Token, error) {
 	if username == "" || password == "" {
-		return nil, ErrAuth
+		return nil, newAuthFailure("username or password missing")
 	}
 	u, err := a.store.GetUser(ctx, username)
 	if err != nil {
-		return nil, ErrAuth
+		return nil, newAuthFailure("user not found")
 	}
 	if u.Status.State != "" && u.Status.State != UserActive {
-		return nil, ErrAuth
+		return nil, newAuthFailure("user is not active")
 	}
 	if u.Spec.EncryptedPassword == "" || !VerifyPassword(password, u.Spec.EncryptedPassword) {
-		return nil, ErrAuth
+		return nil, newAuthFailure("invalid password")
 	}
 	tok, err := a.signer.Mint(u)
 	if err != nil {

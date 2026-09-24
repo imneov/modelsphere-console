@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -10,10 +11,12 @@ import (
 	"testing"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/modelsphere/console/internal/config"
 	"github.com/modelsphere/console/internal/iam"
@@ -40,10 +43,28 @@ func testServer(t *testing.T) *Server {
 			iam.UsersGVR:        "UserList",
 			iam.RolesGVR:        "IAMRoleList",
 			iam.RoleBindingsGVR: "IAMRoleBindingList",
+			iam.LoginRecordsGVR: "LoginRecordList",
 		},
 		user("admin", adminHash, "system:masters"),
 		user("bob", bobHash),
 	)
+	nextRecord := 0
+	dyn.PrependReactor("create", "loginrecords", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		create, ok := action.(k8stesting.CreateAction)
+		if !ok {
+			return false, nil, nil
+		}
+		obj := create.GetObject().(*unstructured.Unstructured).DeepCopy()
+		nextRecord++
+		if obj.GetName() == "" {
+			obj.SetName(fmt.Sprintf("%s%d", obj.GetGenerateName(), nextRecord))
+		}
+		obj.SetCreationTimestamp(metav1.NewTime(time.Date(2026, 9, 24, 0, 0, nextRecord, 0, time.UTC)))
+		if err := dyn.Tracker().Create(iam.LoginRecordsGVR, obj, ""); err != nil {
+			return true, nil, err
+		}
+		return true, obj, nil
+	})
 	store := iam.NewStore(dyn)
 	signer := iam.NewSigner("https://issuer.test", "secret", time.Hour)
 	log := slog.New(slog.DiscardHandler)
@@ -164,6 +185,117 @@ func TestWrongPassword(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("wrong password: expected 401, got %d (body %s)", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTokenAttemptsCreateLoginRecords(t *testing.T) {
+	srv := testServer(t)
+	h := srv.Handler()
+	attempt := func(username, password, forwarded, realIP, remoteAddr, userAgent string) int {
+		form := url.Values{"grant_type": {"password"}, "username": {username}, "password": {password}}
+		req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Forwarded-For", forwarded)
+		req.Header.Set("X-Real-IP", realIP)
+		req.Header.Set("User-Agent", userAgent)
+		req.RemoteAddr = remoteAddr
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	if code := attempt("admin", "wrong", "203.0.113.10, 10.0.0.1", "203.0.113.20", "203.0.113.30:1234", "audit-test/1"); code != http.StatusUnauthorized {
+		t.Fatalf("wrong password: got %d", code)
+	}
+	if code := attempt("missing", "secret", "", "203.0.113.20", "203.0.113.30:1234", "audit-test/2"); code != http.StatusUnauthorized {
+		t.Fatalf("missing user: got %d", code)
+	}
+	if code := attempt("admin", "admin-pw", "", "", "203.0.113.30:1234", "audit-test/3"); code != http.StatusOK {
+		t.Fatalf("successful login: got %d", code)
+	}
+
+	records, err := srv.store.ListLoginRecords(t.Context(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 3 {
+		t.Fatalf("records: got %d, want 3", len(records))
+	}
+	if !records[0].Spec.Success || records[0].Labels[iam.UsernameLabel] != "admin" || records[0].Spec.SourceIP != "203.0.113.30" {
+		t.Fatalf("latest record: %#v", records[0])
+	}
+	if records[1].Spec.Reason != "user not found" || records[1].Spec.SourceIP != "203.0.113.20" {
+		t.Fatalf("missing-user record: %#v", records[1])
+	}
+	if records[2].Spec.Reason != "invalid password" || records[2].Spec.SourceIP != "203.0.113.10" || records[2].Spec.UserAgent != "audit-test/1" {
+		t.Fatalf("wrong-password record: %#v", records[2])
+	}
+	for _, record := range records {
+		if record.GenerateName != "loginrecord-" || record.Spec.Type != "password" || record.Spec.Provider != "local" {
+			t.Fatalf("record metadata: %#v", record)
+		}
+	}
+}
+
+func TestListLoginRecordsRequiresAuthorizationAndFiltersUser(t *testing.T) {
+	srv := testServer(t)
+	h := srv.Handler()
+	admin := login(t, h, "admin", "admin-pw")
+
+	form := url.Values{"grant_type": {"password"}, "username": {"missing"}, "password": {"secret"}}
+	req := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("missing user login: got %d", rec.Code)
+	}
+
+	rec = do(h, "GET", "/api/iam/loginrecords?user=missing", admin, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list login records: %d, %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Items []loginRecordView `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Items) != 1 || response.Items[0].User != "missing" || response.Items[0].Success || response.Items[0].Reason != "user not found" {
+		t.Fatalf("filtered response: %#v", response.Items)
+	}
+	if body := rec.Body.String(); strings.Contains(body, "metadata") || strings.Contains(body, "spec") || strings.Contains(body, "encryptedPassword") {
+		t.Fatalf("response leaked internal fields: %s", body)
+	}
+
+	bob := login(t, h, "bob", "bob-pw")
+	if rec := do(h, "GET", "/api/iam/loginrecords", bob, ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("unauthorized list: expected 403, got %d", rec.Code)
+	}
+}
+
+func TestRequestSourceIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		forwarded  string
+		realIP     string
+		remoteAddr string
+		want       string
+	}{
+		{name: "forwarded", forwarded: "203.0.113.1, 10.0.0.2", realIP: "203.0.113.2", remoteAddr: "203.0.113.3:1234", want: "203.0.113.1"},
+		{name: "real ip", realIP: "203.0.113.2", remoteAddr: "203.0.113.3:1234", want: "203.0.113.2"},
+		{name: "remote address", remoteAddr: "203.0.113.3:1234", want: "203.0.113.3"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/oauth/token", nil)
+			req.Header.Set("X-Forwarded-For", tt.forwarded)
+			req.Header.Set("X-Real-IP", tt.realIP)
+			req.RemoteAddr = tt.remoteAddr
+			if got := requestSourceIP(req); got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

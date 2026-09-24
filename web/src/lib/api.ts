@@ -119,6 +119,18 @@ export interface Binding {
   subjects: Subject[];
 }
 
+export interface LoginRecord {
+  name: string;
+  time: string;
+  user: string;
+  type?: string;
+  provider?: string;
+  sourceIP?: string;
+  success: boolean;
+  reason?: string;
+  userAgent?: string;
+}
+
 export const api = {
   me: () => request<Me>("GET", "/api/me"),
   listUsers: () => request<{ items: User[] }>("GET", "/api/iam/users"),
@@ -136,4 +148,10 @@ export const api = {
   createBinding: (b: { name: string; role: string; subjects: Subject[] }) =>
     request<Binding>("POST", "/api/iam/rolebindings", b),
   deleteBinding: (name: string) => request<void>("DELETE", `/api/iam/rolebindings/${name}`),
+
+  listLoginRecords: (user?: string) =>
+    request<{ items: LoginRecord[] }>(
+      "GET",
+      `/api/iam/loginrecords${user ? `?user=${encodeURIComponent(user)}` : ""}`,
+    ),
 };

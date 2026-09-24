@@ -10,6 +10,7 @@ import { Login } from "@/routes/Login";
 import { Home } from "@/routes/Home";
 import { Users } from "@/routes/Users";
 import { Roles } from "@/routes/Roles";
+import { LoginHistory } from "@/routes/LoginHistory";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,14 @@ createRoot(document.getElementById("root")!).render(
                   element={
                     <PermissionGuard permission="roles.view">
                       <Roles />
+                    </PermissionGuard>
+                  }
+                />
+                <Route
+                  path="/login-history"
+                  element={
+                    <PermissionGuard permission="loginrecords.view">
+                      <LoginHistory />
                     </PermissionGuard>
                   }
                 />
