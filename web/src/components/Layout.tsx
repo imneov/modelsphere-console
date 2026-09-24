@@ -13,11 +13,12 @@ import {
 } from "@riseaicloud/ui";
 import { LogOut, Users as UsersIcon, LayoutDashboard, ShieldCheck, Boxes } from "lucide-react";
 import { useAuth } from "@/auth";
+import { usePermissions } from "@/permissions";
 
 const nav = [
   { to: "/", label: "概览", icon: LayoutDashboard, end: true },
-  { to: "/users", label: "用户", icon: UsersIcon, end: false },
-  { to: "/roles", label: "角色", icon: ShieldCheck, end: false },
+  { to: "/users", label: "用户", icon: UsersIcon, end: false, permission: "users.view" },
+  { to: "/roles", label: "角色", icon: ShieldCheck, end: false, permission: "roles.view" },
 ];
 
 // The console shell: a full-width top bar over a left nav rail and the content
@@ -25,6 +26,7 @@ const nav = [
 // tokens surface scale (grey page, white chrome).
 export function Layout({ children }: { children: ReactNode }) {
   const { me, logout } = useAuth();
+  const { has } = usePermissions();
   const initial = me?.name?.[0]?.toUpperCase() ?? "?";
 
   return (
@@ -61,7 +63,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className="flex min-h-0 flex-1">
         <aside className="w-52 shrink-0 border-r bg-card p-3">
           <nav className="flex flex-col gap-1">
-            {nav.map(({ to, label, icon: Icon, end }) => (
+            {nav.filter(({ permission }) => !permission || has(permission)).map(({ to, label, icon: Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}

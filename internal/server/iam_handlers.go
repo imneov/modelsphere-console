@@ -56,9 +56,15 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
+	permissions, err := s.authz.PermissionsFor(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": id.Name, "groups": id.Groups, "email": id.Email,
-		"isAdmin": id.IsSystemMaster(),
+		"isAdmin":     id.IsSystemMaster(),
+		"permissions": permissions,
 	})
 }
 

@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"sort"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 )
@@ -29,6 +30,50 @@ type Authorizer struct {
 }
 
 func NewAuthorizer(store *Store) *Authorizer { return &Authorizer{store: store} }
+
+func (a *Authorizer) PermissionsFor(ctx context.Context, id *Identity) ([]string, error) {
+	if id == nil {
+		return []string{}, nil
+	}
+	if id.IsSystemMaster() {
+		return []string{"*"}, nil
+	}
+	bindings, err := a.store.ListRoleBindings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	roles := map[string]*IAMRole{}
+	seen := map[string]struct{}{}
+	permissions := []string{}
+	for i := range bindings {
+		b := &bindings[i]
+		if !subjectMatches(b.Spec.Subjects, id) {
+			continue
+		}
+		name := b.Spec.RoleRef.Name
+		role, ok := roles[name]
+		if !ok {
+			role, err = a.store.GetRole(ctx, name)
+			if err != nil {
+				roles[name] = nil
+				continue
+			}
+			roles[name] = role
+		}
+		if role == nil {
+			continue
+		}
+		for _, permission := range role.Spec.UIPermissions {
+			if _, ok := seen[permission]; ok {
+				continue
+			}
+			seen[permission] = struct{}{}
+			permissions = append(permissions, permission)
+		}
+	}
+	sort.Strings(permissions)
+	return permissions, nil
+}
 
 func (a *Authorizer) Authorize(ctx context.Context, id *Identity, attr Attributes) (bool, error) {
 	if id == nil {
