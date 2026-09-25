@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import {
   Avatar,
@@ -11,9 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@riseaicloud/ui";
-import { LogOut, Users as UsersIcon, LayoutDashboard, ShieldCheck, Boxes, History } from "lucide-react";
+import { LogOut, Users as UsersIcon, LayoutDashboard, ShieldCheck, Boxes, History, KeyRound } from "lucide-react";
 import { useAuth } from "@/auth";
 import { usePermissions } from "@/permissions";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 
 const nav = [
   { to: "/", label: "概览", icon: LayoutDashboard, end: true },
@@ -28,6 +29,7 @@ const nav = [
 export function Layout({ children }: { children: ReactNode }) {
   const { me, logout } = useAuth();
   const { has } = usePermissions();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const initial = me?.name?.[0]?.toUpperCase() ?? "?";
 
   return (
@@ -51,6 +53,11 @@ export function Layout({ children }: { children: ReactNode }) {
                 {me?.name}
                 {me?.isAdmin ? " · 管理员" : ""}
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
+                <KeyRound className="mr-2 h-4 w-4" />
+                修改密码
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout}>
                 <LogOut className="mr-2 h-4 w-4" />
@@ -86,6 +93,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
         <main className="min-w-0 flex-1 overflow-auto bg-surface-page p-6">{children}</main>
       </div>
+      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
     </div>
   );
 }

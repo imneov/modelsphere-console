@@ -12,6 +12,10 @@ metadata:
   name: {{ .Values.admin.username }}
   labels:
     {{- include "console.labels" . | nindent 4 }}
+{{- if .Values.admin.requirePasswordReset }}
+  annotations:
+    iam.theriseunion.io/require-password-reset: "true"
+{{- end }}
 spec:
   email: "admin@modelsphere.local"
   description: "Platform administrator"

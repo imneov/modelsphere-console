@@ -14,8 +14,9 @@ import (
 
 // Group/version, identical to Global.
 const (
-	Group   = "iam.theriseunion.io"
-	Version = "v1alpha1"
+	Group                          = "iam.theriseunion.io"
+	Version                        = "v1alpha1"
+	RequirePasswordResetAnnotation = Group + "/require-password-reset"
 )
 
 // GroupVersion resources the dynamic client operates on.
@@ -56,6 +57,10 @@ type User struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              UserSpec   `json:"spec,omitempty"`
 	Status            UserStatus `json:"status,omitempty"`
+}
+
+func (u *User) RequiresPasswordReset() bool {
+	return u != nil && u.Annotations[RequirePasswordResetAnnotation] == "true"
 }
 
 // realUserGroups is the group set stamped into a token: the user's declared

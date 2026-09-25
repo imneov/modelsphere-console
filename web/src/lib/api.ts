@@ -57,6 +57,12 @@ export interface Me {
   email?: string;
   isAdmin: boolean;
   permissions: string[];
+  requirePasswordReset: boolean;
+}
+
+export interface ChangePasswordInput {
+  oldPassword: string;
+  newPassword: string;
 }
 
 export interface User {
@@ -133,6 +139,8 @@ export interface LoginRecord {
 
 export const api = {
   me: () => request<Me>("GET", "/api/me"),
+  changePassword: (passwords: ChangePasswordInput) =>
+    request<{ status: string }>("POST", "/api/me/password", passwords),
   listUsers: () => request<{ items: User[] }>("GET", "/api/iam/users"),
   getUser: (name: string) => request<User>("GET", `/api/iam/users/${name}`),
   createUser: (u: UserInput) => request<User>("POST", "/api/iam/users", u),

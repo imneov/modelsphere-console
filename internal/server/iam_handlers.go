@@ -56,6 +56,11 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
+	u, err := s.store.GetUser(r.Context(), id.Name)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
 	permissions, err := s.authz.PermissionsFor(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -63,8 +68,9 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": id.Name, "groups": id.Groups, "email": id.Email,
-		"isAdmin":     id.IsSystemMaster(),
-		"permissions": permissions,
+		"isAdmin":              id.IsSystemMaster(),
+		"permissions":          permissions,
+		"requirePasswordReset": u.RequiresPasswordReset(),
 	})
 }
 
@@ -113,6 +119,10 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	if in.Password != "" {
+		if err := iam.ValidateComplexity(in.Password); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		hash, err := iam.HashPassword(in.Password)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "hash password")
@@ -150,6 +160,10 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	u.Spec.Groups = in.Groups
 	u.Spec.Lang = in.Lang
 	if in.Password != "" {
+		if err := iam.ValidateComplexity(in.Password); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		hash, err := iam.HashPassword(in.Password)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "hash password")
@@ -163,6 +177,55 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toView(updated))
+}
+
+func (s *Server) handleChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
+	id := identityFrom(r.Context())
+	if id == nil {
+		writeError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var in struct {
+		OldPassword string `json:"oldPassword"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if in.OldPassword == "" || in.NewPassword == "" {
+		writeError(w, http.StatusBadRequest, "当前密码和新密码不能为空")
+		return
+	}
+	u, err := s.store.GetUser(r.Context(), id.Name)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	if !iam.VerifyPassword(in.OldPassword, u.Spec.EncryptedPassword) {
+		writeError(w, http.StatusUnauthorized, "当前密码错误")
+		return
+	}
+	if iam.VerifyPassword(in.NewPassword, u.Spec.EncryptedPassword) {
+		writeError(w, http.StatusBadRequest, "新密码不能与当前密码相同")
+		return
+	}
+	if err := iam.ValidateComplexity(in.NewPassword); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	hash, err := iam.HashPassword(in.NewPassword)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "hash password")
+		return
+	}
+	u.Spec.EncryptedPassword = hash
+	delete(u.Annotations, iam.RequirePasswordResetAnnotation)
+	if _, err := s.store.UpdateUser(r.Context(), u); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {

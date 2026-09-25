@@ -44,6 +44,35 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Server) requirePasswordReset(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/") || isPasswordResetPath(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		id := identityFrom(r.Context())
+		if id == nil || s.store == nil {
+			writeError(w, http.StatusUnauthorized, "unauthenticated")
+			return
+		}
+		u, err := s.store.GetUser(r.Context(), id.Name)
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, "unauthenticated")
+			return
+		}
+		if u.RequiresPasswordReset() {
+			writeError(w, http.StatusForbidden, "请先修改初始密码")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isPasswordResetPath(r *http.Request) bool {
+	return r.Method == http.MethodGet && r.URL.Path == "/api/me" ||
+		r.Method == http.MethodPost && r.URL.Path == "/api/me/password"
+}
+
 // bearerToken reads the token from the Authorization header, falling back to a
 // `token` cookie (browser requests) -- the same two sources Global accepts.
 func bearerToken(r *http.Request) string {
