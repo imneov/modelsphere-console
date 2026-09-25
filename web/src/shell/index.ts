@@ -1,0 +1,8 @@
+// Everything a module may import from the shell. Modules import "@/shell" only,
+// never a file under it, so the shell can move things around freely.
+export type { ConsoleModule, ModulePage } from "@/shell/module";
+export { useModulePath } from "@/shell/module";
+export { apiFetch, request, ApiError, type Me } from "@/shell/api";
+export { useAuth } from "@/shell/auth";
+export { usePermissions, PermissionGuard } from "@/shell/permissions";
+export { StatCard } from "@/shell/StatCard";

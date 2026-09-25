@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, type ColumnDef, DataTable, PageHeader } from "@riseaicloud/ui";
 import { History } from "lucide-react";
-import { api, type LoginRecord } from "@/lib/api";
+import { api, type LoginRecord } from "@/modules/iam/api";
 
 function formatTime(value: string) {
   const date = new Date(value);

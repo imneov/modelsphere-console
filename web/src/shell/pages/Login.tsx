@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@riseaicloud/ui";
-import { useAuth } from "@/auth";
+import { useAuth } from "@/shell/auth";
 
 export function Login() {
   const { me, login } = useAuth();

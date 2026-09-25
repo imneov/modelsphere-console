@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, clearToken, getToken, login as apiLogin, type Me } from "@/lib/api";
+import { api, clearToken, getToken, login as apiLogin, type Me } from "@/shell/api";
 
 interface AuthState {
   me: Me | null;

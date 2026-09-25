@@ -16,8 +16,8 @@ import {
   PageHeader,
 } from "@riseaicloud/ui";
 import { Plus, ShieldCheck } from "lucide-react";
-import { api, type PolicyRule, type Role } from "@/lib/api";
-import { useAuth } from "@/auth";
+import { api, type PolicyRule, type Role } from "@/modules/iam/api";
+import { useAuth } from "@/shell";
 
 const IAM_GROUP = "iam.theriseunion.io";
 

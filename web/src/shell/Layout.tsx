@@ -11,22 +11,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@riseaicloud/ui";
-import { LogOut, Users as UsersIcon, LayoutDashboard, ShieldCheck, Boxes, History, KeyRound } from "lucide-react";
-import { useAuth } from "@/auth";
-import { usePermissions } from "@/permissions";
-import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
-
-const nav = [
-  { to: "/", label: "概览", icon: LayoutDashboard, end: true },
-  { to: "/users", label: "用户", icon: UsersIcon, end: false, permission: "users.view" },
-  { to: "/login-history", label: "登录历史", icon: History, end: false, permission: "loginrecords.view" },
-  { to: "/roles", label: "角色", icon: ShieldCheck, end: false, permission: "roles.view" },
-];
+import { LogOut, Boxes, KeyRound } from "lucide-react";
+import { useAuth } from "@/shell/auth";
+import { usePermissions } from "@/shell/permissions";
+import { ChangePasswordDialog } from "@/shell/ChangePasswordDialog";
+import { navGroups, type ConsoleModule } from "@/shell/module";
 
 // The console shell: a full-width top bar over a left nav rail and the content
 // column — the vertical-two-column layout Rise Global's console uses, on the
 // tokens surface scale (grey page, white chrome).
-export function Layout({ children }: { children: ReactNode }) {
+export function Layout({ modules, children }: { modules: ConsoleModule[]; children: ReactNode }) {
   const { me, logout } = useAuth();
   const { has } = usePermissions();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -70,23 +64,28 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-h-0 flex-1">
         <aside className="w-52 shrink-0 border-r bg-card p-3">
-          <nav className="flex flex-col gap-1">
-            {nav.filter(({ permission }) => !permission || has(permission)).map(({ to, label, icon: Icon, end }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
-                    isActive
-                      ? "bg-primary/10 font-medium text-primary"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  }`
-                }
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </NavLink>
+          <nav className="flex flex-col gap-4">
+            {navGroups(modules, has).map((group, i) => (
+              <div key={group.title ?? i} className="flex flex-col gap-1">
+                {group.title && <div className="px-3 pb-1 text-xs font-medium text-muted-foreground">{group.title}</div>}
+                {group.items.map(({ to, label, icon: Icon, end }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+                        isActive
+                          ? "bg-primary/10 font-medium text-primary"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      }`
+                    }
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
             ))}
           </nav>
         </aside>
