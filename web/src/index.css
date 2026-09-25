@@ -1,9 +1,16 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 /* Colour variables (:root and .dark) are injected by the @riseaicloud/tokens
    Tailwind preset — do not redeclare them here or they fight the preset. */
+
+/* Tailwind 4 dropped the pointer cursor on buttons; the Rise console keeps it. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
 
 html,
 body,
