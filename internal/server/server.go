@@ -72,8 +72,11 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("DELETE /api/iam/rolebindings/{name}", s.handleDeleteRoleBinding)
 
 		mux.HandleFunc("GET /api/iam/loginrecords", s.handleListLoginRecords)
+
+		// Federation: everything under a backend prefix. Needs the authorizer,
+		// hence inside this block.
+		s.mountBackends(mux)
 	}
-	// Federation to backends (wired in P4): everything under a backend prefix.
 
 	if s.web != nil {
 		mux.HandleFunc("GET /", s.spa)

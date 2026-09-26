@@ -24,6 +24,11 @@ import (
 
 func testServer(t *testing.T) *Server {
 	t.Helper()
+	return testServerWithConfig(t, &config.Config{})
+}
+
+func testServerWithConfig(t *testing.T, cfg *config.Config) *Server {
+	t.Helper()
 	adminHash, _ := iam.HashPassword("admin-pw")
 	bobHash, _ := iam.HashPassword("bob-pw")
 	user := func(name, hash string, groups ...string) *unstructured.Unstructured {
@@ -69,7 +74,7 @@ func testServer(t *testing.T) *Server {
 	store := iam.NewStore(dyn)
 	signer := iam.NewSigner("https://issuer.test", "secret", time.Hour)
 	log := slog.New(slog.DiscardHandler)
-	srv := New(&config.Config{}, nil, log, "test")
+	srv := New(cfg, nil, log, "test")
 	srv.SetIAM(store, signer, iam.NewAuthenticator(store, signer, log), iam.NewAuthorizer(store))
 	return srv
 }
