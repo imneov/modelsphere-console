@@ -23,10 +23,24 @@ community install can be upgraded to the commercial Global without a migration:
 |----------------|------------------------------------------------------------|
 | User/role data | `iam.theriseunion.io/v1alpha1` User, IAMRole, IAMRoleBinding CRDs |
 | Tokens         | OAuth2 password grant, HS256 JWT, same claim set           |
-| Authorization  | K8s-RBAC-shaped, `system:masters` short-circuit            |
+| Authorization  | K8s-RBAC-shaped, `system:masters` short-circuit, platform scope only |
 
 Upgrade = share the JWT secret and point the identity endpoints at Global's
 apiserver. The console frontend contract does not change.
+
+**Decision (2026-09-26): the API group stays `iam.theriseunion.io`.** A separate
+group (`iam.modelsphere.dev` was considered) would isolate the two products but
+turn the upgrade into a data migration. Consequences of sharing it:
+
+- On a cluster where Global runs (e.g. a member cluster), console and Global read
+  and write the **same** users, roles and bindings. That is the upgraded state,
+  not a conflict; the helm chart leaves existing CRDs untouched.
+- Those CRDs hold roles for every Global scope (platform, workspace, cluster,
+  namespace, nodegroup) side by side. Console guards only platform-level things,
+  so its authorizer honours only bindings labelled `scope=platform`,
+  `scope-value=global` -- Global's own selector at that level. Anything else
+  would let a namespace admin act as a console admin.
+- The seeded `admin` matches Global's (group `system:masters`, same default hash).
 
 ## Architecture
 
