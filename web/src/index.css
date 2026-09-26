@@ -3,21 +3,34 @@
 @config "../tailwind.config.ts";
 
 /* Colour variables (:root and .dark) are injected by the @riseaicloud/tokens
-   Tailwind preset. The block below overrides only what Rise Global's factory
-   look (layout "minimal", palette "minimal-gradient") sets differently; primary,
-   border, muted and accent already match. Values are HSL triplets because the
-   preset reads them as hsl(var(--x)). Source: rise-global design/tokens. */
+   Tailwind preset. The blocks below override only what Rise Global sets
+   differently; primary, border, muted and accent already match. Token values are
+   HSL triplets because the preset reads them as hsl(var(--x)). Shell values were
+   measured on a live Global console. Source: rise-global design/tokens.
+   <html data-layout> is written by src/shell/preferences.ts. */
 @layer base {
   :root:root {
     --foreground: 0 0% 22%; /* oklch(0.341 0 0) */
     --muted-foreground: 0 0% 48.6%; /* oklch(0.586 0 0) */
-    /* Minimal layout: content sits on the white board, so page and toolbar
-       surfaces are the board's white rather than a grey layer. */
-    --surface-page: 0 0% 100%;
-    --surface-toolbar: 0 0% 100%;
 
     /* Shell chrome, used by src/shell/Layout.tsx only. */
     --shell-foreground: oklch(0.205 0 0);
+    --shell-sidebar: oklch(0.985 0 0);
+    --shell-sidebar-border: oklch(0.922 0 0);
+    /* Global's default "semi-dark header" (mixed-nav, classic). */
+    --shell-header-dark: oklch(0.28 0.037 260);
+    --shell-header-dark-foreground: oklch(0.985 0 0);
+    --shell-header-dark-border: oklch(0.372 0.039 257.3);
+    --shell-header-dark-primary: oklch(0.623 0.188 259.8);
+    /* Classic: the strip the floating sidebar sits on. */
+    --shell-classic-canvas: oklch(0.967 0 0);
+  }
+
+  /* Minimal (palette "minimal-gradient"): content sits on the white board, so
+     page and toolbar surfaces are the board's white rather than a grey layer. */
+  :root:root[data-layout="minimal"] {
+    --surface-page: 0 0% 100%;
+    --surface-toolbar: 0 0% 100%;
     --shell-canvas: oklch(0.93 0.01 202);
     --shell-canvas-image: linear-gradient(180deg, oklch(0.932 0.006 197) 0%, oklch(0.906 0.014 202.4) 20%,
       oklch(0.909 0.014 202.4) 32%, oklch(0.929 0.012 209.8) 46%, oklch(0.952 0.006 211) 60%,
