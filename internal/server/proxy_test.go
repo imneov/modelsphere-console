@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,9 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/modelsphere/console/internal/config"
 )
@@ -242,6 +246,77 @@ func TestProxyStreamsSSEFromGateway(t *testing.T) {
 	}
 	if !strings.Contains(string(rest), "[DONE]") {
 		t.Fatalf("stream did not finish: %q", rest)
+	}
+}
+
+// A gateway backend finds its URL, route and key in the cluster, so nothing
+// about the entrypoint is copied into a values file. Here the console's own
+// config names only the site profile, and everything else comes from the objects
+// beside it -- the same ones swissd deploys from.
+func TestGatewayBackendResolvesFromCluster(t *testing.T) {
+	cfg := &config.Config{Backends: []config.Backend{{
+		Name: "llm", Prefix: "/api/llm", Gateway: &config.Gateway{Profile: "llm/site-profile"},
+	}}}
+	srv := testServerWithConfig(t, cfg, gatewayObjects(t)...)
+
+	resolve, err := srv.targetFunc(cfg.Backends[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := resolve(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The aggregate route, because only it serves every deployed model.
+	if got := target.url.String(); got != "http://openresty.llm.svc:8080/llm-gateway" {
+		t.Fatalf("target = %q", got)
+	}
+	if target.header != "Authorization" || target.key != "Bearer gw-key-1" {
+		t.Fatalf("credential = %q %q", target.header, target.key)
+	}
+}
+
+// A gateway that cannot be found answers 502 with the reason, not a 404 from the
+// SPA, and not a request sent somewhere arbitrary.
+func TestGatewayBackendUnresolved(t *testing.T) {
+	cfg := &config.Config{Backends: []config.Backend{{
+		Name: "llm", Prefix: "/api/llm", Gateway: &config.Gateway{Profile: "llm/absent"},
+	}}}
+	h := testServerWithConfig(t, cfg).Handler()
+	admin := login(t, h, "admin", "admin-pw")
+
+	rec := do(h, "GET", "/api/llm/v1/models", admin, "")
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d %s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "backend llm") || !strings.Contains(body, "absent") {
+		t.Fatalf("the reason is missing from %s", body)
+	}
+}
+
+// The objects a real install has: the swiss site profile, the openresty route
+// ConfigMap and the key Secret.
+func gatewayObjects(t *testing.T) []runtime.Object {
+	t.Helper()
+	return []runtime.Object{
+		&unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1", "kind": "ConfigMap",
+			"metadata": map[string]any{"name": "site-profile", "namespace": "llm"},
+			"data":     map[string]any{"profile.yaml": "name: llm\nroute:\n  nginxConfigMap: llm/openresty-conf\n  nginxService: llm/openresty\n  auth:\n    secretRef: llm/openresty-keys\n"},
+		}},
+		&unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1", "kind": "ConfigMap",
+			"metadata": map[string]any{"name": "openresty-conf", "namespace": "llm"},
+			"data": map[string]any{
+				"session_route_kimi-k2.6.conf":   "set $route \"kimi-k2.6\";\n",
+				"session_route_llm-gateway.conf": "peers_by_model = {}\n",
+			},
+		}},
+		&unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1", "kind": "Secret",
+			"metadata": map[string]any{"name": "openresty-keys", "namespace": "llm"},
+			"data":     map[string]any{"keys": base64.StdEncoding.EncodeToString([]byte("gw-key-1:alice,gw-key-2:bob"))},
+		}},
 	}
 }
 

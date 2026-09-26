@@ -21,3 +21,28 @@ data:
         apiKeyEnv: {{ . | quote }}
         {{- end }}
       {{- end }}
+      {{- $gw := .Values.playground.gateway }}
+      {{- if or $gw.profile $gw.configMap }}
+      # Resolved from the cluster at startup: see the gateway section of values.
+      - name: llm
+        prefix: /api/llm
+        {{- with $gw.apiKeyEnv }}
+        apiKeyEnv: {{ . | quote }}
+        {{- end }}
+        gateway:
+          {{- with $gw.profile }}
+          profile: {{ . | quote }}
+          {{- end }}
+          {{- with $gw.configMap }}
+          configMap: {{ . | quote }}
+          {{- end }}
+          {{- with $gw.service }}
+          service: {{ . | quote }}
+          {{- end }}
+          {{- with $gw.route }}
+          route: {{ . | quote }}
+          {{- end }}
+          {{- with $gw.secretRef }}
+          secretRef: {{ . | quote }}
+          {{- end }}
+      {{- end }}

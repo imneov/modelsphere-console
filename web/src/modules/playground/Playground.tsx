@@ -408,12 +408,14 @@ function numberOr(value: string, fallback: number): number {
 // is what says which one.
 function wiringProblem(status: number): string {
   switch (status) {
+    case 404:
+      return "这个 console 没有配置 llm 后端：chart 里设置 playground.gateway 的 profile 或 configMap";
     case 401:
-      return "网关拒绝了凭据：检查 backends.llm 的 apiKeyEnv 指向的环境变量";
+      return "网关拒绝了凭据：检查 site profile 里 route.auth.secretRef 指向的 Secret";
     case 403:
       return "没有 llm 后端的权限：角色需要在 backends/llm 上授予 get 和 create";
     case 502:
-      return "网关不可达：检查 backends.llm.url 指向的服务和路由名";
+      return "网关不可达或没解析出来：检查 backends.llm.gateway 指向的 profile / ConfigMap / Service";
     default:
       return "";
   }

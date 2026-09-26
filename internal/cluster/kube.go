@@ -8,11 +8,21 @@
 package cluster
 
 import (
+	"context"
+	"encoding/base64"
 	"fmt"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+)
+
+var (
+	configMapsGVR = schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
+	secretsGVR    = schema.GroupVersionResource{Version: "v1", Resource: "secrets"}
 )
 
 type Kube struct {
@@ -33,9 +43,51 @@ func NewKube(kubeconfig, context_ string) (*Kube, error) {
 	return &Kube{dyn: dyn}, nil
 }
 
+// NewKubeFrom wraps a dynamic client the caller already has, which is how tests
+// hand this package a fake.
+func NewKubeFrom(dyn dynamic.Interface) *Kube { return &Kube{dyn: dyn} }
+
 // Dynamic exposes the dynamic client for the iam store to build resource
 // clients against the iam.theriseunion.io GroupVersionResources.
 func (k *Kube) Dynamic() dynamic.Interface { return k.dyn }
+
+// ConfigMap reads one ConfigMap's data. The gateway resolver reads two: the site
+// profile, and the openresty route list beside it.
+func (k *Kube) ConfigMap(ctx context.Context, namespace, name string) (map[string]string, error) {
+	obj, err := k.dyn.Resource(configMapsGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	data, _, err := unstructured.NestedStringMap(obj.Object, "data")
+	if err != nil {
+		return nil, fmt.Errorf("configmap %s/%s: %w", namespace, name, err)
+	}
+	return data, nil
+}
+
+// Secret reads one Secret's entries, decoded. The gateway keeps its keys in a
+// file rather than an environment variable -- nginx re-reads files on reload,
+// never env -- so there is no env var to point at and console reads the Secret
+// itself. That read is the whole reason its role needs secrets at all.
+func (k *Kube) Secret(ctx context.Context, namespace, name string) (map[string][]byte, error) {
+	obj, err := k.dyn.Resource(secretsGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	data, _, err := unstructured.NestedStringMap(obj.Object, "data")
+	if err != nil {
+		return nil, fmt.Errorf("secret %s/%s: %w", namespace, name, err)
+	}
+	out := make(map[string][]byte, len(data))
+	for key, value := range data {
+		decoded, err := base64.StdEncoding.DecodeString(value)
+		if err != nil {
+			return nil, fmt.Errorf("secret %s/%s: entry %q is not base64", namespace, name, key)
+		}
+		out[key] = decoded
+	}
+	return out, nil
+}
 
 func restConfig(kubeconfig, context_ string) (*rest.Config, error) {
 	if kubeconfig == "" && context_ == "" {

@@ -13,7 +13,9 @@ func TestValidateBackends(t *testing.T) {
 		wantErr string
 	}{
 		{"valid", []Backend{ok}, ""},
-		{"missing field", []Backend{{Name: "swiss", Prefix: "/api/deploy"}}, "needs name, prefix and url"},
+		{"missing url", []Backend{{Name: "swiss", Prefix: "/api/deploy"}}, "needs url, or a gateway"},
+		{"missing name", []Backend{{Prefix: "/api/deploy", URL: ok.URL}}, "needs name and prefix"},
+		{"missing prefix", []Backend{{Name: "swiss", URL: ok.URL}}, "needs name and prefix"},
 		// Outside /api/ the auth middleware treats the path as a public SPA route.
 		{"prefix outside /api", []Backend{{Name: "swiss", Prefix: "/deploy", URL: ok.URL}}, "under /api/"},
 		{"prefix is /api itself", []Backend{{Name: "swiss", Prefix: "/api", URL: ok.URL}}, "under /api/"},
@@ -34,6 +36,54 @@ func TestValidateBackends(t *testing.T) {
 			"env name is not a name",
 			[]Backend{{Name: "llm", Prefix: "/api/llm", URL: "http://gw.svc:8080/llm", APIKeyEnv: "llm-api-key"}},
 			"not an environment variable name",
+		},
+		{
+			"gateway backend reads the site profile",
+			[]Backend{{Name: "llm", Prefix: "/api/llm", Gateway: &Gateway{Profile: "llm/site-profile"}}},
+			"",
+		},
+		{
+			"gateway backend names the route configmap and service directly",
+			[]Backend{{Name: "llm", Prefix: "/api/llm", Gateway: &Gateway{ConfigMap: "llm/openresty-conf", Service: "llm/openresty"}}},
+			"",
+		},
+		{
+			"both url and gateway",
+			[]Backend{{Name: "llm", Prefix: "/api/llm", URL: "http://gw.svc:8080/llm", Gateway: &Gateway{Profile: "llm/site-profile"}}},
+			"exactly one says where the backend is",
+		},
+		{
+			"gateway without a source",
+			[]Backend{{Name: "llm", Prefix: "/api/llm", Gateway: &Gateway{Service: "llm/openresty"}}},
+			"needs profile or configMap",
+		},
+		{
+			"gateway with both sources",
+			[]Backend{{Name: "llm", Prefix: "/api/llm", Gateway: &Gateway{Profile: "llm/site-profile", ConfigMap: "llm/openresty-conf"}}},
+			"both profile and configMap",
+		},
+		// A bare name cannot be looked up: nothing says which namespace.
+		{
+			"gateway profile without a namespace",
+			[]Backend{{Name: "llm", Prefix: "/api/llm", Gateway: &Gateway{Profile: "site-profile"}}},
+			"must be namespace/name",
+		},
+		{
+			"gateway with no service and no profile to read one from",
+			[]Backend{{Name: "llm", Prefix: "/api/llm", Gateway: &Gateway{ConfigMap: "llm/openresty-conf"}}},
+			"gateway.service is required",
+		},
+		{
+			"gateway port out of range",
+			[]Backend{{Name: "llm", Prefix: "/api/llm", Gateway: &Gateway{Profile: "llm/site-profile", Port: 70000}}},
+			"not a port",
+		},
+		// The key Secret is the one reference a bare name may be used for: it
+		// means the entrypoint's own namespace.
+		{
+			"gateway secretref may be bare",
+			[]Backend{{Name: "llm", Prefix: "/api/llm", Gateway: &Gateway{Profile: "llm/site-profile", SecretRef: "openresty"}}},
+			"",
 		},
 	}
 	for _, tc := range cases {

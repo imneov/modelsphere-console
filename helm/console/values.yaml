@@ -44,26 +44,48 @@ backends:
   - name: swiss
     prefix: /api/deploy
     url: http://swissd.swiss.svc:8080/api
-  # The inference gateway the Playground talks to. llm-openresty serves
-  # 8080/<route>/v1/..., so url ends at the route: the aggregated one, whose
-  # GET /v1/models lists every deployed model. Point it at a per-model route to
-  # hold the Playground to that model.
-  - name: llm
-    prefix: /api/llm
-    url: http://llm-gateway.modelsphere.svc:8080/llm-gateway
-    apiKeyEnv: CONSOLE_LLM_API_KEY
+
+# The Playground's inference gateway, resolved from the cluster instead of named
+# here: console reads the entrypoint Service, the route to talk to and the key
+# from what is already the source of truth, and re-reads it as the cluster
+# changes. No URL to let go stale, no route list to keep in step with deploys,
+# and no copy of the gateway key in this release.
+#
+#   profile    swiss's site profile ConfigMap, "namespace/name" -- the document
+#              swissd deploys from, which already names the entrypoint Service,
+#              the shared route ConfigMap and the key Secret. Prefer this: the
+#              console and swissd then cannot disagree about where the entrypoint
+#              is.
+#   configMap  the openresty route ConfigMap and its Service, "namespace/name",
+#              for an install with no swissd. The aggregate route -- the one
+#              serving several models -- is chosen from the ConfigMap's
+#              session_route_<route>.conf keys.
+#   route      pins one route instead of choosing. Empty means the aggregate one.
+#
+# Left empty, the Playground module has no backend: the console still serves
+# every other page, and the page itself says what is missing.
+playground:
+  gateway:
+    profile: ""
+    configMap: ""
+    service: ""
+    route: ""
+    # Optional overrides. secretRef names the Secret holding the gateway's keys
+    # (normally read from the profile); apiKeyEnv takes the key from an
+    # environment variable instead, for an install that copies it into its own
+    # namespace -- then wire it through backendSecrets below.
+    secretRef: ""
+    apiKeyEnv: ""
 
 # Backend credentials, each read from a Secret key into the environment variable
-# it is keyed by. The Secret must already exist: a gateway key kept in this
-# chart's Secret would become a chart value, and values end up in release
-# history. Empty means the llm backend sends no credential, which llm-openresty
-# accepts only while it has no keys of its own.
+# it is keyed by. For a backend whose config names an apiKeyEnv; the gateway
+# above needs none, because console reads its key from the cluster. The Secret
+# must already exist: a key kept in this chart's Secret would become a chart
+# value, and values end up in release history.
 backendSecrets: {}
-#  CONSOLE_LLM_API_KEY:
-#    secretName: llm-gateway-api
-#    key: apiKey
 
-# RBAC for the iam CRDs and native cluster roles/bindings the authorizer reads.
+# RBAC for the iam CRDs and native cluster roles/bindings the authorizer reads,
+# plus read on the gateway's ConfigMaps and key Secret when one is configured.
 rbac:
   create: true
 

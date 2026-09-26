@@ -59,6 +59,10 @@ type Backend struct {
 	Name   string `yaml:"name"`
 	Prefix string `yaml:"prefix"`
 	URL    string `yaml:"url"`
+	// Gateway makes this backend an inference entrypoint whose address is read
+	// from the cluster rather than written here. Exactly one of URL and Gateway
+	// is set.
+	Gateway *Gateway `yaml:"gateway,omitempty"`
 	// APIKeyEnv is the environment variable holding a credential console sends
 	// to this backend on every request, as `Authorization: Bearer <value>`,
 	// replacing the caller's token. It is how a backend authenticates the portal
@@ -67,9 +71,53 @@ type Backend struct {
 	// this form (lua/api_keys.parse_bearer).
 	//
 	// Empty means the caller's token is forwarded unchanged, which is what a
-	// backend that verifies the JWT itself (swissd) wants.
+	// backend that verifies the JWT itself (swissd) wants. On a Gateway backend
+	// it is an override: the key otherwise comes from the Secret the profile
+	// names, so a cluster that keeps the console and the gateway in one
+	// namespace can still take a copied key through a Secret volume.
 	APIKeyEnv string `yaml:"apiKeyEnv,omitempty"`
 }
+
+// Gateway is an inference entrypoint resolved from the cluster at startup and
+// refreshed as the cluster changes. Nothing here names a URL, because none of it
+// is stable: the entrypoint Service moves with the install, the routes come and
+// go with every deploy, and the key is rotated by whoever runs the gateway. A
+// URL copied into a values file goes stale silently; a route set copied there
+// makes the Playground lie about what is deployed.
+//
+// Two ways to say where the truth is: the swiss site profile (what swissd
+// deploys from, so the two cannot disagree), or the openresty route ConfigMap
+// and its Service directly for an install that has no swissd.
+type Gateway struct {
+	// Profile is the site profile ConfigMap, "namespace/name". Everything below
+	// that it does not name comes from there: route.nginxService, nginxPort,
+	// nginxConfigMap and auth (header, prefix, secretRef, secretKey).
+	Profile string `yaml:"profile,omitempty"`
+	// ConfigMap is the openresty route ConfigMap, "namespace/name", when there
+	// is no profile. Its session_route_<route>.conf keys are the routes, and
+	// the aggregate one -- the route that serves several models, which is what
+	// lets one picker list everything deployed -- is chosen from them.
+	ConfigMap string `yaml:"configMap,omitempty"`
+	// Service is the entrypoint Service, "namespace/name".
+	Service string `yaml:"service,omitempty"`
+	// Port of the entrypoint. Default 8080 (the openresty chart's one port).
+	Port int `yaml:"port,omitempty"`
+	// Route pins the route to talk to. Empty picks the aggregate route.
+	Route string `yaml:"route,omitempty"`
+	// SecretRef is the Secret holding the gateway's keys, "namespace/name" or a
+	// bare name meaning the entrypoint's namespace. SecretKey is the entry
+	// inside it, default "keys", whose value is "key1:owner1,key2:owner2"; the
+	// first key is the one console sends.
+	SecretRef string `yaml:"secretRef,omitempty"`
+	SecretKey string `yaml:"secretKey,omitempty"`
+}
+
+// GatewayDefaults are the values a Gateway falls back to when neither it nor the
+// profile names one.
+const (
+	DefaultGatewayPort      = 8080
+	DefaultGatewaySecretKey = "keys"
+)
 
 // APIKey is the backend's own credential, read from the environment. Empty when
 // the backend names none, or when the variable is unset.
@@ -143,8 +191,8 @@ func (c *Config) Validate() error {
 	}
 	names, prefixes := map[string]bool{}, map[string]bool{}
 	for i, b := range c.Backends {
-		if b.Name == "" || b.Prefix == "" || b.URL == "" {
-			return fmt.Errorf("%s: backends[%d] needs name, prefix and url", c.origin(), i)
+		if b.Name == "" || b.Prefix == "" {
+			return fmt.Errorf("%s: backends[%d] needs name and prefix", c.origin(), i)
 		}
 		if err := validateBackend(b); err != nil {
 			return fmt.Errorf("%s: backends[%d] (%s): %w", c.origin(), i, b.Name, err)
@@ -174,9 +222,20 @@ func validateBackend(b Backend) error {
 			return fmt.Errorf("prefix %q is reserved by console", b.Prefix)
 		}
 	}
-	u, err := url.Parse(b.URL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return fmt.Errorf("url %q must be an absolute http(s) URL", b.URL)
+	switch {
+	case b.URL == "" && b.Gateway == nil:
+		return fmt.Errorf("needs url, or a gateway to resolve one from")
+	case b.URL != "" && b.Gateway != nil:
+		return fmt.Errorf("has both url and gateway; exactly one says where the backend is")
+	case b.Gateway != nil:
+		if err := validateGateway(*b.Gateway); err != nil {
+			return err
+		}
+	default:
+		u, err := url.Parse(b.URL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("url %q must be an absolute http(s) URL", b.URL)
+		}
 	}
 	// A mistyped env name would silently send no credential, and the backend
 	// would answer 401 for reasons nobody can see in the config.
@@ -186,4 +245,41 @@ func validateBackend(b Backend) error {
 	return nil
 }
 
-var envNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+// validateGateway checks only what can be known without the cluster. Whether the
+// profile names a Service, whether the route ConfigMap has an aggregate route --
+// those are answered at startup where the answer can be logged with the reason.
+func validateGateway(g Gateway) error {
+	switch {
+	case g.Profile == "" && g.ConfigMap == "":
+		return fmt.Errorf("gateway needs profile or configMap to say where the entrypoint is")
+	case g.Profile != "" && g.ConfigMap != "":
+		return fmt.Errorf("gateway has both profile and configMap; the profile already names one")
+	}
+	for _, ref := range []struct{ field, value string }{
+		{"profile", g.Profile}, {"configMap", g.ConfigMap}, {"service", g.Service},
+	} {
+		if ref.value != "" && !refRE.MatchString(ref.value) {
+			return fmt.Errorf("gateway.%s %q must be namespace/name", ref.field, ref.value)
+		}
+	}
+	// A profile carries the Service; without one, nothing else does.
+	if g.Profile == "" && g.Service == "" {
+		return fmt.Errorf("gateway.service is required when there is no profile to read it from")
+	}
+	if g.SecretRef != "" && !refRE.MatchString(g.SecretRef) && !nameRE.MatchString(g.SecretRef) {
+		return fmt.Errorf("gateway.secretRef %q must be name or namespace/name", g.SecretRef)
+	}
+	if g.Port < 0 || g.Port > 65535 {
+		return fmt.Errorf("gateway.port %d is not a port", g.Port)
+	}
+	if strings.ContainsAny(g.SecretKey+g.Route, " \t") {
+		return fmt.Errorf("gateway.secretKey and gateway.route must not contain spaces")
+	}
+	return nil
+}
+
+var (
+	envNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	refRE     = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?/[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
+	nameRE    = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
+)
