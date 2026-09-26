@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -117,5 +119,70 @@ func TestBackendAPIKey(t *testing.T) {
 	}
 	if got := base.APIKey(); got != "" {
 		t.Fatalf("APIKey() = %q for a backend naming none, want empty", got)
+	}
+}
+
+// document is what a config file says, and the YAML key names are part of the
+// contract: KnownFields turns a typo into a startup failure instead of a setting
+// that quietly does nothing.
+const document = `
+server:
+  auth:
+    jwtSecret: s
+backends:
+  - name: swiss
+    prefix: /api/deploy
+    url: http://swissd.swiss.svc:8080/api
+  - name: llm
+    prefix: /api/llm
+    gateway:
+      profile: llm/site-profile
+      route: llm-gateway
+`
+
+func TestLoadGatewayBackend(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "console.yaml")
+	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	llm := c.Backends[1]
+	if llm.Gateway == nil || llm.Gateway.Profile != "llm/site-profile" || llm.Gateway.Route != "llm-gateway" {
+		t.Fatalf("gateway = %+v", llm.Gateway)
+	}
+	// The defaults the resolver applies, not the config: what the file omits is
+	// whatever the cluster says.
+	if llm.Gateway.Port != 0 || llm.Gateway.SecretKey != "" {
+		t.Fatalf("gateway = %+v", llm.Gateway)
+	}
+
+	typo := filepath.Join(t.TempDir(), "console.yaml")
+	if err := os.WriteFile(typo, []byte(strings.Replace(document, "gateway:", "gatewai:", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(typo); err == nil || !strings.Contains(err.Error(), "gatewai") {
+		t.Fatalf("a misspelled key loaded: %v", err)
+	}
+}
+
+// The example is documentation people copy; it has to be a config console would
+// actually accept.
+func TestExampleConfigLoads(t *testing.T) {
+	c, err := Load("../../examples/console.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	llm := c.Backends[1]
+	if llm.Gateway == nil || llm.Gateway.Profile == "" {
+		t.Fatalf("the example no longer shows a gateway backend: %+v", llm)
 	}
 }
