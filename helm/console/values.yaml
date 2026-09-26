@@ -8,6 +8,8 @@ replicaCount: 1
 service:
   type: ClusterIP
   port: 8080
+  # Only with type NodePort; empty lets Kubernetes pick one.
+  nodePort: ""
 
 # Identity signing. jwtSecret is generated on first install if left empty, and
 # kept in a Secret. Share it with Rise Global to make an upgrade seamless.

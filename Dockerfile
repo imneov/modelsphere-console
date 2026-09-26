@@ -7,21 +7,30 @@
 #
 # The web stage is a static Vite build that lands in web/dist.
 
+# Package indexes are build args, so a build that cannot reach the public ones
+# can point at a mirror: --build-arg NPM_REGISTRY=https://registry.npmmirror.com
+#                        --build-arg GOPROXY=https://goproxy.cn,direct
+ARG NPM_REGISTRY=https://registry.npmjs.org
+ARG GOPROXY=https://proxy.golang.org,direct
+
 # --- 1. the SPA ------------------------------------------------------------
 FROM node:24-bookworm-slim AS web
+ARG NPM_REGISTRY
 WORKDIR /src/web
 # The private @riseaicloud/* registry auth is passed as a build secret, never
 # baked into a layer: --mount=type=secret,id=npmrc,target=/src/web/.npmrc
-COPY web/package.json web/package-lock.json* web/pnpm-lock.yaml* ./
+COPY web/package.json web/package-lock.json ./
 # @riseaicloud/* resolve to file:./vendor/..., so the install needs them present.
 COPY web/vendor ./vendor
 RUN --mount=type=secret,id=npmrc,target=/src/web/.npmrc \
-    corepack enable && (pnpm install --frozen-lockfile || npm ci --no-audit --no-fund)
+    npm ci --no-audit --no-fund --registry "$NPM_REGISTRY"
 COPY web/ ./
 RUN npm run build
 
 # --- 2. the binary ---------------------------------------------------------
 FROM golang:1.26 AS build
+ARG GOPROXY
+ENV GOPROXY=$GOPROXY
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
