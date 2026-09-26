@@ -5,7 +5,7 @@ roles, login) and federates everything else to backends like
 [swiss](https://github.com/modelsphere/swiss).
 
 ```
-browser ─▶ web (Next.js + React 18) ─▶ consoled (Go BFF)
+browser ─▶ web (shell + modules) ─▶ consoled (Go BFF)
                                          identity: iam CRDs + OAuth2 (HS256)
                                          + global-scope RBAC + reverse proxy
                                                         │ HTTP (Bearer JWT)

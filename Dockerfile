@@ -5,9 +5,7 @@
 # runtime image. Debian-based build stages match the Debian-derived runtime and
 # remove a class of musl-vs-glibc "works on my builder" differences.
 #
-# NOTE (P0): the web stage assumes a static build lands in web/dist. If the
-# frontend keeps Next.js server features, this stage and the runtime change to
-# run a Node server instead of embedding — decided when the frontend is wired.
+# The web stage is a static Vite build that lands in web/dist.
 
 # --- 1. the SPA ------------------------------------------------------------
 FROM node:24-bookworm-slim AS web
@@ -15,6 +13,8 @@ WORKDIR /src/web
 # The private @riseaicloud/* registry auth is passed as a build secret, never
 # baked into a layer: --mount=type=secret,id=npmrc,target=/src/web/.npmrc
 COPY web/package.json web/package-lock.json* web/pnpm-lock.yaml* ./
+# @riseaicloud/* resolve to file:./vendor/..., so the install needs them present.
+COPY web/vendor ./vendor
 RUN --mount=type=secret,id=npmrc,target=/src/web/.npmrc \
     corepack enable && (pnpm install --frozen-lockfile || npm ci --no-audit --no-fund)
 COPY web/ ./
