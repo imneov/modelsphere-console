@@ -1,12 +1,15 @@
 package server
 
 import (
+	"bufio"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/modelsphere/console/internal/config"
 )
@@ -127,6 +130,118 @@ func TestProxyAuthorizesPerBackendAndVerb(t *testing.T) {
 	}
 	if len(*seen) != 1 {
 		t.Fatalf("only the permitted request may reach the backend, got %d", len(*seen))
+	}
+}
+
+// A backend with a credential of its own (the model gateway) gets that key as
+// its Bearer token, not the caller's session -- the session authorizes the
+// caller to console, and nothing else.
+func TestProxySendsBackendCredential(t *testing.T) {
+	t.Setenv("CONSOLE_TEST_GATEWAY_KEY", "gw-secret")
+	up, seen := upstream(t)
+	cfg := &config.Config{Backends: []config.Backend{{
+		Name: "llm", Prefix: "/api/llm", URL: up.URL, APIKeyEnv: "CONSOLE_TEST_GATEWAY_KEY",
+	}}}
+	h := testServerWithConfig(t, cfg).Handler()
+	admin := login(t, h, "admin", "admin-pw")
+
+	if rec := do(h, "POST", "/api/llm/v1/chat/completions", admin, `{"model":"kimi"}`); rec.Code != http.StatusTeapot {
+		t.Fatalf("expected passthrough, got %d %s", rec.Code, rec.Body.String())
+	}
+	if len(*seen) != 1 {
+		t.Fatalf("upstream hits: %d", len(*seen))
+	}
+	if a := (*seen)[0].header.Get("Authorization"); a != "Bearer gw-secret" {
+		t.Fatalf("backend credential not sent: %q", a)
+	}
+}
+
+// Without apiKeyEnv the caller's token is still carried, which is what a backend
+// verifying the JWT itself needs.
+func TestProxyWithoutCredentialCarriesSession(t *testing.T) {
+	up, seen := upstream(t)
+	h := proxyServer(t, up.URL)
+	admin := login(t, h, "admin", "admin-pw")
+
+	if rec := do(h, "GET", "/api/deploy/catalog", admin, ""); rec.Code != http.StatusTeapot {
+		t.Fatalf("expected passthrough, got %d", rec.Code)
+	}
+	if a := (*seen)[0].header.Get("Authorization"); a != "Bearer "+admin {
+		t.Fatalf("caller token not carried: %q", a)
+	}
+}
+
+// The Playground's path end to end: the caller's request reaches the gateway
+// carrying the credential console holds (not the caller's token), the
+// conversation id reaches it too, and the gateway's frames come back as they are
+// produced rather than all at the end.
+func TestProxyStreamsSSEFromGateway(t *testing.T) {
+	t.Setenv("CONSOLE_TEST_GATEWAY_KEY", "gw-secret")
+	release := make(chan struct{})
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a := r.Header.Get("Authorization"); a != "Bearer gw-secret" {
+			t.Errorf("gateway saw Authorization %q, want its own key", a)
+		}
+		if s := r.Header.Get("X-Session-Id"); s != "conv-1" {
+			t.Errorf("gateway saw X-Session-Id %q, want the conversation", s)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		fmt.Fprint(w, `data: {"choices":[{"delta":{"content":"first"}}]}`+"\n\n")
+		flusher.Flush()
+		<-release // hold the response open: a buffering proxy would show nothing yet
+		fmt.Fprint(w, "data: [DONE]\n\n")
+		flusher.Flush()
+	}))
+	t.Cleanup(gateway.Close)
+
+	cfg := &config.Config{Backends: []config.Backend{{
+		Name: "llm", Prefix: "/api/llm", URL: gateway.URL, APIKeyEnv: "CONSOLE_TEST_GATEWAY_KEY",
+	}}}
+	srv := testServerWithConfig(t, cfg)
+	console := httptest.NewServer(srv.Handler())
+	t.Cleanup(console.Close)
+
+	req, err := http.NewRequest("POST", console.URL+"/api/llm/v1/chat/completions", strings.NewReader(`{"model":"m","stream":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+login(t, srv.Handler(), "admin", "admin-pw"))
+	req.Header.Set("X-Session-Id", "conv-1")
+	resp, err := console.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.Header.Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("content type: %q", resp.Header.Get("Content-Type"))
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	first := make(chan string, 1)
+	go func() {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			line = ""
+		}
+		first <- line
+	}()
+	select {
+	case line := <-first:
+		if !strings.Contains(line, "first") {
+			t.Fatalf("first frame: %q", line)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the gateway was still generating and no frame arrived: the proxy buffered the stream")
+	}
+
+	close(release)
+	rest, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(rest), "[DONE]") {
+		t.Fatalf("stream did not finish: %q", rest)
 	}
 }
 

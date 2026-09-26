@@ -47,16 +47,17 @@ turn the upgrade into a data migration. Consequences of sharing it:
 ```
 browser ─▶ web (Vite / React 19 / Tailwind 4 / @riseaicloud/ui)
              shell: login, layout, sidebar, route guards
-             modules: iam, swiss, …            (src/modules/*)
-                     │  same-origin /oauth, /api/iam, /api/deploy…
+             modules: iam, swiss, playground, …   (src/modules/*)
+                     │  same-origin /oauth, /api/iam, /api/deploy, /api/llm…
                      ▼
              console (Go BFF)
                internal/iam      identity kernel: CRD types + OAuth2 (HS256) + RBAC
                internal/server   mux + auth middleware + static SPA
                                  + backend proxy (proxy.go)
                      │
-                     ▼  HTTP: X-Remote-User / X-Remote-Group + Bearer JWT
-             swissd, and other backends
+                     ▼  HTTP: X-Remote-User / X-Remote-Group + Bearer JWT,
+                        or the backend's own key (backends.apiKeyEnv)
+             swissd, llm-openresty, and other backends
 ```
 
 Users and roles are read/written as **CRDs via the dynamic client** — no scheme,
@@ -68,7 +69,8 @@ unchanged. Moving either one moves both.
 ## Modules
 
 The console is a shell plus compile-time modules. A module is a feature area
-(iam, swiss, later container management); the shell owns everything around it.
+(iam, swiss, playground, later container management); the shell owns everything
+around it.
 
 | Owned by | What |
 |---|---|
@@ -120,11 +122,42 @@ browser  /api/deploy/catalog  ──▶ console
 | Prefix | must be under `/api/` (that is what puts it behind login), not `/api/iam` or `/api/me` |
 | Authorization | resource `backends`, resourceName = backend name; GET/HEAD/OPTIONS `get`, POST `create`, PUT/PATCH `update`, DELETE `delete` |
 | Identity | `X-Remote-User` / `X-Remote-Group`, as Rise Global's apiserver sets for a ReverseProxy — a backend runs unchanged behind either |
+| Credential | `apiKeyEnv` names an environment variable console sends as `Authorization: Bearer <value>`, replacing the caller's token. The browser never sees it. Empty means the token is forwarded unchanged (swissd's case: it verifies the JWT itself) |
 | Streaming | flushed as it arrives (SSE, chunked progress) |
 | Backend down | JSON `502` |
 
 A backend must trust `X-Remote-*` only from console (network policy / mTLS),
 never from browsers.
+
+In-cluster, the credential comes from a Secret rather than the chart's values:
+`helm/console` renders an env entry per `backendSecrets` key. A variable that is
+named but unset is logged at startup and the request goes without it — console
+starts, and the backend answers `401`, rather than the pod refusing to boot.
+
+## Playground
+
+The Playground is chat against the inference gateway, for the question a
+deployment page cannot answer: does this model actually generate? swissd's own
+chat probe is one prompt, 32 tokens, non-streaming, and it lives on a release;
+the Playground is a conversation, streaming, for anyone with the permission.
+
+| Concern | Decision |
+|---|---|
+| Where it runs | `web/src/modules/playground/`, mounted at `/playground`; the page is one module declaration plus a page, API client and SSE parser |
+| Which backend | `llm` → llm-openresty's aggregate route, so one picker lists every deployed model (`GET /v1/models`) |
+| Gateway key | held by console (`backends.llm.apiKeyEnv`), never by the browser and never in a chart value |
+| Conversation identity | the page sends a per-conversation `X-Session-Id`; the gateway pins that conversation to one engine, so its prefix cache stays warm across turns |
+| Token counts | the page does not send `stream_options`; the gateway injects `include_usage` for streaming requests |
+| Reasoning models | `delta.reasoning_content` is shown in a collapsible block above the answer |
+| Access | UI permission `playground.use` guards the page; the backend needs `get` **and** `create` on `backends/llm` (models are a GET, completions a POST) |
+
+A user therefore needs a role carrying both:
+
+```json
+{"uiPermissions": ["playground.use"],
+ "rules": [{"apiGroups": ["iam.theriseunion.io"], "resources": ["backends"],
+            "resourceNames": ["llm"], "verbs": ["get", "create"]}]}
+```
 
 ## Bringing swiss in
 
@@ -172,6 +205,7 @@ requests carry the same headers Global's apiserver sets.
 | P3 | Full roles: authorizer + role/binding CRUD + role/permission UI. |
 | P4 | Federation: module shell, stack aligned with swiss, backend proxy with identity headers and per-backend RBAC. **(done)** |
 | P5 | swiss module: swiss prepares its frontend (table above) and exports `openapi.json`; copy into `modules/swiss`; CODEOWNERS. |
-| P6 | Container management modules, moved over from Rise Global. |
+| P6 | Playground: chat module, `llm` backend with a console-held gateway key, streaming SSE end to end. **(done)** |
+| P7 | Container management modules, moved over from Rise Global. |
 
 Each phase is independently committable and verifiable.

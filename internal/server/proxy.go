@@ -16,9 +16,10 @@ const backendResource = "backends"
 
 // mountBackends proxies each backend's prefix. Authentication and the
 // password-reset guard already ran (the prefix is under /api/); this adds
-// per-backend authorization and swaps the caller's identity into the
-// X-Remote-* headers the backend trusts -- the same headers Rise Global's
-// apiserver sets for a ReverseProxy, so a backend runs unchanged behind either.
+// per-backend authorization, swaps the caller's identity into the X-Remote-*
+// headers the backend trusts -- the same headers Rise Global's apiserver sets
+// for a ReverseProxy, so a backend runs unchanged behind either -- and adds the
+// backend's own credential, if it has one.
 //
 // Backend URLs were checked by config.Validate; one that still fails to parse
 // is skipped and logged rather than taking the server down.
@@ -29,7 +30,11 @@ func (s *Server) mountBackends(mux *http.ServeMux) {
 			s.log.Error("backend skipped: bad url", "backend", b.Name, "err", err)
 			continue
 		}
-		proxy := s.backendProxy(b, target)
+		key := b.APIKey()
+		if b.APIKeyEnv != "" && key == "" {
+			s.log.Warn("backend credential is empty: requests go without it", "backend", b.Name, "env", b.APIKeyEnv)
+		}
+		proxy := s.backendProxy(b, target, key)
 		mux.HandleFunc(strings.TrimSuffix(b.Prefix, "/")+"/", func(w http.ResponseWriter, r *http.Request) {
 			if !s.authorize(w, r, backendVerb(r.Method), backendResource, b.Name) {
 				return
@@ -39,7 +44,7 @@ func (s *Server) mountBackends(mux *http.ServeMux) {
 	}
 }
 
-func (s *Server) backendProxy(b config.Backend, target *url.URL) *httputil.ReverseProxy {
+func (s *Server) backendProxy(b config.Backend, target *url.URL, apiKey string) *httputil.ReverseProxy {
 	prefix := strings.TrimSuffix(b.Prefix, "/")
 	return &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
@@ -64,6 +69,11 @@ func (s *Server) backendProxy(b config.Backend, target *url.URL) *httputil.Rever
 			// only as a cookie, so a backend that verifies the JWT itself can.
 			if tok := bearerToken(pr.In); tok != "" {
 				pr.Out.Header.Set("Authorization", "Bearer "+tok)
+			}
+			// A backend with a credential of its own replaces that token: the
+			// session authorizes the caller to console, not to the gateway.
+			if apiKey != "" {
+				pr.Out.Header.Set("Authorization", "Bearer "+apiKey)
 			}
 		},
 		// Stream as it arrives: backends answer with SSE / chunked progress.

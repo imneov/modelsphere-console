@@ -35,10 +35,33 @@ admin:
 # The prefix must sit under /api/ (that is what puts it behind login).
 # Access is RBAC on resource "backends", resourceName = name; the verb follows
 # the HTTP method (GET get, POST create, PUT/PATCH update, DELETE delete).
+#
+# A backend that authenticates with a credential of its own names the environment
+# variable holding it in apiKeyEnv. console then sends `Authorization: Bearer
+# <value>` instead of the caller's token, so the key stays in the cluster and out
+# of the browser. The value comes from a Secret: see backendSecrets.
 backends:
   - name: swiss
     prefix: /api/deploy
     url: http://swissd.swiss.svc:8080/api
+  # The inference gateway the Playground talks to. llm-openresty serves
+  # 8080/<route>/v1/..., so url ends at the route: the aggregated one, whose
+  # GET /v1/models lists every deployed model. Point it at a per-model route to
+  # hold the Playground to that model.
+  - name: llm
+    prefix: /api/llm
+    url: http://llm-gateway.modelsphere.svc:8080/llm-gateway
+    apiKeyEnv: CONSOLE_LLM_API_KEY
+
+# Backend credentials, each read from a Secret key into the environment variable
+# it is keyed by. The Secret must already exist: a gateway key kept in this
+# chart's Secret would become a chart value, and values end up in release
+# history. Empty means the llm backend sends no credential, which llm-openresty
+# accepts only while it has no keys of its own.
+backendSecrets: {}
+#  CONSOLE_LLM_API_KEY:
+#    secretName: llm-gateway-api
+#    key: apiKey
 
 # RBAC for the iam CRDs and native cluster roles/bindings the authorizer reads.
 rbac:

@@ -26,6 +26,15 @@ spec:
                 secretKeyRef:
                   name: {{ include "console.fullname" . }}
                   key: jwtSecret
+            {{- /* Backend credentials, keyed by the env var a backend's apiKeyEnv
+                   names. An existing Secret, not one this chart writes. */}}
+            {{- range $env, $ref := .Values.backendSecrets }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $ref.secretName | quote }}
+                  key: {{ $ref.key | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080

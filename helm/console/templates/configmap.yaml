@@ -17,4 +17,7 @@ data:
       - name: {{ .name | quote }}
         prefix: {{ .prefix | quote }}
         url: {{ .url | quote }}
+        {{- with .apiKeyEnv }}
+        apiKeyEnv: {{ . | quote }}
+        {{- end }}
       {{- end }}

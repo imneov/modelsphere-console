@@ -23,3 +23,12 @@ backends:
   - name: swiss
     prefix: /api/deploy
     url: http://swissd.swiss.svc:8080/api
+
+  # The inference gateway the Playground talks to. llm-openresty serves
+  # 8080/<route>/v1/..., so url ends at the route. apiKeyEnv names the
+  # environment variable holding the gateway key: console sends it as the
+  # Bearer token in place of the caller's, so the key never reaches a browser.
+  - name: llm
+    prefix: /api/llm
+    url: http://llm-gateway.modelsphere.svc:8080/llm-gateway
+    apiKeyEnv: CONSOLE_LLM_API_KEY

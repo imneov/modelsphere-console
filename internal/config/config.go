@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -58,6 +59,25 @@ type Backend struct {
 	Name   string `yaml:"name"`
 	Prefix string `yaml:"prefix"`
 	URL    string `yaml:"url"`
+	// APIKeyEnv is the environment variable holding a credential console sends
+	// to this backend on every request, as `Authorization: Bearer <value>`,
+	// replacing the caller's token. It is how a backend authenticates the portal
+	// instead of the browser: an inference gateway's key stays server-side and
+	// never becomes part of what the SPA can read. llm-openresty accepts only
+	// this form (lua/api_keys.parse_bearer).
+	//
+	// Empty means the caller's token is forwarded unchanged, which is what a
+	// backend that verifies the JWT itself (swissd) wants.
+	APIKeyEnv string `yaml:"apiKeyEnv,omitempty"`
+}
+
+// APIKey is the backend's own credential, read from the environment. Empty when
+// the backend names none, or when the variable is unset.
+func (b Backend) APIKey() string {
+	if b.APIKeyEnv == "" {
+		return ""
+	}
+	return os.Getenv(b.APIKeyEnv)
 }
 
 func Load(path string) (*Config, error) {
@@ -158,5 +178,12 @@ func validateBackend(b Backend) error {
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return fmt.Errorf("url %q must be an absolute http(s) URL", b.URL)
 	}
+	// A mistyped env name would silently send no credential, and the backend
+	// would answer 401 for reasons nobody can see in the config.
+	if b.APIKeyEnv != "" && !envNameRE.MatchString(b.APIKeyEnv) {
+		return fmt.Errorf("apiKeyEnv %q is not an environment variable name", b.APIKeyEnv)
+	}
 	return nil
 }
+
+var envNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

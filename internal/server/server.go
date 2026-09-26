@@ -147,6 +147,16 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
+// Flush forwards to the wrapped writer. Wrapping hid http.Flusher from the
+// reverse proxy, whose type assertion then failed: every SSE frame and chunked
+// progress update waited for the handler to return, which for a streaming model
+// means the whole answer arrives at once -- or, on a long generation, not at all.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
