@@ -1,11 +1,30 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 @config "../tailwind.config.ts";
 
 /* Colour variables (:root and .dark) are injected by the @riseaicloud/tokens
-   Tailwind preset — do not redeclare them here or they fight the preset. */
-
-/* Tailwind 4 dropped the pointer cursor on buttons; the Rise console keeps it. */
+   Tailwind preset. The block below overrides only what Rise Global's factory
+   look (layout "minimal", palette "minimal-gradient") sets differently; primary,
+   border, muted and accent already match. Values are HSL triplets because the
+   preset reads them as hsl(var(--x)). Source: rise-global design/tokens. */
 @layer base {
+  :root:root {
+    --foreground: 0 0% 22%; /* oklch(0.341 0 0) */
+    --muted-foreground: 0 0% 48.6%; /* oklch(0.586 0 0) */
+    /* Minimal layout: content sits on the white board, so page and toolbar
+       surfaces are the board's white rather than a grey layer. */
+    --surface-page: 0 0% 100%;
+    --surface-toolbar: 0 0% 100%;
+
+    /* Shell chrome, used by src/shell/Layout.tsx only. */
+    --shell-foreground: oklch(0.205 0 0);
+    --shell-canvas: oklch(0.93 0.01 202);
+    --shell-canvas-image: linear-gradient(180deg, oklch(0.932 0.006 197) 0%, oklch(0.906 0.014 202.4) 20%,
+      oklch(0.909 0.014 202.4) 32%, oklch(0.929 0.012 209.8) 46%, oklch(0.952 0.006 211) 60%,
+      oklch(0.966 0.005 183) 72%, oklch(0.969 0.001 197.1) 82%, oklch(0.964 0.001 106.4) 100%);
+  }
+
+  /* Tailwind 4 dropped the pointer cursor on buttons; the Rise console keeps it. */
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
@@ -20,4 +39,5 @@ body,
 
 body {
   @apply bg-surface-page text-foreground;
+  font-family: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
