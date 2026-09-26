@@ -17,10 +17,14 @@ type Attributes struct {
 }
 
 // Authorizer answers "may this identity do this" against the IAMRole and
-// IAMRoleBinding CRDs. This is the global-scope-only core of Global's
-// authorizer: the system:masters short-circuit plus standard K8s RBAC rule
-// matching. Global's multi-scope chain (workspace/nodegroup/namespace) is
-// intentionally dropped -- the community portal has one scope.
+// IAMRoleBinding CRDs, as Rise Global answers it at platform scope: the
+// system:masters short-circuit, then standard K8s RBAC rule matching over the
+// bindings labelled scope=platform, scope-value=global. Everything the console
+// guards (users, roles, backends) is platform-level, so that is the only link of
+// Global's scope chain it evaluates. Bindings at namespace, workspace, cluster or
+// nodegroup scope are Global's to enforce within that scope and grant nothing
+// here -- on a Global member cluster they sit in the same CRDs, and honouring
+// them would turn a namespace admin into a console admin.
 //
 // It evaluates the iam CRDs directly rather than reconciled native RBAC, so no
 // controller is needed. The CRD objects are identical to Global's, so on upgrade
@@ -38,31 +42,13 @@ func (a *Authorizer) PermissionsFor(ctx context.Context, id *Identity) ([]string
 	if id.IsSystemMaster() {
 		return []string{"*"}, nil
 	}
-	bindings, err := a.store.ListRoleBindings(ctx)
+	roles, err := a.platformRoles(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	roles := map[string]*IAMRole{}
 	seen := map[string]struct{}{}
 	permissions := []string{}
-	for i := range bindings {
-		b := &bindings[i]
-		if !subjectMatches(b.Spec.Subjects, id) {
-			continue
-		}
-		name := b.Spec.RoleRef.Name
-		role, ok := roles[name]
-		if !ok {
-			role, err = a.store.GetRole(ctx, name)
-			if err != nil {
-				roles[name] = nil
-				continue
-			}
-			roles[name] = role
-		}
-		if role == nil {
-			continue
-		}
+	for _, role := range roles {
 		for _, permission := range role.Spec.UIPermissions {
 			if _, ok := seen[permission]; ok {
 				continue
@@ -82,30 +68,11 @@ func (a *Authorizer) Authorize(ctx context.Context, id *Identity, attr Attribute
 	if id.IsSystemMaster() {
 		return true, nil
 	}
-	bindings, err := a.store.ListRoleBindings(ctx)
+	roles, err := a.platformRoles(ctx, id)
 	if err != nil {
 		return false, err
 	}
-	roles := map[string]*IAMRole{}
-	for i := range bindings {
-		b := &bindings[i]
-		if !subjectMatches(b.Spec.Subjects, id) {
-			continue
-		}
-		name := b.Spec.RoleRef.Name
-		role, ok := roles[name]
-		if !ok {
-			role, err = a.store.GetRole(ctx, name)
-			if err != nil {
-				// A dangling RoleRef grants nothing; it is not a hard error.
-				roles[name] = nil
-				continue
-			}
-			roles[name] = role
-		}
-		if role == nil {
-			continue
-		}
+	for _, role := range roles {
 		for _, rule := range role.Spec.Rules {
 			if ruleAllows(rule, attr) {
 				return true, nil
@@ -113,6 +80,40 @@ func (a *Authorizer) Authorize(ctx context.Context, id *Identity, attr Attribute
 		}
 	}
 	return false, nil
+}
+
+// platformRoles is every role bound to id at platform scope, each once.
+func (a *Authorizer) platformRoles(ctx context.Context, id *Identity) ([]*IAMRole, error) {
+	bindings, err := a.store.ListRoleBindings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var roles []*IAMRole
+	for i := range bindings {
+		b := &bindings[i]
+		if !isPlatformScope(b.Labels) || !subjectMatches(b.Spec.Subjects, id) {
+			continue
+		}
+		name := b.Spec.RoleRef.Name
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		role, err := a.store.GetRole(ctx, name)
+		if err != nil {
+			// A dangling RoleRef grants nothing; it is not a hard error.
+			continue
+		}
+		roles = append(roles, role)
+	}
+	return roles, nil
+}
+
+// isPlatformScope is Global's label selector for the platform level
+// (authorizer.visitRulesAtScope): scope=platform and scope-value=global.
+func isPlatformScope(labels map[string]string) bool {
+	return labels[ScopeLabel] == ScopePlatform && labels[ScopeValueLabel] == ScopeGlobal
 }
 
 func subjectMatches(subjects []rbacv1.Subject, id *Identity) bool {
