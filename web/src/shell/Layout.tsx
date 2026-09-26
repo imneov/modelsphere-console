@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@riseaicloud/ui";
-import { LogOut, Boxes, KeyRound, ChevronLeft, ChevronRight, PanelLeft, SlidersHorizontal } from "lucide-react";
+import { LogOut, Boxes, KeyRound, ChevronLeft, ChevronRight, PanelLeft, Palette } from "lucide-react";
 import { useAuth } from "@/shell/auth";
 import { usePermissions } from "@/shell/permissions";
 import { ChangePasswordDialog } from "@/shell/ChangePasswordDialog";
@@ -147,7 +147,7 @@ function TopBar({
           title="偏好设置"
           className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${t.icon}`}
         >
-          <SlidersHorizontal className="h-4 w-4" />
+          <Palette className="h-4 w-4" />
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
