@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/modelsphere/console/internal/config"
 )
@@ -168,5 +169,35 @@ func grantBackend(t *testing.T, h http.Handler, user, verb string) {
 	binding := `{"name":"` + user + `-swiss-` + verb + `","role":"swiss-` + verb + `","subjects":[{"kind":"User","name":"` + user + `"}]}`
 	if rec := do(h, "POST", "/api/iam/rolebindings", admin, binding); rec.Code != http.StatusCreated {
 		t.Fatalf("create binding: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// The production mux also serves the embedded SPA on "/". Registering it next to
+// a backend prefix must not collide (Go's ServeMux panics on ambiguous patterns),
+// and each must still get its own requests.
+func TestProxyCoexistsWithSPA(t *testing.T) {
+	up, seen := upstream(t)
+	srv := testServerWithConfig(t, &config.Config{Backends: []config.Backend{{Name: "swiss", Prefix: "/api/deploy", URL: up.URL + "/api"}}})
+	srv.SetWeb(fstest.MapFS{"index.html": {Data: []byte("<html>console</html>")}})
+
+	var h http.Handler
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("Handler panicked: %v", r)
+			}
+		}()
+		h = srv.Handler()
+	}()
+
+	if rec := do(h, "GET", "/swiss/catalog", "", ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "console") {
+		t.Fatalf("SPA route: %d %q", rec.Code, rec.Body.String())
+	}
+	admin := login(t, h, "admin", "admin-pw")
+	if rec := do(h, "POST", "/api/deploy/plans", admin, "{}"); rec.Code != http.StatusTeapot || len(*seen) != 1 {
+		t.Fatalf("proxy beside SPA: %d, hits %d", rec.Code, len(*seen))
+	}
+	if rec := do(h, "POST", "/swiss/catalog", "", ""); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("non-GET on an SPA route: expected 405, got %d", rec.Code)
 	}
 }

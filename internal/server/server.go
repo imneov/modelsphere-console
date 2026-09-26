@@ -79,7 +79,9 @@ func (s *Server) Handler() http.Handler {
 	}
 
 	if s.web != nil {
-		mux.HandleFunc("GET /", s.spa)
+		// Method-less on purpose: "GET /" next to a method-less backend prefix
+		// is an ambiguous pair that ServeMux refuses. spa enforces GET/HEAD.
+		mux.HandleFunc("/", s.spa)
 	}
 	return s.recover(s.logRequests(s.authenticate(s.requirePasswordReset(mux))))
 }
