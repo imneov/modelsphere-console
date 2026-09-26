@@ -14,9 +14,12 @@ server:
     issuer: "https://console.modelsphere.local"
     tokenTTL: 24h
 
-# Everything not owned by consoled is federated to a backend, carrying the
-# caller's token. Requests under prefix are reverse-proxied to url.
+# Everything not owned by consoled is federated to a backend. Requests under
+# prefix are reverse-proxied to url, the prefix replaced by url's path:
+# /api/deploy/catalog -> http://swissd.swiss.svc:8080/api/catalog. The backend
+# receives X-Remote-User / X-Remote-Group and the caller's Bearer token.
+# Access is RBAC on resource "backends", resourceName = name.
 backends:
   - name: swiss
     prefix: /api/deploy
-    url: http://swissd.swiss.svc:8080
+    url: http://swissd.swiss.svc:8080/api
