@@ -11,6 +11,11 @@ import (
 // spa serves the single-page app: a real file when it exists, index.html
 // otherwise, so client-side routes resolve. /api/* never reaches here.
 func (s *Server) spa(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
 	if s.web == nil {
 		writeError(w, http.StatusNotFound, "no web UI in this build")
 		return

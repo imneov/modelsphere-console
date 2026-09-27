@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
-import { useAuth } from "@/auth";
+import { useAuth } from "@/shell/auth";
 
 interface PermissionsState {
   has: (permission: string) => boolean;

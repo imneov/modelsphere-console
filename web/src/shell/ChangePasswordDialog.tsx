@@ -10,8 +10,8 @@ import {
   Input,
   Label,
 } from "@riseaicloud/ui";
-import { api } from "@/lib/api";
-import { PasswordStrength, passwordMeetsRequirements } from "@/components/PasswordStrength";
+import { api } from "@/shell/api";
+import { PasswordStrength, passwordMeetsRequirements } from "@/shell/PasswordStrength";
 
 export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [oldPassword, setOldPassword] = useState("");

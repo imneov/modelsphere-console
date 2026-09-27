@@ -2,9 +2,11 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/modelsphere/console/internal/iam"
@@ -107,7 +109,7 @@ func (s *Server) handleDeleteRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.DeleteRole(r.Context(), name); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeStoreError(w, err, "role not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -166,6 +168,10 @@ func (s *Server) handleCreateRoleBinding(w http.ResponseWriter, r *http.Request)
 		},
 	}
 	created, err := s.store.CreateRoleBinding(r.Context(), b)
+	if errors.Is(err, iam.ErrRoleNotBindable) {
+		writeError(w, http.StatusBadRequest, "role "+in.Role+" not found at platform scope")
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -179,8 +185,18 @@ func (s *Server) handleDeleteRoleBinding(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := s.store.DeleteRoleBinding(r.Context(), name); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeStoreError(w, err, "role binding not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// writeStoreError maps a store error to 404 when the object is absent (or out
+// of the console's platform scope, which the store reports the same way).
+func writeStoreError(w http.ResponseWriter, err error, notFound string) {
+	if apierrors.IsNotFound(err) {
+		writeError(w, http.StatusNotFound, notFound)
+		return
+	}
+	writeError(w, http.StatusInternalServerError, err.Error())
 }

@@ -16,12 +16,12 @@ spec:
     spec:
       serviceAccountName: {{ include "console.serviceAccountName" . }}
       containers:
-        - name: consoled
+        - name: console
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["--config", "/etc/consoled/console.yaml"]
+          args: ["--config", "/etc/console/console.yaml"]
           env:
-            - name: CONSOLED_JWT_SECRET
+            - name: CONSOLE_JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "console.fullname" . }}
@@ -37,7 +37,7 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /etc/consoled
+              mountPath: /etc/console
               readOnly: true
       volumes:
         - name: config

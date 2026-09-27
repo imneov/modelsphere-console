@@ -1,5 +1,5 @@
 {{- if .Values.rbac.create }}
-# consoled's own permissions: full CRUD on the iam CRDs it owns, and read on the
+# console's own permissions: full CRUD on the iam CRDs it owns, and read on the
 # native ClusterRoles/ClusterRoleBindings the authorizer resolves (P3). Cluster
 # scope because Users and the roles are cluster-scoped.
 apiVersion: rbac.authorization.k8s.io/v1

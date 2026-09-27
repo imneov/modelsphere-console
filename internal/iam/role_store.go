@@ -2,7 +2,9 @@ package iam
 
 import (
 	"context"
+	"errors"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -12,8 +14,17 @@ func decodeInto[T any](u *unstructured.Unstructured, out *T) error {
 	return runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, out)
 }
 
+// Roles and bindings are read through a platform-scope lens. On a Rise Global
+// cluster these CRDs also hold every workspace, cluster and namespace role;
+// those are Global's to manage, and the console neither lists nor touches them.
+// A non-platform object reads as not found.
+var platformSelector = metav1.ListOptions{LabelSelector: ScopeLabel + "=" + ScopePlatform + "," + ScopeValueLabel + "=" + ScopeGlobal}
+
+// ErrRoleNotBindable: the role does not exist at platform scope.
+var ErrRoleNotBindable = errors.New("role not found at platform scope")
+
 func (s *Store) ListRoles(ctx context.Context) ([]IAMRole, error) {
-	list, err := s.dyn.Resource(RolesGVR).List(ctx, metav1.ListOptions{})
+	list, err := s.dyn.Resource(RolesGVR).List(ctx, platformSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -30,6 +41,9 @@ func (s *Store) GetRole(ctx context.Context, name string) (*IAMRole, error) {
 	u, err := s.dyn.Resource(RolesGVR).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
+	}
+	if !isPlatformScope(u.GetLabels()) {
+		return nil, apierrors.NewNotFound(RolesGVR.GroupResource(), name)
 	}
 	var r IAMRole
 	return &r, decodeInto(u, &r)
@@ -51,6 +65,9 @@ func (s *Store) CreateRole(ctx context.Context, r *IAMRole) (*IAMRole, error) {
 }
 
 func (s *Store) UpdateRole(ctx context.Context, r *IAMRole) (*IAMRole, error) {
+	if _, err := s.GetRole(ctx, r.Name); err != nil {
+		return nil, err
+	}
 	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(r)
 	if err != nil {
 		return nil, err
@@ -64,11 +81,14 @@ func (s *Store) UpdateRole(ctx context.Context, r *IAMRole) (*IAMRole, error) {
 }
 
 func (s *Store) DeleteRole(ctx context.Context, name string) error {
+	if _, err := s.GetRole(ctx, name); err != nil {
+		return err
+	}
 	return s.dyn.Resource(RolesGVR).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func (s *Store) ListRoleBindings(ctx context.Context) ([]IAMRoleBinding, error) {
-	list, err := s.dyn.Resource(RoleBindingsGVR).List(ctx, metav1.ListOptions{})
+	list, err := s.dyn.Resource(RoleBindingsGVR).List(ctx, platformSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +101,12 @@ func (s *Store) ListRoleBindings(ctx context.Context) ([]IAMRoleBinding, error) 
 	return out, nil
 }
 
+// CreateRoleBinding binds only platform roles: a platform binding to a
+// namespace role would hand its rules out platform-wide.
 func (s *Store) CreateRoleBinding(ctx context.Context, b *IAMRoleBinding) (*IAMRoleBinding, error) {
+	if _, err := s.GetRole(ctx, b.Spec.RoleRef.Name); err != nil {
+		return nil, ErrRoleNotBindable
+	}
 	b.TypeMeta = metav1.TypeMeta{APIVersion: Group + "/" + Version, Kind: "IAMRoleBinding"}
 	setGlobalScope(&b.ObjectMeta)
 	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(b)
@@ -97,6 +122,13 @@ func (s *Store) CreateRoleBinding(ctx context.Context, b *IAMRoleBinding) (*IAMR
 }
 
 func (s *Store) DeleteRoleBinding(ctx context.Context, name string) error {
+	u, err := s.dyn.Resource(RoleBindingsGVR).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	if !isPlatformScope(u.GetLabels()) {
+		return apierrors.NewNotFound(RoleBindingsGVR.GroupResource(), name)
+	}
 	return s.dyn.Resource(RoleBindingsGVR).Delete(ctx, name, metav1.DeleteOptions{})
 }
 

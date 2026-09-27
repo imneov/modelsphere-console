@@ -1,5 +1,9 @@
-consoled is installed as {{ include "console.fullname" . }}.
+console is installed as {{ include "console.fullname" . }}.
 {{- $defaultPasswordHash := "$2b$12$Q44Y0B99hoByZY.6v30jl.D83rXFbSpOfh8iWLbndLZBEjFAZwaeO" }}
+{{- $existing := "" }}
+{{- if .Values.admin.username }}{{ $existing = lookup "iam.theriseunion.io/v1alpha1" "User" "" .Values.admin.username }}{{ end }}
+{{- $adminIsOurs := false }}
+{{- if $existing }}{{ $adminIsOurs = eq (get (dig "metadata" "labels" dict $existing) "app.kubernetes.io/instance") .Release.Name }}{{ end }}
 
 Reach it (ClusterIP by default):
 
@@ -9,6 +13,8 @@ Access URL: http://localhost:8080/
 
 {{- if not .Values.admin.username }}
 No administrator user was seeded. Configure an administrator before signing in.
+{{- else if and $existing (not $adminIsOurs) }}
+{{ .Values.admin.username | quote }} already exists on this cluster and belongs to another release, so it was left as it is — it may be Rise Global's, with a password this chart does not know. Set admin.username to a name that is free to seed one, or sign in with the existing credentials.
 {{- else if and (eq .Values.admin.username "admin") (or (not .Values.admin.encryptedPassword) (eq .Values.admin.encryptedPassword $defaultPasswordHash)) }}
 Default login: admin / P@88w0rd
 {{- if .Values.admin.requirePasswordReset }}

@@ -1,5 +1,18 @@
 {{- if .Values.admin.username }}
-# Zero-config login: seed the admin User CRD directly. consoled authenticates
+{{- /*
+Seed the administrator User. On a cluster where Rise Global already runs, that
+User is Global's: installing beside it would abort on an object owned by another
+release. Leave it alone -- it holds a password hash and groups this chart did not
+set, and adopting them would mean overwriting them. Skipping is safe only because
+the object is not ours: a User belonging to this release keeps its labels and is
+still rendered on upgrade, which matters because a resource that disappears from
+the manifest is one helm deletes.
+*/}}
+{{- $existing := lookup "iam.theriseunion.io/v1alpha1" "User" "" .Values.admin.username }}
+{{- $labels := dict }}
+{{- if $existing }}{{ $labels = dig "metadata" "labels" dict $existing }}{{ end }}
+{{- if or (not $existing) (eq (get $labels "app.kubernetes.io/instance") .Release.Name) }}
+# Zero-config login: seed the admin User CRD directly. console authenticates
 # against spec.encryptedPassword (bcrypt) — there is no controller that hashes a
 # plaintext, so the hash is baked here. Default password is `P@88w0rd`; override
 # .Values.admin.encryptedPassword with your own (htpasswd -bnBC 12 "" '<pw>').
@@ -22,4 +35,5 @@ spec:
   groups:
     - system:masters
   encryptedPassword: {{ .Values.admin.encryptedPassword | default "$2b$12$Q44Y0B99hoByZY.6v30jl.D83rXFbSpOfh8iWLbndLZBEjFAZwaeO" | quote }}
+{{- end }}
 {{- end }}

@@ -1,4 +1,4 @@
-// Package iam is consoled's identity kernel: the User/Role/RoleBinding types,
+// Package iam is console's identity kernel: the User/Role/RoleBinding types,
 // their storage as iam.theriseunion.io CRDs, password verification, and HS256
 // token minting and verification.
 //

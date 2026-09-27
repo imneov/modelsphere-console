@@ -16,8 +16,8 @@ import {
   PageHeader,
 } from "@riseaicloud/ui";
 import { Plus, Users as UsersIcon } from "lucide-react";
-import { api, type User, type UserInput } from "@/lib/api";
-import { useAuth } from "@/auth";
+import { api, type User, type UserInput } from "@/modules/iam/api";
+import { useAuth } from "@/shell";
 
 const stateBadge: Record<string, { label: string; className: string }> = {
   Active: { label: "活跃", className: "bg-green-100 text-green-800" },

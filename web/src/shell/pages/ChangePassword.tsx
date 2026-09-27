@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@riseaicloud/ui";
 import { KeyRound } from "lucide-react";
-import { PasswordStrength, passwordMeetsRequirements } from "@/components/PasswordStrength";
-import { api } from "@/lib/api";
+import { PasswordStrength, passwordMeetsRequirements } from "@/shell/PasswordStrength";
+import { api } from "@/shell/api";
 
 export function ChangePassword() {
   const [oldPassword, setOldPassword] = useState("");
