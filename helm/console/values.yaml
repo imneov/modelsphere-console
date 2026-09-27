@@ -3,7 +3,10 @@ image:
   tag: ""            # defaults to .Chart.AppVersion
   pullPolicy: IfNotPresent
 
-replicaCount: 1
+# Two by default: with apiKeys on, programs call models through console, so a
+# console restart is an inference outage. A PodDisruptionBudget keeps one up
+# through node drains whenever there is more than one.
+replicaCount: 2
 
 service:
   type: ClusterIP
@@ -76,6 +79,20 @@ playground:
     # namespace -- then wire it through backendSecrets below.
     secretRef: ""
     apiKeyEnv: ""
+
+# Keys programs use to call models at <console>/v1, issued by admins on the API
+# keys page (plaintext shown once; only a hash is kept). Needs playground.gateway:
+# /v1 is forwarded to that gateway with the gateway's own key, so the gateway
+# itself is unchanged and never sees these keys.
+#
+# The keys live in a Secret console creates in this release's namespace,
+# <fullname>-api-keys. It is not part of the chart, so an upgrade or rollback
+# never touches issued keys; uninstalling leaves it behind too.
+apiKeys:
+  enabled: true
+  # Largest /v1 request body accepted, in bytes. The body is read whole to check
+  # which model it asks for. Empty means 16 MiB.
+  maxBodyBytes: ""
 
 # Backend credentials, each read from a Secret key into the environment variable
 # it is keyed by. For a backend whose config names an apiKeyEnv; the gateway

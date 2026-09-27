@@ -1,0 +1,36 @@
+{{- /*
+The issued keys' Secret, which console creates on first use rather than the chart
+owning it: an upgrade or rollback must not touch issued keys. create cannot be
+limited to one name; everything else is.
+*/ -}}
+{{- if and .Values.rbac.create (include "console.apiKeys.enabled" .) }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "console.fullname" . }}-api-keys
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ include "console.apiKeys.secret" . | quote }}]
+    verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "console.fullname" . }}-api-keys
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "console.fullname" . }}-api-keys
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "console.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
