@@ -51,13 +51,15 @@ var unresolved = &backendTarget{url: url.URL{Scheme: "http", Host: "backend-with
 //
 // Backend URLs were checked by config.Validate; one that still fails to parse
 // is skipped and logged rather than taking the server down.
-func (s *Server) mountBackends(mux *http.ServeMux) {
+func (s *Server) mountBackends(mux *http.ServeMux) map[string]targetResolver {
+	resolvers := map[string]targetResolver{}
 	for _, b := range s.cfg.Backends {
 		resolve, err := s.targetFunc(b)
 		if err != nil {
 			s.log.Error("backend skipped", "backend", b.Name, "err", err)
 			continue
 		}
+		resolvers[b.Name] = resolve
 		proxy := s.backendProxy(b)
 		mux.HandleFunc(strings.TrimSuffix(b.Prefix, "/")+"/", func(w http.ResponseWriter, r *http.Request) {
 			if !s.authorize(w, r, backendVerb(r.Method), backendResource, b.Name) {
@@ -73,11 +75,14 @@ func (s *Server) mountBackends(mux *http.ServeMux) {
 			proxy.ServeHTTP(w, r.WithContext(withTarget(r.Context(), target)))
 		})
 	}
+	return resolvers
 }
+
+type targetResolver func(context.Context) (*backendTarget, error)
 
 // targetFunc is how a backend finds its target: once and forever when the config
 // holds a URL, from the cluster on every request when it holds a gateway.
-func (s *Server) targetFunc(b config.Backend) (func(context.Context) (*backendTarget, error), error) {
+func (s *Server) targetFunc(b config.Backend) (targetResolver, error) {
 	if b.Gateway != nil {
 		if s.kube == nil {
 			return nil, fmt.Errorf("gateway %+v needs cluster access, and this console has none", *b.Gateway)
@@ -100,7 +105,7 @@ func (s *Server) targetFunc(b config.Backend) (func(context.Context) (*backendTa
 	return func(context.Context) (*backendTarget, error) { return fixed, nil }, nil
 }
 
-func gatewayResolver(r *gateway.Resolver) func(context.Context) (*backendTarget, error) {
+func gatewayResolver(r *gateway.Resolver) targetResolver {
 	return func(ctx context.Context) (*backendTarget, error) {
 		entry, err := r.Resolve(ctx)
 		if err != nil {

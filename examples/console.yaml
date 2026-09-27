@@ -39,3 +39,10 @@ backends:
     prefix: /api/llm
     gateway:
       profile: llm/site-profile
+
+# Keys programs use to call models at <console>/v1, issued by admins on the API
+# keys page. console keeps their hashes in this Secret (creating it) and forwards
+# /v1 to the backend named here with that backend's own credential.
+apiKeys:
+  secret: console/console-api-keys
+  backend: llm

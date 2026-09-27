@@ -23,9 +23,29 @@ type Config struct {
 	Cluster  Cluster   `yaml:"cluster,omitempty"`
 	Server   Server    `yaml:"server,omitempty"`
 	Backends []Backend `yaml:"backends,omitempty"`
+	APIKeys  APIKeys   `yaml:"apiKeys,omitempty"`
 
 	Origin string `yaml:"-"`
 }
+
+// APIKeys turns on key management and the /v1 endpoint programs call models
+// through. Empty Secret leaves both off.
+type APIKeys struct {
+	// Secret holding the issued keys, "namespace/name"; console creates it.
+	Secret string `yaml:"secret,omitempty"`
+	// Backend is the backend /v1 forwards to, by name. Default "llm".
+	Backend string `yaml:"backend,omitempty"`
+	// MaxBodyBytes caps a /v1 request body, which is read whole to check its
+	// model. Default 16 MiB.
+	MaxBodyBytes int64 `yaml:"maxBodyBytes,omitempty"`
+}
+
+const (
+	DefaultAPIKeysBackend = "llm"
+	DefaultMaxBodyBytes   = 16 << 20
+)
+
+func (a APIKeys) Enabled() bool { return a.Secret != "" }
 
 // Cluster is where the iam CRDs (User/Role/RoleBinding) are read and written.
 // Empty kubeconfig means in-cluster, which is the normal deployment.
@@ -175,6 +195,12 @@ func (c *Config) applyDefaults() {
 	if c.Server.Auth.Issuer == "" {
 		c.Server.Auth.Issuer = "https://console.modelsphere.local"
 	}
+	if c.APIKeys.Backend == "" {
+		c.APIKeys.Backend = DefaultAPIKeysBackend
+	}
+	if c.APIKeys.MaxBodyBytes == 0 {
+		c.APIKeys.MaxBodyBytes = DefaultMaxBodyBytes
+	}
 }
 
 func (c *Config) origin() string {
@@ -201,6 +227,16 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("%s: backends[%d] (%s): duplicate name or prefix", c.origin(), i, b.Name)
 		}
 		names[b.Name], prefixes[b.Prefix] = true, true
+	}
+	if a := c.APIKeys; a.Enabled() {
+		switch {
+		case !refRE.MatchString(a.Secret):
+			return fmt.Errorf("%s: apiKeys.secret %q must be namespace/name", c.origin(), a.Secret)
+		case !names[a.Backend]:
+			return fmt.Errorf("%s: apiKeys.backend %q is not a configured backend; /v1 would have nowhere to go", c.origin(), a.Backend)
+		case a.MaxBodyBytes < 0:
+			return fmt.Errorf("%s: apiKeys.maxBodyBytes must not be negative", c.origin())
+		}
 	}
 	return nil
 }
