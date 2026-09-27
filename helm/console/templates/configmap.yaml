@@ -46,6 +46,16 @@ data:
           {{- with $gw.secretRef }}
           secretRef: {{ . | quote }}
           {{- end }}
+      {{- else if include "console.gateway.builtin" . }}
+      {{- $name := include "console.gateway.name" . }}
+      # The built-in gateway: see the gateway section of values.
+      - name: llm
+        prefix: /api/llm
+        gateway:
+          configMap: {{ printf "%s/%s-routes" .Release.Namespace $name | quote }}
+          service: {{ printf "%s/%s" .Release.Namespace $name | quote }}
+          secretRef: {{ printf "%s-keys" $name | quote }}
+          route: {{ .Values.gateway.route | quote }}
       {{- end }}
     {{- if include "console.router.enabled" . }}
     router:

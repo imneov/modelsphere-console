@@ -26,44 +26,47 @@ apiserver -- not a data migration.
 Identity (P1–P3), the module shell with backend federation (P4) and the
 Playground and the router -- `/v1` with API keys (P6). See `docs/console-design.md` for the plan.
 
-## Deploy
+## Install
 
-Two commands. The first builds and pushes the image for the current commit and
-writes the values file that pins it; the second installs, and is also what every
-later upgrade runs — unchanged:
+One command, no values:
 
 ```sh
-# 1. build + push console:<chart version>-dev.<commit>, then write console-image.yaml
-CONSOLE_REGISTRY=<registry>/<org> hack/image.sh
+helm install modelsphere ./helm/console -n modelsphere --create-namespace
+```
 
-# 2. install; re-run the same line to upgrade
-helm upgrade --install console ./helm/console -n console --create-namespace \
-  -f console-image.yaml \
-  --set playground.gateway.profile=<namespace>/<site-profile>
+What comes up, and what you can do right after:
+
+| Piece | What it gives you |
+|---|---|
+| console (2 replicas, NodePort) | log in as `admin` / `P@88w0rd` (you set a new password first); `NOTES` prints the URL |
+| built-in gateway (llm-openresty) | the Playground lists and chats with the models it serves |
+| demo model (llama.cpp, Qwen2.5-0.5B, CPU) | something to chat with on any cluster, GPU or not; ~500 MB downloaded once |
+| router | admins issue API keys under 路由 → API 密钥; programs call `http://<console>/v1` with any OpenAI SDK |
+
+Needs a default StorageClass (for the demo model's weights) and roughly 2 CPU /
+2 GiB free. Grow from there with values:
+
+| Value | For |
+|---|---|
+| `gateway.models` | your own OpenAI-compatible endpoints, served next to (or instead of) the demo |
+| `demo.enabled=false` | once real models are in |
+| `playground.gateway.profile=<ns>/<site-profile>` | use an existing gateway (swiss's site profile) instead of the built-in one |
+| `service.type`, `metrics.serviceMonitor.enabled` | exposure and Prometheus Operator scraping |
+
+See [docs/console-design.md](docs/console-design.md#one-command-install).
+
+### Building your own image
+
+```sh
+# build + push console:<chart version>-dev.<commit>, then write console-image.yaml
+CONSOLE_REGISTRY=<registry>/<org> hack/image.sh
+helm upgrade --install modelsphere ./helm/console -n modelsphere --create-namespace -f console-image.yaml
 ```
 
 The tag carries the commit, so an upgrade always changes the pod template and
-rolls: a fixed tag would leave helm with nothing to do and every pod on the old
-image. `hack/image.sh --no-push` builds only, and `CONSOLE_REGISTRY` defaults to
-the repository in `helm/console/values.yaml`.
-
-`playground.gateway` is the one setting worth getting right, and it is optional:
-without it the Playground page says no backend is configured, and every other page
-works. Point it at swiss's site profile (`namespace/name`) and console reads the
-entrypoint Service, the route and the gateway key from the cluster — see
-[docs/console-design.md](docs/console-design.md#a-backend-that-resolves-itself-gateway).
-With the gateway set, admins also issue API keys (路由 → API 密钥) that programs
-use against `http://<console>/v1` like any OpenAI-compatible endpoint;
-`router.enabled: false` turns that off. Usage is exported as `router_*` metrics
-on port 9090. The chart logs in on the default `admin` / `P@88w0rd` unless the cluster already
-has that user (Rise Global's, say), in which case it is left alone and `NOTES`
-says so.
-
-Reach the UI, ClusterIP by default:
-
-```sh
-kubectl -n console port-forward svc/console-console 8080:8080   # then http://localhost:8080/
-```
+rolls. `hack/image.sh --no-push` builds only. The chart logs in on the default
+`admin` / `P@88w0rd` unless the cluster already has that user (Rise Global's,
+say), in which case it is left alone and `NOTES` says so.
 
 ## Build
 

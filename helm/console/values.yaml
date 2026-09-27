@@ -8,8 +8,11 @@ image:
 # through node drains whenever there is more than one.
 replicaCount: 2
 
+# NodePort by default so the UI is reachable the moment the install finishes;
+# the chart's NOTES print the address. ClusterIP plus an ingress for anything
+# longer-lived.
 service:
-  type: ClusterIP
+  type: NodePort
   port: 8080
   # Only with type NodePort; empty lets Kubernetes pick one.
   nodePort: ""
@@ -48,7 +51,64 @@ backends:
     prefix: /api/deploy
     url: http://swissd.swiss.svc:8080/api
 
-# The Playground's inference gateway, resolved from the cluster instead of named
+# The built-in inference gateway: llm-openresty with one aggregate route, "llm",
+# serving the demo model and gateway.models. It is what makes a bare `helm
+# install` usable -- the Playground and /v1 work without naming anything. When
+# playground.gateway below names an existing gateway, that one is used instead
+# and none of this is installed.
+gateway:
+  enabled: true
+  image:
+    repository: 4pdosc/llm-openresty
+    tag: "0.1.20"
+    pullPolicy: IfNotPresent
+  # Watches the routes and keys and reloads nginx in place.
+  reloadImage: 4pdosc/autoconfig-reload:0.3.46
+  replicas: 1
+  route: llm
+  # Concurrent requests per model before the gateway answers 429.
+  maxConcurrency: 64
+  # Streams in flight get this long to finish when a pod stops.
+  terminationGracePeriodSeconds: 600
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: "2", memory: 1Gi }
+  # OpenAI-compatible endpoints to serve besides the demo model. name is the id
+  # clients send and must equal what the engine serves; url is its base, e.g.
+  #   - name: qwen3-32b
+  #     url: http://qwen3-32b.models.svc.cluster.local:8000
+  models: []
+
+# A small CPU model, on by default so a fresh install has something to chat
+# with: llama.cpp serving Qwen2.5-0.5B-Instruct (Q4_K_M, ~500 MB), downloaded
+# once into a PVC -- from ModelScope, then hf-mirror. Needs ~2 CPU and 1 GiB;
+# answers are what a 0.5B model gives. Turn it off once real models are in.
+demo:
+  enabled: true
+  image:
+    repository: ghcr.io/ggml-org/llama.cpp
+    tag: server-b11206
+    pullPolicy: IfNotPresent
+  model:
+    name: qwen2.5-0.5b-instruct
+    file: qwen2.5-0.5b-instruct-q4_k_m.gguf
+    urls:
+      - https://modelscope.cn/models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/master/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      - https://hf-mirror.com/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf
+  port: 8080
+  # Context is split across the parallel slots.
+  # -t matches the CPU limit: one thread per node core would be throttled.
+  extraArgs: ["-c", "8192", "-np", "2", "-t", "4", "--no-webui"]
+  persistence:
+    # Off, the weights are downloaded again on every restart.
+    enabled: true
+    size: 2Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: "1", memory: 1Gi }
+    limits: { cpu: "4", memory: 2Gi }
+
+# An existing inference gateway, resolved from the cluster instead of named
 # here: console reads the entrypoint Service, the route to talk to and the key
 # from what is already the source of truth, and re-reads it as the cluster
 # changes. No URL to let go stale, no route list to keep in step with deploys,
@@ -65,8 +125,7 @@ backends:
 #              session_route_<route>.conf keys.
 #   route      pins one route instead of choosing. Empty means the aggregate one.
 #
-# Left empty, the Playground module has no backend: the console still serves
-# every other page, and the page itself says what is missing.
+# Left empty, the built-in gateway above is used.
 playground:
   gateway:
     profile: ""
@@ -81,8 +140,8 @@ playground:
     apiKeyEnv: ""
 
 # The router: programs call models at <console>/v1 with API keys admins issue on
-# the router's API keys page (plaintext shown once; only a hash is kept). Needs
-# playground.gateway: /v1 is forwarded to that gateway with the gateway's own
+# the router's API keys page (plaintext shown once; only a hash is kept). /v1 is
+# forwarded to the gateway -- built-in or playground.gateway -- with the gateway's own
 # key, so the gateway itself is unchanged and never sees these keys.
 #
 # The keys live in a Secret console creates in this release's namespace,
