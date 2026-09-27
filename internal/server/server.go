@@ -38,6 +38,7 @@ type Server struct {
 
 	router   *router.Router
 	registry *prometheus.Registry
+	models   *modelIndex
 
 	targetsOnce sync.Once
 	targets     map[string]targetResolver
@@ -48,7 +49,7 @@ type Server struct {
 func New(cfg *config.Config, kube *cluster.Kube, log *slog.Logger, version string) *Server {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	return &Server{cfg: cfg, kube: kube, log: log, version: version, registry: reg}
+	return &Server{cfg: cfg, kube: kube, log: log, version: version, registry: reg, models: newModelIndex(log)}
 }
 
 // SetWeb installs the SPA filesystem. Without one, console is API only.
@@ -72,7 +73,11 @@ func (s *Server) EnableRouter(store *router.Store) {
 	if maxBody <= 0 {
 		maxBody = config.DefaultMaxBodyBytes
 	}
-	s.router = router.New(store, routerResolver(resolve), maxBody, s.log, s.registry)
+	var backend router.Backend
+	if resolve != nil {
+		backend = routerBackend{s: s, name: s.cfg.Router.Backend, resolve: resolve}
+	}
+	s.router = router.New(store, backend, maxBody, s.log, s.registry)
 }
 
 // MetricsHandler serves the Prometheus metrics, on their own listener.

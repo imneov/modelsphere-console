@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -34,8 +35,13 @@ type reader interface {
 
 // Entry is a resolved entrypoint: where inference goes, and with which credential.
 type Entry struct {
-	URL    string
-	Route  string
+	// URL is the preferred route's; Base plus a route of Routes reaches any.
+	URL   string
+	Route string
+	Base  string
+	// Routes are every route the gateway serves, aggregate ones first. Which
+	// route serves which model is answered by asking each its /v1/models.
+	Routes []string
 	Header string
 	Key    string
 	// Source is what answered, for the log line and for anyone reading a 502:
@@ -98,8 +104,8 @@ func (r *Resolver) Resolve(ctx context.Context) (*Entry, error) {
 		r.err = err
 		return nil, err
 	}
-	if r.entry == nil || *r.entry != *entry {
-		r.log.Info("gateway resolved", "url", entry.URL, "route", entry.Route, "key", entry.KeySource, "from", entry.Source)
+	if r.entry == nil || !r.entry.equal(entry) {
+		r.log.Info("gateway resolved", "url", entry.Base, "routes", strings.Join(entry.Routes, ","), "key", entry.KeySource, "from", entry.Source)
 	}
 	r.entry, r.err = entry, nil
 	return entry, nil
@@ -135,14 +141,17 @@ func (r *Resolver) resolve(ctx context.Context) (*Entry, error) {
 		port = config.DefaultGatewayPort
 	}
 
-	route, source, err := r.route(ctx, profile, profileRef)
+	routes, source, err := r.routes(ctx, profile, profileRef)
 	if err != nil {
 		return nil, err
 	}
 
+	base := fmt.Sprintf("http://%s.%s.svc:%d", svcName, svcNS, port)
 	entry := &Entry{
-		URL:    fmt.Sprintf("http://%s.%s.svc:%d/%s", svcName, svcNS, port, route),
-		Route:  route,
+		URL:    base + "/" + routes[0],
+		Route:  routes[0],
+		Base:   base,
+		Routes: routes,
 		Header: profile.Route.Auth.HeaderName(),
 		Source: source,
 	}
@@ -152,10 +161,11 @@ func (r *Resolver) resolve(ctx context.Context) (*Entry, error) {
 	return entry, nil
 }
 
-// route picks the route to talk to: the explicit one, else the aggregate route
-// from the route ConfigMap. The aggregate route is the one that serves several
-// models, which is what makes a single picker list everything deployed.
-func (r *Resolver) route(ctx context.Context, p profile, profileRef string) (route, source string, err error) {
+// routes lists the routes to talk to: the explicit one, else every route in the
+// route ConfigMap, aggregate ones (those serving several models) first. autoconfig
+// writes one plain route per model, so a gateway with no aggregate route is the
+// normal case, not an error.
+func (r *Resolver) routes(ctx context.Context, p profile, profileRef string) (routes []string, source string, err error) {
 	gw := r.backend.Gateway
 	ref := gw.ConfigMap
 	if ref == "" {
@@ -166,49 +176,38 @@ func (r *Resolver) route(ctx context.Context, p profile, profileRef string) (rou
 		if source == "" {
 			source = profileRef
 		}
-		return gw.Route, source, nil
+		return []string{gw.Route}, source, nil
 	}
 	if ref == "" {
-		return "", "", fmt.Errorf("no gateway.route and no route configmap to choose one from: set gateway.route")
+		return nil, "", fmt.Errorf("no gateway.route and no route configmap to choose one from: set gateway.route")
 	}
 	ns, name, err := splitRef(ref, "")
 	if err != nil {
-		return "", "", err
+		return nil, "", err
 	}
 	data, err := r.r.ConfigMap(ctx, ns, name)
 	if err != nil {
-		return "", "", fmt.Errorf("route configmap %s: %w", ref, err)
+		return nil, "", fmt.Errorf("route configmap %s: %w", ref, err)
 	}
 
-	var all, aggregates []string
+	var aggregates, plain []string
 	for key, content := range data {
 		route, ok := routeOfKey(key)
 		if !ok {
 			continue
 		}
-		all = append(all, route)
 		if strings.Contains(content, "peers_by_model") {
 			aggregates = append(aggregates, route)
+		} else {
+			plain = append(plain, route)
 		}
 	}
-	sort.Strings(all)
+	if len(aggregates)+len(plain) == 0 {
+		return nil, "", fmt.Errorf("route configmap %s has no session_route_<route>.conf entry; is this the entrypoint's shared configmap?", ref)
+	}
 	sort.Strings(aggregates)
-	switch {
-	case len(aggregates) > 0:
-		// Several aggregate routes is a deliberate install (one entrypoint per
-		// model family); picking the first keeps the choice stable and logged.
-		if len(aggregates) > 1 {
-			r.log.Info("several aggregate routes, using the first", "route", aggregates[0], "others", strings.Join(aggregates[1:], ", "), "configmap", ref)
-		}
-		return aggregates[0], ref, nil
-	case len(all) == 1:
-		// A single-model route: /v1/models answers from the engine itself.
-		return all[0], ref, nil
-	case len(all) == 0:
-		return "", "", fmt.Errorf("route configmap %s has no session_route_<route>.conf entry; is this the entrypoint's shared configmap?", ref)
-	default:
-		return "", "", fmt.Errorf("route configmap %s has %d routes and none serves several models, so there is no obvious pick: set gateway.route (candidates: %s)", ref, len(all), strings.Join(all, ", "))
-	}
+	sort.Strings(plain)
+	return append(aggregates, plain...), ref, nil
 }
 
 // credential fills in the key console sends. An explicit apiKeyEnv wins so an
@@ -377,4 +376,9 @@ func keys[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func (e *Entry) equal(o *Entry) bool {
+	return e.URL == o.URL && e.Route == o.Route && e.Base == o.Base && slices.Equal(e.Routes, o.Routes) &&
+		e.Header == o.Header && e.Key == o.Key && e.Source == o.Source && e.KeySource == o.KeySource
 }

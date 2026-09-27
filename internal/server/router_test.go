@@ -136,7 +136,12 @@ func TestV1SwapsTheKeyForTheGateways(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Body.String() != `{"from":"gateway"}` {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
-	got := (*seen)[0]
+	var got seenRequest
+	for _, r := range *seen {
+		if r.path == "/llm/v1/chat/completions" {
+			got = r
+		}
+	}
 	switch {
 	case got.path != "/llm/v1/chat/completions" || got.body != `{"model":"qwen","stream":true}`:
 		t.Fatalf("forwarded %s %q", got.path, got.body)
@@ -200,8 +205,15 @@ func TestV1KeyLimitedToModels(t *testing.T) {
 			t.Errorf("%s %s %s: %d, want %d: %s", tc.method, tc.path, tc.body, rec.Code, tc.want, rec.Body.String())
 		}
 	}
-	if len(*seen) != 2 {
-		t.Fatalf("%d requests reached the gateway, want the 2 allowed", len(*seen))
+	forwarded := 0
+	for _, r := range *seen {
+		if r.path != "/llm/v1/models" {
+			forwarded++
+		}
+	}
+	// Only the allowed chat: /v1/models/<id> is answered by console itself.
+	if forwarded != 1 {
+		t.Fatalf("%d inference requests reached the gateway, want the 1 allowed", forwarded)
 	}
 
 	rec := do(h, "GET", "/v1/models", key.Value, "")
@@ -257,8 +269,8 @@ func TestRouterMetrics(t *testing.T) {
 	out := scrape(t, srv)
 	for _, want := range []string{
 		`router_requests_total{code="200",key_id="` + key.ID + `",key_name="ci",model="qwen"} 2`,
-		// A model the gateway refused does not become a label value.
-		`router_requests_total{code="404",key_id="` + key.ID + `",key_name="ci",model=""} 1`,
+		// A model nothing serves is answered here and never becomes a label value.
+		`router_rejected_total{reason="unknown_model"} 1`,
 		`router_key_last_request_timestamp_seconds{key_id="` + key.ID + `",key_name="ci"}`,
 		`router_rejected_total{reason="invalid_key"} 1`,
 		"go_goroutines",
@@ -280,6 +292,10 @@ func TestRouterMetrics(t *testing.T) {
 func TestV1Streams(t *testing.T) {
 	release := make(chan struct{})
 	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/llm/v1/models" {
+			_, _ = w.Write([]byte(`{"data":[{"id":"qwen"}]}`))
+			return
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"content":"first"}}]}` + "\n\n"))
 		w.(http.Flusher).Flush()

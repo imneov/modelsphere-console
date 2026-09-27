@@ -267,9 +267,9 @@ func TestGatewayBackendResolvesFromCluster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The aggregate route, because only it serves every deployed model.
-	if got := target.url.String(); got != "http://openresty.llm.svc:8080/llm-gateway" {
-		t.Fatalf("target = %q", got)
+	// Every route, the aggregate one first: which serves what is asked per model.
+	if got := target.url.String(); got != "http://openresty.llm.svc:8080" || strings.Join(target.routes, ",") != "llm-gateway,kimi-k2.6" {
+		t.Fatalf("target = %q routes %v", got, target.routes)
 	}
 	if target.header != "Authorization" || target.key != "Bearer gw-key-1" {
 		t.Fatalf("credential = %q %q", target.header, target.key)

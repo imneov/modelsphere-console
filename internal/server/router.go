@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	"github.com/modelsphere/console/internal/router"
 )
@@ -34,15 +35,42 @@ func (s *Server) mountRouter(mux *http.ServeMux) {
 	})
 }
 
-func routerResolver(resolve targetResolver) router.Resolver {
-	if resolve == nil {
-		return nil
+// routerBackend is the router's view of a backend: its models, and the route for
+// one of them, through the same index the Playground uses.
+type routerBackend struct {
+	s       *Server
+	name    string
+	resolve targetResolver
+}
+
+func (rb routerBackend) Models(ctx context.Context) ([]string, error) {
+	t, err := rb.resolve(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return func(ctx context.Context) (*router.Target, error) {
-		t, err := resolve(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &router.Target{URL: t.url, Header: t.header, Key: t.key}, nil
+	c, err := rb.s.models.get(ctx, rb.name, t, "")
+	if err != nil {
+		return nil, err
 	}
+	return c.models, nil
+}
+
+func (rb routerBackend) Target(ctx context.Context, model string) (*router.Target, error) {
+	t, err := rb.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c, err := rb.s.models.get(ctx, rb.name, t, model)
+	if err != nil {
+		return nil, err
+	}
+	route, err := c.routeFor(model, t)
+	if err != nil {
+		return nil, err
+	}
+	u, err := url.Parse(routeURL(t, route))
+	if err != nil {
+		return nil, err
+	}
+	return &router.Target{URL: *u, Header: t.header, Key: t.key}, nil
 }
