@@ -189,7 +189,7 @@ the Playground is a conversation, streaming, for anyone with the permission.
 | Concern | Decision |
 |---|---|
 | Where it runs | `web/src/modules/playground/`, mounted at `/playground`; both pages are lazy-loaded (Markdown and highlighting are most of the weight) |
-| Pages | `/playground` — one conversation; `/playground/compare` — 2–4 columns, one prompt sent to every column, shared parameters in a dialog |
+| Pages | `/playground` — one conversation; `/playground/compare` — 2–4 columns, one prompt sent to every column, shared parameters in a dialog; `/playground/api-keys` — key management (below) |
 | Which backend | `llm` → the gateway's aggregate route, resolved from the cluster, so one picker lists every deployed model (`GET /v1/models`) |
 | Gateway key | read by console from the Secret the site profile names (or `apiKeyEnv`). Never in a values file, never in a chart value, never in the browser |
 | Conversation identity | each conversation (each column, in compare) sends its own `X-Session-Id`; the gateway pins it to one engine, so its prefix cache stays warm across turns |
@@ -198,7 +198,7 @@ the Playground is a conversation, streaming, for anyone with the permission.
 | Stats per answer | TTFT, total time, input/output tokens, tok/s over the decoding window (after TTFT), and cache hit rate = `prompt_tokens_details.cached_tokens / prompt_tokens`, shown only when the engine reports it |
 | Reasoning models | `delta.reasoning_content`, or a leading `<think>…</think>` in content, is shown in a collapsible block above the answer |
 | Reasoning in history | never sent back: the next turn's history carries only the answer, as the OpenAI-style APIs expect |
-| View code | cURL / Python / Node.js reproducing the current request against `<origin>/v1`, key read from `$MODELSPHERE_API_KEY`. That endpoint and its keys are the API-key work below; until it lands the snippets are a preview |
+| View code | cURL / Python / Node.js reproducing the current request against `<origin>/v1`, key read from `$MODELSPHERE_API_KEY` — an API key an admin issued (below) |
 | Access | UI permission `playground.use` guards the pages; the backend needs `get` **and** `create` on `backends/llm` (models are a GET, completions a POST) |
 
 A user therefore needs a role carrying both:
@@ -209,24 +209,31 @@ A user therefore needs a role carrying both:
             "resourceNames": ["llm"], "verbs": ["get", "create"]}]}
 ```
 
-### API keys (next)
+### API keys
 
 Programs reach the models through console, not the gateway: console owns the
-user-facing key, the gateway keeps its single key.
+user-facing keys, the gateway keeps its single key and is not changed.
 
 ```
-client --Bearer user key--> console /v1 --gateway key--> llm-openresty
-            verify: hash, expiry, allowed models (reads `model`, body size capped)
+client --Bearer ms_…--> console /v1 --gateway key--> llm-openresty
+                         verify key (hash, expiry)
+                         read body (capped) -> check `model` against the key
 ```
 
 | Concern | Decision |
 |---|---|
-| Endpoint | `/v1/*` passthrough, resolved like `backends.llm`; `X-Session-Id` forwarded unchanged; the gateway is not changed |
-| Issuing | admins only; format `prefix_access_secret`; plaintext shown once, masked in the list |
-| Expiry | 7 days, 1 month, 6 months, or never |
-| Scope | optional allowed-model list; last-used time recorded |
-| Storage | hashes in one Secret in console's namespace — no new CRD in the shared `iam.theriseunion.io` group |
-| Availability | console is now on the inference path: replicas and disruption budget have to reflect that |
+| Endpoint | `/v1/*` → the backend `apiKeys.backend` names (`llm`), resolved like it; `Authorization`, `Cookie`, `X-Remote-*` stripped, the backend's credential added; `X-Session-Id` passes unchanged; streams as it arrives |
+| Errors | OpenAI envelope (`{"error":{"message","type","code"}}`): 401 `invalid_api_key` / `expired_api_key`, 403 `model_not_allowed`, 413 `request_too_large`, 502/503 when the gateway or the key store is unavailable |
+| Format | `ms_<16 hex id>_<32 hex secret>`; the list shows `ms_<first 4 of id>***` |
+| Hashing | salted SHA-256 of the secret. The secret is 128 random bits, so a slow hash buys nothing and would cost CPU on every inference call |
+| Issuing | `/api/iam/apikeys` list/create/delete, RBAC resource `apikeys` — system:masters unless a role grants it; the page needs UI permission `apikeys.view`. The plaintext is in the create response only |
+| Expiry | 7, 30 or 180 days, or never; nothing else is accepted |
+| Model scope | none = every model. A scoped key: JSON bodies must name an allowed `model`; a request naming none (multipart, files) is refused; `GET /v1/models` is filtered to the allowed ones |
+| Body cap | `apiKeys.maxBodyBytes`, default 16 MiB — the body is read whole to find `model` |
+| Storage | one Secret `<release>-api-keys` in console's namespace, one entry per key id holding its JSON. console creates it; the chart never owns it, so upgrade/rollback/uninstall leave issued keys alone. No CRD in the shared `iam.theriseunion.io` group |
+| Replicas | each replica caches the keys: re-read every 10 s, and at most once a second for an unknown key. A key deleted elsewhere keeps working here for up to 10 s; a failed re-read keeps the last good set |
+| Last used | kept in memory, written once a minute and on shutdown, merged with the stored value (latest wins); writes retry on resourceVersion conflicts |
+| Availability | console is now on the inference path: 2 replicas by default, spread across nodes, PDB `maxUnavailable: 1`; on SIGTERM `/readyz` fails, 5 s for endpoints to catch up, then up to 60 s for in-flight generations (`terminationGracePeriodSeconds: 75`) |
 
 ## Bringing swiss in
 
@@ -274,7 +281,7 @@ requests carry the same headers Global's apiserver sets.
 | P3 | Full roles: authorizer + role/binding CRUD + role/permission UI. |
 | P4 | Federation: module shell, stack aligned with swiss, backend proxy with identity headers and per-backend RBAC. **(done)** |
 | P5 | swiss module: swiss prepares its frontend (table above) and exports `openapi.json`; copy into `modules/swiss`; CODEOWNERS. |
-| P6 | Playground: chat module, `llm` backend resolved from the cluster (site profile or route ConfigMap) with the gateway key read from its Secret, streaming SSE end to end. **(done)** Then: Markdown, compare page, full parameters, stats, view code. **(done)** API keys and the `/v1` endpoint. |
+| P6 | Playground: chat module, `llm` backend resolved from the cluster (site profile or route ConfigMap) with the gateway key read from its Secret, streaming SSE end to end. **(done)** Then: Markdown, compare page, full parameters, stats, view code. **(done)** API keys and the `/v1` endpoint. **(done)** |
 | P7 | Container management modules, moved over from Rise Global. |
 
 Each phase is independently committable and verifiable.

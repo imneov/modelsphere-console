@@ -24,7 +24,7 @@ apiserver -- not a data migration.
 ## Status
 
 Identity (P1–P3), the module shell with backend federation (P4) and the
-Playground (P6). See `docs/console-design.md` for the plan.
+Playground with API keys and the `/v1` endpoint (P6). See `docs/console-design.md` for the plan.
 
 ## Deploy
 
@@ -52,7 +52,9 @@ without it the Playground page says no backend is configured, and every other pa
 works. Point it at swiss's site profile (`namespace/name`) and console reads the
 entrypoint Service, the route and the gateway key from the cluster — see
 [docs/console-design.md](docs/console-design.md#a-backend-that-resolves-itself-gateway).
-The chart logs in on the default `admin` / `P@88w0rd` unless the cluster already
+With the gateway set, admins also issue API keys (Playground → API 密钥) that
+programs use against `http://<console>/v1` like any OpenAI-compatible endpoint;
+`apiKeys.enabled: false` turns that off. The chart logs in on the default `admin` / `P@88w0rd` unless the cluster already
 has that user (Rise Global's, say), in which case it is left alone and `NOTES`
 says so.
 
