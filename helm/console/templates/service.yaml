@@ -16,6 +16,21 @@ spec:
       {{- if and (eq .Values.service.type "NodePort") .Values.service.nodePort }}
       nodePort: {{ .Values.service.nodePort }}
       {{- end }}
+---
+# Metrics get a Service of their own, always ClusterIP: on the main Service a
+# NodePort type would publish them on every node.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "console.fullname" . }}-metrics
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "console.selectorLabels" . | nindent 4 }}
+  ports:
     - name: metrics
       port: {{ .Values.metrics.port }}
       targetPort: metrics

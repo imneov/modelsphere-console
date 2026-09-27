@@ -242,8 +242,9 @@ client --Bearer ms_…--> console /v1 --gateway key--> llm-openresty
 
 Usage is observed, not stored: writing "last used" to the keys' Secret would put
 an apiserver write on the inference path. Served on `server.metricsAddr`
-(`:9090`), a listener of its own so metrics are not reachable wherever the UI is;
-the chart adds `prometheus.io/*` pod annotations and an optional ServiceMonitor.
+(`:9090`), a listener of its own so metrics are not reachable wherever the UI is,
+behind a ClusterIP Service of its own (`<release>-metrics`) whatever type the UI's
+Service is; the chart adds `prometheus.io/*` pod annotations and an optional ServiceMonitor.
 
 | Metric | Labels | Meaning |
 |---|---|---|
