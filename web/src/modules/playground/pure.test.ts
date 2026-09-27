@@ -13,6 +13,7 @@ describe("toChatParams + buildPayload", () => {
     expect(buildPayload(history, toChatParams("m", DEFAULT_FORM))).toEqual({
       model: "m",
       stream: true,
+      stream_options: { include_usage: true },
       messages: history,
       temperature: 0.7,
       top_p: 0.95,

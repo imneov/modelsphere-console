@@ -59,6 +59,7 @@ describe("playground api.streamChat", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       model: "kimi-k2.6",
       stream: true,
+      stream_options: { include_usage: true },
       messages: [
         { role: "system", content: "简洁回答" },
         { role: "user", content: "你好" },
@@ -81,7 +82,7 @@ describe("playground api.streamChat", () => {
     });
 
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-    expect(body).toEqual({ model: "m", stream: true, messages: [{ role: "user", content: "你好" }] });
+    expect(body).toEqual({ model: "m", stream: true, stream_options: { include_usage: true }, messages: [{ role: "user", content: "你好" }] });
   });
 
   it("accumulates content and reasoning across chunk boundaries", async () => {
