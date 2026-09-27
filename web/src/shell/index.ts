@@ -6,3 +6,4 @@ export { apiFetch, request, ApiError, type Me } from "@/shell/api";
 export { useAuth } from "@/shell/auth";
 export { usePermissions, PermissionGuard } from "@/shell/permissions";
 export { StatCard } from "@/shell/StatCard";
+export { CopyButton, copyText } from "@/shell/CopyButton";

@@ -23,9 +23,8 @@ import {
   Textarea,
 } from "@riseaicloud/ui";
 import { KeyRound, Plus, TriangleAlert } from "lucide-react";
-import { CopyButton } from "@/modules/playground/components/CopyButton";
-import { useModels } from "@/modules/playground/components/ModelSelect";
-import { formatTime, keysApi, type ApiKey } from "@/modules/playground/keys";
+import { CopyButton } from "@/shell";
+import { api, formatTime, type ApiKey } from "@/modules/router/api";
 
 const EXPIRY_OPTIONS = [
   { days: 7, label: "7 天" },
@@ -38,7 +37,7 @@ const MAX_MODEL_BADGES = 3;
 
 export function ApiKeys() {
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["apikeys"], queryFn: keysApi.list });
+  const { data, isLoading, error } = useQuery({ queryKey: ["router", "apikeys"], queryFn: api.listKeys });
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteErr, setDeleteErr] = useState("");
   const err = deleteErr || (error as Error | null)?.message;
@@ -84,7 +83,6 @@ export function ApiKeys() {
         </div>
       ),
     },
-    { key: "lastUsedAt", title: "最近使用", width: 160, render: (k) => (k.lastUsedAt ? formatTime(k.lastUsedAt) : <span className="text-muted-foreground">从未使用</span>) },
     { key: "createdBy", title: "创建者", width: 90 },
     { key: "createdAt", title: "创建时间", width: 160, render: (k) => formatTime(k.createdAt) },
   ];
@@ -109,7 +107,7 @@ export function ApiKeys() {
         columns={columns}
         totalItems={data?.items.length ?? 0}
         showRefresh
-        onRefresh={() => qc.invalidateQueries({ queryKey: ["apikeys"] })}
+        onRefresh={() => qc.invalidateQueries({ queryKey: ["router", "apikeys"] })}
         emptyText="暂无 API 密钥，点击「新建 API 密钥」创建"
         minWidth={900}
         deleteConfig={{
@@ -119,11 +117,11 @@ export function ApiKeys() {
           onDelete: async (k) => {
             setDeleteErr("");
             try {
-              await keysApi.remove(k.id);
+              await api.deleteKey(k.id);
             } catch (e) {
               setDeleteErr((e as Error).message);
             }
-            qc.invalidateQueries({ queryKey: ["apikeys"] });
+            qc.invalidateQueries({ queryKey: ["router", "apikeys"] });
           },
         }}
       />
@@ -139,7 +137,7 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const [created, setCreated] = useState<Created | null>(null);
 
   const close = () => {
-    if (created) qc.invalidateQueries({ queryKey: ["apikeys"] });
+    if (created) qc.invalidateQueries({ queryKey: ["router", "apikeys"] });
     setCreated(null);
     onOpenChange(false);
   };
@@ -155,7 +153,7 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 }
 
 function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
-  const models = useModels();
+  const models = useQuery({ queryKey: ["router", "models"], queryFn: api.models, retry: false });
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [expiresInDays, setExpiresInDays] = useState(30);
@@ -165,7 +163,7 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
 
   const create = useMutation({
     mutationFn: () =>
-      keysApi.create({
+      api.createKey({
         name: name.trim(),
         description: description.trim() || undefined,
         expiresInDays,

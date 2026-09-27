@@ -2,5 +2,6 @@
 import type { ConsoleModule } from "@/shell";
 import { iamModule } from "@/modules/iam";
 import { playgroundModule } from "@/modules/playground";
+import { routerModule } from "@/modules/router";
 
-export const modules: ConsoleModule[] = [playgroundModule, iamModule];
+export const modules: ConsoleModule[] = [playgroundModule, routerModule, iamModule];
