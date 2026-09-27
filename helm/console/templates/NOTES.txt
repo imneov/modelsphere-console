@@ -5,11 +5,39 @@ console is installed as {{ include "console.fullname" . }}.
 {{- $adminIsOurs := false }}
 {{- if $existing }}{{ $adminIsOurs = eq (get (dig "metadata" "labels" dict $existing) "app.kubernetes.io/instance") .Release.Name }}{{ end }}
 
-Reach it (ClusterIP by default):
+{{- $svc := include "console.fullname" . }}
+Open it:
+{{- if eq .Values.service.type "NodePort" }}
 
-  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "console.fullname" . }} 8080:{{ .Values.service.port }}
+  NODE_PORT=$(kubectl -n {{ .Release.Namespace }} get svc {{ $svc }} -o jsonpath='{.spec.ports[0].nodePort}')
+  NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+  echo "http://$NODE_IP:$NODE_PORT/"
+{{- else if eq .Values.service.type "LoadBalancer" }}
 
-Access URL: http://localhost:8080/
+  kubectl -n {{ .Release.Namespace }} get svc {{ $svc }} -w    # then http://<EXTERNAL-IP>:{{ .Values.service.port }}/
+{{- else }}
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ $svc }} 8080:{{ .Values.service.port }}
+  # then http://localhost:8080/
+{{- end }}
+{{- if include "console.gateway.builtin" . }}
+{{- if .Values.demo.enabled }}
+
+Demo model: {{ .Values.demo.model.name }}, served on CPU by llama.cpp. Its weights
+(~500 MB) download on first start; the Playground lists it once this is ready:
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ $svc }}-demo --timeout=20m
+{{- end }}
+
+Models are served through the built-in gateway ({{ $svc }}-gateway). Add your own
+OpenAI-compatible endpoints under gateway.models{{ if .Values.demo.enabled }}, and set demo.enabled=false once
+you have them{{ end }}.
+{{- end }}
+{{- if include "console.router.enabled" . }}
+
+Programs call the same models at http://<console address>/v1 with an API key an
+administrator issues under 路由 → API 密钥.
+{{- end }}
 
 {{- if not .Values.admin.username }}
 No administrator user was seeded. Configure an administrator before signing in.
