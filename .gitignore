@@ -13,3 +13,6 @@
 
 # Local npm auth for the private @riseaicloud/* registry — never commit
 .npmrc
+
+# The image built from this working copy (hack/image.sh)
+/console-image.yaml
