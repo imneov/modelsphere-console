@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic/fake"
@@ -58,5 +59,30 @@ func TestConfigMapAndSecret(t *testing.T) {
 	// handing the gateway a credential made of someone else's encoding.
 	if _, err := k.Secret(t.Context(), "llm", "broken"); err == nil || !strings.Contains(err.Error(), "not base64") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestWriteSecretCreatesThenReplaces(t *testing.T) {
+	k := NewKubeFrom(fake.NewSimpleDynamicClient(runtime.NewScheme()))
+	ctx := t.Context()
+	if _, _, err := k.SecretVersioned(ctx, "console", "keys"); !apierrors.IsNotFound(err) {
+		t.Fatalf("absent secret: %v", err)
+	}
+	if err := k.WriteSecret(ctx, "console", "keys", map[string][]byte{"a": []byte("1")}, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := k.WriteSecret(ctx, "console", "keys", map[string][]byte{"a": []byte("1")}, true, ""); !apierrors.IsAlreadyExists(err) {
+		t.Fatalf("second create: %v", err)
+	}
+	_, rv, err := k.SecretVersioned(ctx, "console", "keys")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := k.WriteSecret(ctx, "console", "keys", map[string][]byte{"b": []byte("2")}, false, rv); err != nil {
+		t.Fatal(err)
+	}
+	data, _, err := k.SecretVersioned(ctx, "console", "keys")
+	if err != nil || len(data) != 1 || string(data["b"]) != "2" {
+		t.Fatalf("replaced data = %v %v", data, err)
 	}
 }
