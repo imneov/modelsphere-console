@@ -163,7 +163,7 @@ backends:
 | Step | Where it comes from |
 |---|---|
 | Entrypoint | profile `route.nginxService` + `route.nginxPort` (default 8080) → `http://<name>.<ns>.svc:<port>` |
-| Route | the aggregate route in the ConfigMap: the one whose config has `peers_by_model`, i.e. the one that serves several models and therefore lists them on `GET /v1/models`. A single route is used as-is; several non-aggregate routes are an error that names the candidates and asks for `route:` |
+| Routes | every `session_route_<route>.conf` in the ConfigMap, aggregate ones (`peers_by_model`, serving several models) first; `route:` pins one. Which route serves which model is not in the ConfigMap -- see "Models across routes" |
 | Key | profile `route.auth.secretRef`/`secretKey` (default entry `keys`, format `key1:owner1,…`; the first key is used), sent as `Authorization: Bearer <key>` — llm-openresty accepts nothing else. A bare Secret name means the entrypoint's namespace |
 | Overrides | `apiKeyEnv` (a copied key in the console's namespace), and `route` |
 
@@ -190,11 +190,11 @@ the Playground is a conversation, streaming, for anyone with the permission.
 |---|---|
 | Where it runs | `web/src/modules/playground/`, mounted at `/playground`; both pages are lazy-loaded (Markdown and highlighting are most of the weight) |
 | Pages | `/playground` — one conversation; `/playground/compare` — 2–4 columns, one prompt sent to every column, shared parameters in a dialog |
-| Which backend | `llm` → the gateway's aggregate route, resolved from the cluster, so one picker lists every deployed model (`GET /v1/models`) |
+| Which backend | `llm` → the gateway, resolved from the cluster; one picker lists every model on every route (see "Models across routes") |
 | Gateway key | read by console from the Secret the site profile names (or `apiKeyEnv`). Never in a values file, never in a chart value, never in the browser |
 | Conversation identity | each conversation (each column, in compare) sends its own `X-Session-Id`; the gateway pins it to one engine, so its prefix cache stays warm across turns |
 | Parameters | system prompt, temperature, top_p, max_tokens, seed, stop (one per line), frequency/presence penalty, reasoning_effort; an empty field is left out of the request, so the engine's default applies |
-| Token counts | the page does not send `stream_options`; the gateway injects `include_usage` for streaming requests |
+| Token counts | the page sends `stream_options.include_usage`: openresty injects it only on aggregate routes, and autoconfig's per-model routes are not |
 | Stats per answer | TTFT, total time, input/output tokens, tok/s over the decoding window (after TTFT), and cache hit rate = `prompt_tokens_details.cached_tokens / prompt_tokens`, shown only when the engine reports it |
 | Reasoning models | `delta.reasoning_content`, or a leading `<think>…</think>` in content, is shown in a collapsible block above the answer |
 | Reasoning in history | never sent back: the next turn's history carries only the answer, as the OpenAI-style APIs expect |
@@ -208,6 +208,47 @@ A user therefore needs a role carrying both:
  "rules": [{"apiGroups": ["iam.theriseunion.io"], "resources": ["backends"],
             "resourceNames": ["llm"], "verbs": ["get", "create"]}]}
 ```
+
+### Models across routes
+
+The modelsphere stack's gateway is fed by autoconfig: one plain route per model
+(`session_route_<model>.conf`, `peers` only), and no route that lists them all.
+Console makes one model list and one endpoint out of it:
+
+```
+resolve (30 s): ConfigMap keys -> routes [aggregate..., plain...]
+index (per backend): GET <gateway>/<route>/v1/models for every route, in parallel
+                     model -> first route listing it
+request: GET /v1/models          -> answered from the index
+         anything with "model"   -> <gateway>/<route of that model>/...
+```
+
+| Concern | Decision |
+|---|---|
+| Freshness | the index is kept 30 s and refreshed behind a stale answer; an unknown model re-asks at once (at most every 2 s), so a model deployed a moment ago works on its first request |
+| A route that does not answer | left out, not fatal. openresty loads a route up to a minute after autoconfig writes it and answers 502 until then, so a list missing a route is re-asked after 2 s instead of 30 s |
+| Same model on two routes | the first wins; aggregate routes come first, so a hand-written aggregate route beside autoconfig's is preferred |
+| No model in the request | fine with one route, 400 with several |
+| Unknown model | `/api/llm`: 400 listing what is served; `/v1`: 404 `model_not_found`, as OpenAI answers |
+| Scoped keys | `/v1/models` and `/v1/models/<id>` are answered by the router from the index, filtered by the key; nothing is rewritten on the way back |
+| Replicas | each keeps its own index; a route added or removed is seen by all within one resolve (≤ 30 s) |
+
+Pointing an install at the stack's gateway:
+
+```yaml
+playground:
+  gateway:
+    configMap: llm-route/openresty-conf
+    service: llm-route/openresty
+    secretRef: llm-route/openresty      # the openresty chart's key Secret, if auth is on
+```
+
+Verified on daocloud-ce against the stack's own charts (helm-charts openresty
+0.1.20 + autoconfig 0.4.0, ModelRoute `routing.modelsphere.dev`): two llama.cpp
+engines, two ModelRoutes, two plain routes. The Playground lists and chats with
+both, with token stats; `/v1` routes each model to its engine through the OpenAI
+SDK; a key scoped to one model sees and uses only it; deleting and recreating a
+ModelRoute is followed by both replicas.
 
 ## Router
 
@@ -289,7 +330,7 @@ stream, 401 on a bad key), `cached_tokens` 28/29 on a repeated prompt.
 |---|---|---|
 | console image is not public | `swr…/risecloud/console` needs credentials; the verification loaded the image onto the node | publish `console:<appVersion>` anonymously (e.g. Docker Hub `4pdosc/console`) and default the chart to it |
 | llama.cpp comes from ghcr.io | slow or blocked in some networks | a mirror value, or a copy under the same public org |
-| models deployed by swiss do not reach the built-in route | nothing generates a `peers_by_model` route; autoconfig only writes flat per-model routes | console writes the aggregate route from what is deployed, or autoconfig learns it |
+| models deployed through swiss reach console only via the stack's gateway | the built-in gateway's route is rendered by the chart; autoconfig writes per-model routes into the stack's own `llm-route/openresty-conf` | point `playground.gateway` at the stack's gateway (see "Models across routes"); a built-in gateway fed by autoconfig is a later step |
 | swiss is not part of the install | its image (`harbor.4pd.io`) is private, its catalog URL is a placeholder, its engines need GPUs and hostPath weights, and routing needs autoconfig with the ModelRoute and LLMSLORequirement CRDs | see "Bringing swiss in" |
 | swiss and console read the gateway key differently | swiss sends the Secret value verbatim (`apiKey`), console parses `key:owner` (`keys`) | one format, in swiss |
 

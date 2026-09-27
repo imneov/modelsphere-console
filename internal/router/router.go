@@ -24,33 +24,41 @@ type Target struct {
 	Key    string
 }
 
-type Resolver func(context.Context) (*Target, error)
+// Backend is what /v1 forwards to: the models it serves, and where a request for
+// one of them goes. A gateway with one route per model answers per model.
+type Backend interface {
+	Models(ctx context.Context) ([]string, error)
+	// Target for model; "" is a request that names none.
+	Target(ctx context.Context, model string) (*Target, error)
+}
+
+var (
+	ErrUnknownModel = errors.New("model not served")
+	ErrNoModel      = errors.New("request names no model")
+)
 
 // Router serves /v1: the caller's API key is checked here and replaced by the
 // backend's own credential, so the gateway keeps one key and needs no change.
 // Errors use the OpenAI envelope, since the callers are SDKs.
 type Router struct {
 	keys    *Store
-	resolve Resolver
+	backend Backend
 	maxBody int64
 	log     *slog.Logger
 	metrics *metrics
 	proxy   *httputil.ReverseProxy
 }
 
-// New builds a router; a nil resolve answers 503 for every call.
-func New(keys *Store, resolve Resolver, maxBody int64, log *slog.Logger, reg prometheus.Registerer) *Router {
-	rt := &Router{keys: keys, resolve: resolve, maxBody: maxBody, log: log, metrics: newMetrics(reg)}
+// New builds a router; a nil backend answers 503 for every call.
+func New(keys *Store, backend Backend, maxBody int64, log *slog.Logger, reg prometheus.Registerer) *Router {
+	rt := &Router{keys: keys, backend: backend, maxBody: maxBody, log: log, metrics: newMetrics(reg)}
 	rt.proxy = rt.newProxy()
 	return rt
 }
 
 // call is what the handler decided, for the proxy to act on.
 type call struct {
-	key    Key
 	target *Target
-	// filterModels: a key limited to some models lists only those.
-	filterModels bool
 }
 
 type callKey struct{}
@@ -91,24 +99,37 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.ContentLength = int64(len(body))
 	r.Header.Set("Content-Length", strconv.Itoa(len(body)))
 
-	model := modelOf(body)
-	if msg := modelDenied(key, r, model); msg != "" {
-		rt.reject(w, "model_not_allowed", http.StatusForbidden, "permission_error", "model_not_allowed", msg)
-		return
-	}
-
-	if rt.resolve == nil {
+	if rt.backend == nil {
 		rt.reject(w, "no_backend", http.StatusServiceUnavailable, "server_error", "service_unavailable", "No inference backend is configured")
 		return
 	}
-	target, err := rt.resolve(r.Context())
-	if err != nil {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		if id, ok := modelPath(r.URL.Path); ok {
+			rt.serveModels(w, r, key, id)
+			return
+		}
+	}
+
+	model := modelOf(body)
+	if msg := modelDenied(key, model); msg != "" {
+		rt.reject(w, "model_not_allowed", http.StatusForbidden, "permission_error", "model_not_allowed", msg)
+		return
+	}
+	target, err := rt.backend.Target(r.Context(), model)
+	switch {
+	case errors.Is(err, ErrUnknownModel):
+		rt.reject(w, "unknown_model", http.StatusNotFound, "invalid_request_error", "model_not_found", fmt.Sprintf("The model %q does not exist", model))
+		return
+	case errors.Is(err, ErrNoModel):
+		rt.reject(w, "no_model", http.StatusBadRequest, "invalid_request_error", "", "The request names no model")
+		return
+	case err != nil:
 		rt.log.Warn("inference backend unresolved", "err", err)
 		rt.reject(w, "no_backend", http.StatusBadGateway, "server_error", "bad_gateway", "Inference gateway is unavailable")
 		return
 	}
 
-	c := &call{key: key, target: target, filterModels: len(key.Models) > 0 && r.Method == http.MethodGet && strings.TrimSuffix(r.URL.Path, "/") == "/v1/models"}
+	c := &call{target: target}
 	sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 	rt.proxy.ServeHTTP(sw, r.WithContext(context.WithValue(r.Context(), callKey{}, c)))
 	// The model label comes from a request the gateway accepted, so a caller
@@ -135,26 +156,67 @@ func modelOf(body []byte) string {
 // modelDenied is why a key limited to some models may not make this request, or
 // "". A request that names no model (multipart, files, batches) is outside what
 // such a key can be checked against, so it is refused rather than let through.
-func modelDenied(key Key, r *http.Request, model string) string {
-	if len(key.Models) == 0 {
+func modelDenied(key Key, model string) string {
+	switch {
+	case len(key.Models) == 0:
 		return ""
-	}
-	if r.Method == http.MethodGet || r.Method == http.MethodHead {
-		switch id, _ := strings.CutPrefix(r.URL.Path, "/v1/models"); {
-		case id == "" || id == "/":
-			return ""
-		case strings.HasPrefix(id, "/") && key.Allows(strings.TrimPrefix(id, "/")):
-			return ""
-		}
-		return "This API key is limited to certain models"
-	}
-	if model == "" {
+	case model == "":
 		return "This API key is limited to certain models, and the request names none"
-	}
-	if !key.Allows(model) {
+	case !key.Allows(model):
 		return fmt.Sprintf("This API key may not use model %q", model)
 	}
 	return ""
+}
+
+// modelPath matches /v1/models and /v1/models/<id>, which the router answers
+// itself: the models may live on several routes, none of which lists them all.
+func modelPath(path string) (id string, ok bool) {
+	rest, ok := strings.CutPrefix(path, "/v1/models")
+	switch {
+	case !ok:
+		return "", false
+	case rest == "" || rest == "/":
+		return "", true
+	case strings.HasPrefix(rest, "/"):
+		return strings.TrimPrefix(rest, "/"), true
+	}
+	return "", false
+}
+
+// serveModels lists the models the key may use, or describes one.
+func (rt *Router) serveModels(w http.ResponseWriter, r *http.Request, key Key, id string) {
+	models, err := rt.backend.Models(r.Context())
+	if err != nil {
+		rt.log.Warn("model list unavailable", "err", err)
+		rt.reject(w, "no_backend", http.StatusBadGateway, "server_error", "bad_gateway", "Inference gateway is unavailable")
+		return
+	}
+	var visible []map[string]string
+	for _, m := range models {
+		if key.Allows(m) {
+			visible = append(visible, map[string]string{"id": m, "object": "model", "owned_by": "modelsphere"})
+		}
+	}
+	if id == "" {
+		if visible == nil {
+			visible = []map[string]string{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"object": "list", "data": visible})
+		rt.metrics.requests.WithLabelValues(key.ID, key.Name, "", "200").Inc()
+		return
+	}
+	for _, m := range visible {
+		if m["id"] == id {
+			writeJSON(w, http.StatusOK, m)
+			rt.metrics.requests.WithLabelValues(key.ID, key.Name, id, "200").Inc()
+			return
+		}
+	}
+	if !key.Allows(id) {
+		rt.reject(w, "model_not_allowed", http.StatusForbidden, "permission_error", "model_not_allowed", fmt.Sprintf("This API key may not use model %q", id))
+		return
+	}
+	rt.reject(w, "unknown_model", http.StatusNotFound, "invalid_request_error", "model_not_found", fmt.Sprintf("The model %q does not exist", id))
 }
 
 // unresolved stands in for a request that reached the proxy without a target: it
@@ -182,60 +244,13 @@ func (rt *Router) newProxy() *httputil.ReverseProxy {
 			if target.Key != "" {
 				pr.Out.Header.Set(target.Header, target.Key)
 			}
-			if c != nil && c.filterModels {
-				// Plain bytes back, so the list can be rewritten.
-				pr.Out.Header.Del("Accept-Encoding")
-			}
 		},
 		FlushInterval: -1,
-		ModifyResponse: func(resp *http.Response) error {
-			c := callFrom(resp.Request.Context())
-			if resp.StatusCode != http.StatusOK || c == nil || !c.filterModels {
-				return nil
-			}
-			return filterModelList(resp, c.key)
-		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			rt.log.Warn("inference backend unreachable", "path", r.URL.Path, "err", err)
 			openAIError(w, http.StatusBadGateway, "server_error", "bad_gateway", "Inference gateway is unreachable")
 		},
 	}
-}
-
-func filterModelList(resp *http.Response, key Key) error {
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	resp.Body.Close()
-	if err != nil {
-		return err
-	}
-	var list map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &list); err != nil {
-		return fmt.Errorf("model list is not JSON: %w", err)
-	}
-	var models []json.RawMessage
-	if err := json.Unmarshal(list["data"], &models); err != nil {
-		return fmt.Errorf("model list has no data array: %w", err)
-	}
-	kept := []json.RawMessage{}
-	for _, m := range models {
-		var id struct {
-			ID string `json:"id"`
-		}
-		if json.Unmarshal(m, &id) == nil && key.Allows(id.ID) {
-			kept = append(kept, m)
-		}
-	}
-	if list["data"], err = json.Marshal(kept); err != nil {
-		return err
-	}
-	if raw, err = json.Marshal(list); err != nil {
-		return err
-	}
-	resp.Body = io.NopCloser(bytes.NewReader(raw))
-	resp.ContentLength = int64(len(raw))
-	resp.Header.Set("Content-Length", strconv.Itoa(len(raw)))
-	resp.Header.Del("Content-Encoding")
-	return nil
 }
 
 func apiKeyOf(r *http.Request) string {

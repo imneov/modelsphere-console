@@ -24,6 +24,9 @@ type backendTarget struct {
 	url    url.URL
 	header string
 	key    string
+	// routes, on a gateway: the request goes to url plus the one serving its
+	// model (see modelIndex).
+	routes []string
 }
 
 type targetKey struct{}
@@ -69,6 +72,12 @@ func (s *Server) mountBackends(mux *http.ServeMux) {
 				// unreachable backend, but the reason is the useful part.
 				writeError(w, http.StatusBadGateway, fmt.Sprintf("backend %s: %v", b.Name, err))
 				return
+			}
+			if b.Gateway != nil {
+				target = s.routeByModel(w, r, b, target)
+				if target == nil {
+					return
+				}
 			}
 			proxy.ServeHTTP(w, r.WithContext(withTarget(r.Context(), target)))
 		})
@@ -125,11 +134,11 @@ func gatewayResolver(r *gateway.Resolver) targetResolver {
 		if err != nil {
 			return nil, err
 		}
-		target, err := url.Parse(entry.URL)
+		base, err := url.Parse(entry.Base)
 		if err != nil {
 			return nil, err
 		}
-		return &backendTarget{url: *target, header: entry.Header, key: entry.Key}, nil
+		return &backendTarget{url: *base, header: entry.Header, key: entry.Key, routes: entry.Routes}, nil
 	}
 }
 

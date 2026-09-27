@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -154,10 +155,25 @@ func TestResolveSingleModelRoute(t *testing.T) {
 	}
 }
 
-func TestResolveAmbiguousRoutes(t *testing.T) {
-	_, err := resolveOne(t, &config.Gateway{ConfigMap: "llm/many-routes-conf", Service: "llm/openresty"}, fixture())
-	if err == nil || !strings.Contains(err.Error(), "set gateway.route") || !strings.Contains(err.Error(), "a, b") {
-		t.Fatalf("err = %v", err)
+// autoconfig writes one plain route per model and no aggregate one: every route
+// is served, and which model each serves is asked of the routes themselves.
+func TestResolveSeveralPlainRoutes(t *testing.T) {
+	entry, err := resolveOne(t, &config.Gateway{ConfigMap: "llm/many-routes-conf", Service: "llm/openresty"}, fixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(entry.Routes, []string{"a", "b"}) || entry.Base != "http://openresty.llm.svc:8080" {
+		t.Fatalf("entry = %+v", entry)
+	}
+}
+
+func TestResolveAggregateRoutesFirst(t *testing.T) {
+	entry, err := resolveOne(t, &config.Gateway{Profile: "llm/site-profile"}, fixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(entry.Routes, []string{"llm-gateway", "glm-5.1", "kimi-k2.6"}) {
+		t.Fatalf("routes = %v", entry.Routes)
 	}
 }
 

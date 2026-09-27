@@ -151,12 +151,13 @@ export const api = {
 };
 
 // buildPayload is the request body exactly as sent, so View Code can show the
-// same thing. stream_options is deliberately absent: the gateway injects
-// include_usage itself for streaming requests (lua/reqtransform.lua).
+// same thing. include_usage is asked for explicitly: openresty adds it only on
+// aggregate routes, and autoconfig's per-model routes are not.
 export function buildPayload(messages: ChatMessage[], params: ChatParams): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     model: params.model,
     stream: true,
+    stream_options: { include_usage: true },
     messages: [
       ...(params.system ? [{ role: "system", content: params.system }] : []),
       ...messages.map(({ role, content }) => ({ role, content })),
