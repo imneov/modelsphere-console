@@ -182,3 +182,30 @@ func TestNewModelIsFoundWithoutWaitingForTheTTL(t *testing.T) {
 		t.Fatalf("qwen-c went to %v", v)
 	}
 }
+
+// A route openresty has not loaded yet answers 502; once it does, its model
+// shows up within catalogMissRefresh, not the full TTL.
+func TestLateRouteJoinsTheListSoon(t *testing.T) {
+	srv, h, gw := multiRouteServer(t)
+	admin := login(t, h, "admin", "admin-pw")
+	clock := time.Now()
+	srv.models.now = func() time.Time { return clock }
+
+	if got := ids(t, do(h, "GET", "/api/llm/v1/models", admin, "")); got != "qwen-a,qwen-b" {
+		t.Fatalf("models = %s", got)
+	}
+	gw.serve("broken", "qwen-late")
+	clock = clock.Add(catalogMissRefresh)
+	do(h, "GET", "/api/llm/v1/models", admin, "") // stale answer, refresh behind it
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got := ids(t, do(h, "GET", "/api/llm/v1/models", admin, ""))
+		if got == "qwen-a,qwen-b,qwen-late" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("models = %s", got)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

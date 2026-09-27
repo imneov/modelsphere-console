@@ -37,6 +37,9 @@ type catalog struct {
 	models     []string
 	route      map[string]string
 	refreshing bool
+	// partial: a route did not answer. openresty loads a new route up to a
+	// minute after autoconfig writes it, so such a list is re-asked sooner.
+	partial bool
 }
 
 const (
@@ -73,7 +76,7 @@ func (ix *modelIndex) get(ctx context.Context, name string, t *backendTarget, wa
 		if fresh, err := ix.refresh(ctx, name, t, sig); err == nil {
 			return fresh, nil
 		}
-	case now.Sub(c.at) >= catalogTTL:
+	case now.Sub(c.at) >= c.ttl():
 		ix.mu.Lock()
 		if !c.refreshing {
 			c.refreshing = true
@@ -144,6 +147,7 @@ func (ix *modelIndex) probe(ctx context.Context, name string, t *backendTarget) 
 	if answered == 0 {
 		return nil, fmt.Errorf("no route listed its models: %w", errors.Join(errs...))
 	}
+	c.partial = answered < len(routes)
 	slices.Sort(c.models)
 	return c, nil
 }
@@ -179,6 +183,13 @@ func (ix *modelIndex) list(ctx context.Context, u string, t *backendTarget) ([]s
 		}
 	}
 	return ids, nil
+}
+
+func (c *catalog) ttl() time.Duration {
+	if c.partial {
+		return catalogMissRefresh
+	}
+	return catalogTTL
 }
 
 func (c *catalog) serves(model string) bool {
