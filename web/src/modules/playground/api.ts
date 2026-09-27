@@ -15,12 +15,21 @@ export interface ChatMessage {
   content: string;
 }
 
+export type ReasoningEffort = "" | "none" | "minimal" | "low" | "medium" | "high";
+
 export interface ChatParams {
   model: string;
   system: string;
   temperature: number;
   topP: number;
   maxTokens: number;
+  // Optional: NaN, empty or absent means the request does not carry it, so the
+  // engine's own default applies.
+  seed?: number;
+  stop?: string[];
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  reasoningEffort?: ReasoningEffort;
 }
 
 export interface Delta {
@@ -38,12 +47,19 @@ export interface StreamResult {
   ms: number;
   promptTokens?: number;
   completionTokens?: number;
+  // Prompt tokens served from the engine's prefix cache, when the engine reports
+  // usage.prompt_tokens_details.
+  cachedTokens?: number;
   aborted: boolean;
 }
 
 interface Chunk {
   choices?: { delta?: { content?: string; reasoning_content?: string } }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number } | null;
+  } | null;
   error?: { message?: string } | string;
 }
 
@@ -68,19 +84,7 @@ export const api = {
   }): Promise<StreamResult> => {
     const { messages, params, sessionId, signal, onDelta } = args;
     const started = performance.now();
-    // stream_options is deliberately not sent: the gateway injects
-    // include_usage itself for streaming requests (lua/reqtransform.lua).
-    const payload: Record<string, unknown> = {
-      model: params.model,
-      stream: true,
-      messages: [
-        ...(params.system ? [{ role: "system", content: params.system }] : []),
-        ...messages.map(({ role, content }) => ({ role, content })),
-      ],
-    };
-    if (Number.isFinite(params.temperature)) payload.temperature = params.temperature;
-    if (Number.isFinite(params.topP)) payload.top_p = params.topP;
-    if (params.maxTokens > 0) payload.max_tokens = params.maxTokens;
+    const payload = buildPayload(messages, params);
 
     let res: Response;
     try {
@@ -114,6 +118,8 @@ export const api = {
       if (chunk.usage) {
         out.promptTokens = chunk.usage.prompt_tokens;
         out.completionTokens = chunk.usage.completion_tokens;
+        const cached = chunk.usage.prompt_tokens_details?.cached_tokens;
+        if (typeof cached === "number") out.cachedTokens = cached;
       }
       const delta = chunk.choices?.[0]?.delta;
       if (!delta) return;
@@ -143,6 +149,30 @@ export const api = {
     return out;
   },
 };
+
+// buildPayload is the request body exactly as sent, so View Code can show the
+// same thing. stream_options is deliberately absent: the gateway injects
+// include_usage itself for streaming requests (lua/reqtransform.lua).
+export function buildPayload(messages: ChatMessage[], params: ChatParams): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    model: params.model,
+    stream: true,
+    messages: [
+      ...(params.system ? [{ role: "system", content: params.system }] : []),
+      ...messages.map(({ role, content }) => ({ role, content })),
+    ],
+  };
+  if (Number.isFinite(params.temperature)) payload.temperature = params.temperature;
+  if (Number.isFinite(params.topP)) payload.top_p = params.topP;
+  if (params.maxTokens > 0) payload.max_tokens = params.maxTokens;
+  if (params.seed !== undefined && Number.isInteger(params.seed) && params.seed >= 0) payload.seed = params.seed;
+  const stop = (params.stop ?? []).filter((s) => s !== "");
+  if (stop.length) payload.stop = stop;
+  if (params.frequencyPenalty !== undefined && Number.isFinite(params.frequencyPenalty)) payload.frequency_penalty = params.frequencyPenalty;
+  if (params.presencePenalty !== undefined && Number.isFinite(params.presencePenalty)) payload.presence_penalty = params.presencePenalty;
+  if (params.reasoningEffort) payload.reasoning_effort = params.reasoningEffort;
+  return payload;
+}
 
 function aborted(started: number): StreamResult {
   return { text: "", reasoning: "", ms: performance.now() - started, aborted: true };

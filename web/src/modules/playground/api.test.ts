@@ -106,6 +106,14 @@ describe("playground api.streamChat", () => {
 
     expect(result.promptTokens).toBe(12);
     expect(result.completionTokens).toBe(34);
+    expect(result.cachedTokens).toBeUndefined();
+  });
+
+  it("takes cached prompt tokens when the engine reports them", async () => {
+    const usage = `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 100, completion_tokens: 5, prompt_tokens_details: { cached_tokens: 64 } } })}\n\n`;
+    vi.stubGlobal("fetch", vi.fn(async () => sse([delta("hi"), usage])));
+    const result = await call(() => {});
+    expect(result.cachedTokens).toBe(64);
   });
 
   it("ignores keep-alives and unparseable frames", async () => {
