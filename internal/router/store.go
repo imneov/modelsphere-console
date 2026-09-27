@@ -1,4 +1,4 @@
-package apikey
+package router
 
 import (
 	"context"
@@ -36,10 +36,7 @@ const (
 	// missRefresh rate-limits the re-read an unknown key triggers, so a flood of
 	// made-up keys costs one GET a second, not one per request.
 	missRefresh = time.Second
-	// flushEvery is how precise "last used" is; writing it per request would put
-	// a Secret update on every inference call.
-	flushEvery = time.Minute
-	writeTries = 5
+	writeTries  = 5
 )
 
 // Store keeps the keys in one Secret, one entry per key id holding its JSON.
@@ -54,11 +51,10 @@ type Store struct {
 	keys      map[string]Key
 	loaded    bool
 	checkedAt time.Time
-	used      map[string]time.Time
 }
 
 func NewStore(b backend, namespace, name string, log *slog.Logger) *Store {
-	return &Store{b: b, namespace: namespace, name: name, log: log, now: time.Now, used: map[string]time.Time{}}
+	return &Store{b: b, namespace: namespace, name: name, log: log, now: time.Now}
 }
 
 func (s *Store) Ref() string { return s.namespace + "/" + s.name }
@@ -119,7 +115,7 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	})
 }
 
-// List reads the Secret afresh, newest first, with this replica's unflushed use.
+// List reads the Secret afresh, newest first.
 func (s *Store) List(ctx context.Context) ([]Key, error) {
 	keys, _, err := s.read(ctx)
 	if err != nil {
@@ -127,12 +123,6 @@ func (s *Store) List(ctx context.Context) ([]Key, error) {
 	}
 	s.mu.Lock()
 	s.remember(keys)
-	for id, at := range s.used {
-		if k, ok := keys[id]; ok && (k.LastUsedAt == nil || at.After(*k.LastUsedAt)) {
-			k.LastUsedAt = &at
-			keys[id] = k
-		}
-	}
 	s.mu.Unlock()
 	out := slices.Collect(maps.Values(keys))
 	slices.SortFunc(out, func(a, b Key) int { return b.CreatedAt.Compare(a.CreatedAt) })
@@ -173,72 +163,6 @@ func (s *Store) Verify(ctx context.Context, value string) (Key, error) {
 	}
 	return key, nil
 }
-
-// Touch records a use, written out by the next Flush.
-func (s *Store) Touch(id string) {
-	s.mu.Lock()
-	s.used[id] = s.now().UTC().Truncate(time.Second)
-	s.mu.Unlock()
-}
-
-// Run flushes last-used times until ctx ends, and once more on the way out.
-func (s *Store) Run(ctx context.Context) {
-	t := time.NewTicker(flushEvery)
-	defer t.Stop()
-	for {
-		select {
-		case <-t.C:
-			if err := s.Flush(ctx); err != nil {
-				s.log.Warn("api key last-used times not saved", "secret", s.Ref(), "err", err)
-			}
-		case <-ctx.Done():
-			down, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			if err := s.Flush(down); err != nil {
-				s.log.Warn("api key last-used times not saved", "secret", s.Ref(), "err", err)
-			}
-			cancel()
-			return
-		}
-	}
-}
-
-func (s *Store) Flush(ctx context.Context) error {
-	s.mu.Lock()
-	pending := maps.Clone(s.used)
-	s.mu.Unlock()
-	if len(pending) == 0 {
-		return nil
-	}
-	err := s.mutate(ctx, func(keys map[string]Key) error {
-		changed := false
-		for id, at := range pending {
-			k, ok := keys[id]
-			if !ok || k.LastUsedAt != nil && !at.After(*k.LastUsedAt) {
-				continue
-			}
-			k.LastUsedAt = &at
-			keys[id] = k
-			changed = true
-		}
-		if !changed {
-			return errUnchanged
-		}
-		return nil
-	})
-	if err != nil && !errors.Is(err, errUnchanged) {
-		return err
-	}
-	s.mu.Lock()
-	for id, at := range pending {
-		if s.used[id].Equal(at) {
-			delete(s.used, id)
-		}
-	}
-	s.mu.Unlock()
-	return nil
-}
-
-var errUnchanged = errors.New("unchanged")
 
 // mutate is a read-modify-write of the Secret, retried when another replica
 // wrote in between.

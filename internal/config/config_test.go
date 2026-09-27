@@ -23,6 +23,7 @@ func TestValidateBackends(t *testing.T) {
 		{"prefix is /api itself", []Backend{{Name: "swiss", Prefix: "/api", URL: ok.URL}}, "under /api/"},
 		{"prefix shadows iam", []Backend{{Name: "x", Prefix: "/api/iam", URL: ok.URL}}, "reserved"},
 		{"prefix shadows me", []Backend{{Name: "x", Prefix: "/api/me", URL: ok.URL}}, "reserved"},
+		{"prefix shadows router", []Backend{{Name: "x", Prefix: "/api/router", URL: ok.URL}}, "reserved"},
 		{"trailing slash", []Backend{{Name: "swiss", Prefix: "/api/deploy/", URL: ok.URL}}, "trailing"},
 		{"relative url", []Backend{{Name: "swiss", Prefix: "/api/deploy", URL: "swissd:8080"}}, "absolute http"},
 		{"duplicate prefix", []Backend{ok, {Name: "other", Prefix: "/api/deploy", URL: ok.URL}}, "duplicate"},
@@ -171,21 +172,21 @@ func TestLoadGatewayBackend(t *testing.T) {
 	}
 }
 
-func TestValidateAPIKeys(t *testing.T) {
+func TestValidateRouter(t *testing.T) {
 	llm := Backend{Name: "llm", Prefix: "/api/llm", Gateway: &Gateway{Profile: "llm/site-profile"}}
 	cases := []struct {
 		name    string
-		keys    APIKeys
+		router  Router
 		wantErr string
 	}{
-		{"off", APIKeys{}, ""},
-		{"on", APIKeys{Secret: "console/console-api-keys"}, ""},
-		{"secret without namespace", APIKeys{Secret: "console-api-keys"}, "namespace/name"},
-		{"unknown backend", APIKeys{Secret: "console/k", Backend: "swiss"}, "not a configured backend"},
+		{"off", Router{}, ""},
+		{"on", Router{Secret: "console/console-api-keys"}, ""},
+		{"secret without namespace", Router{Secret: "console-api-keys"}, "namespace/name"},
+		{"unknown backend", Router{Secret: "console/k", Backend: "swiss"}, "not a configured backend"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := &Config{Server: Server{Auth: Auth{JWTSecret: "s"}}, Backends: []Backend{llm}, APIKeys: tc.keys}
+			c := &Config{Server: Server{Auth: Auth{JWTSecret: "s"}}, Backends: []Backend{llm}, Router: tc.router}
 			c.applyDefaults()
 			err := c.Validate()
 			switch {
@@ -212,7 +213,10 @@ func TestExampleConfigLoads(t *testing.T) {
 	if llm.Gateway == nil || llm.Gateway.Profile == "" {
 		t.Fatalf("the example no longer shows a gateway backend: %+v", llm)
 	}
-	if !c.APIKeys.Enabled() || c.APIKeys.Backend != "llm" || c.APIKeys.MaxBodyBytes != DefaultMaxBodyBytes {
-		t.Fatalf("the example no longer shows api keys: %+v", c.APIKeys)
+	if !c.Router.Enabled() || c.Router.Backend != "llm" || c.Router.MaxBodyBytes != DefaultMaxBodyBytes {
+		t.Fatalf("the example no longer shows the router: %+v", c.Router)
+	}
+	if c.Server.MetricsAddr != DefaultMetricsAddr {
+		t.Fatalf("metricsAddr = %q", c.Server.MetricsAddr)
 	}
 }

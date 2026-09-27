@@ -1,6 +1,6 @@
-// Package apikey issues and verifies the keys programs use to call models through
-// console's /v1 endpoint. See docs/console-design.md, "API keys".
-package apikey
+// Package router is console's inference entrypoint for programs: /v1, opened by
+// API keys admins issue. See docs/console-design.md, "Router".
+package router
 
 import (
 	"crypto/rand"
@@ -34,7 +34,6 @@ type Key struct {
 	CreatedBy   string     `json:"createdBy"`
 	CreatedAt   time.Time  `json:"createdAt"`
 	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
-	LastUsedAt  *time.Time `json:"lastUsedAt,omitempty"`
 }
 
 func (k Key) Masked() string {

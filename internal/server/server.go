@@ -1,6 +1,7 @@
 // Package server is console's HTTP surface: the identity endpoints it owns
-// (/oauth, /api/iam, /api/me), the auth middleware that guards them, and the
-// reverse proxy that federates everything else to backends like swissd.
+// (/oauth, /api/iam, /api/me), the auth middleware that guards them, the
+// router's /v1 and key management, and the reverse proxy that federates
+// everything else to backends like swissd.
 package server
 
 import (
@@ -9,13 +10,18 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/modelsphere/console/internal/apikey"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/modelsphere/console/internal/cluster"
 	"github.com/modelsphere/console/internal/config"
 	"github.com/modelsphere/console/internal/iam"
+	"github.com/modelsphere/console/internal/router"
 )
 
 type Server struct {
@@ -30,13 +36,19 @@ type Server struct {
 	store  *iam.Store
 	authz  *iam.Authorizer
 
-	keys *apikey.Store
+	router   *router.Router
+	registry *prometheus.Registry
+
+	targetsOnce sync.Once
+	targets     map[string]targetResolver
 
 	draining atomic.Bool
 }
 
 func New(cfg *config.Config, kube *cluster.Kube, log *slog.Logger, version string) *Server {
-	return &Server{cfg: cfg, kube: kube, log: log, version: version}
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	return &Server{cfg: cfg, kube: kube, log: log, version: version, registry: reg}
 }
 
 // SetWeb installs the SPA filesystem. Without one, console is API only.
@@ -49,8 +61,24 @@ func (s *Server) SetIAM(store *iam.Store, signer *iam.Signer, authn *iam.Authent
 	s.store, s.signer, s.authn, s.authz = store, signer, authn, authz
 }
 
-// SetAPIKeys installs key management and the /v1 endpoint.
-func (s *Server) SetAPIKeys(keys *apikey.Store) { s.keys = keys }
+// EnableRouter serves /v1 with the keys in store, forwarding to the backend the
+// config's router section names, and /api/router for managing the keys.
+func (s *Server) EnableRouter(store *router.Store) {
+	resolve := s.backendTargets()[s.cfg.Router.Backend]
+	if resolve == nil {
+		s.log.Error("router has no backend: it was skipped at startup", "backend", s.cfg.Router.Backend)
+	}
+	maxBody := s.cfg.Router.MaxBodyBytes
+	if maxBody <= 0 {
+		maxBody = config.DefaultMaxBodyBytes
+	}
+	s.router = router.New(store, routerResolver(resolve), maxBody, s.log, s.registry)
+}
+
+// MetricsHandler serves the Prometheus metrics, on their own listener.
+func (s *Server) MetricsHandler() http.Handler {
+	return promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{})
+}
 
 // Handler builds the mux and wraps it in the middleware chain. Auth runs inside
 // logging and recovery, so an auth rejection is still logged and a panic in it
@@ -84,13 +112,10 @@ func (s *Server) Handler() http.Handler {
 
 		// Federation: everything under a backend prefix. Needs the authorizer,
 		// hence inside this block.
-		resolvers := s.mountBackends(mux)
+		s.mountBackends(mux)
 
-		if s.keys != nil {
-			mux.HandleFunc("GET /api/iam/apikeys", s.handleListAPIKeys)
-			mux.HandleFunc("POST /api/iam/apikeys", s.handleCreateAPIKey)
-			mux.HandleFunc("DELETE /api/iam/apikeys/{id}", s.handleDeleteAPIKey)
-			s.mountInference(mux, resolvers[s.cfg.APIKeys.Backend])
+		if s.router != nil {
+			s.mountRouter(mux)
 		}
 	}
 
@@ -109,13 +134,23 @@ func (s *Server) Run(ctx context.Context) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	errc := make(chan error, 1)
+	errc := make(chan error, 2)
 	go func() {
 		s.log.Info("console listening", "addr", s.cfg.Server.Addr, "version", s.version)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errc <- err
 		}
 	}()
+	if addr := s.cfg.Server.MetricsAddr; addr != "" && addr != "off" {
+		metrics := &http.Server{Addr: addr, Handler: s.MetricsHandler(), ReadHeaderTimeout: 10 * time.Second}
+		go func() {
+			s.log.Info("metrics listening", "addr", addr)
+			if err := metrics.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				errc <- err
+			}
+		}()
+		defer metrics.Close()
+	}
 	select {
 	case err := <-errc:
 		return err

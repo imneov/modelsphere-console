@@ -1,4 +1,4 @@
-package apikey
+package router
 
 import (
 	"context"
@@ -211,45 +211,5 @@ func TestWritesRetryOnConflict(t *testing.T) {
 	f.conflicts = writeTries
 	if _, _, err := s.Create(ctx, Input{Name: "c"}); err == nil {
 		t.Fatal("gave up after writeTries conflicts, want an error")
-	}
-}
-
-func TestLastUsedIsFlushedInBatches(t *testing.T) {
-	f := &fakeSecret{}
-	s, c := testStore(f)
-	ctx := context.Background()
-	key, value, err := s.Create(ctx, Input{Name: "a"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	version := f.version
-	for i := 0; i < 10; i++ {
-		if _, err := s.Verify(ctx, value); err != nil {
-			t.Fatal(err)
-		}
-		s.Touch(key.ID)
-		c.advance(time.Second)
-	}
-	if f.version != version {
-		t.Fatal("a use wrote the Secret before the flush")
-	}
-	list, err := s.List(ctx)
-	if err != nil || list[0].LastUsedAt == nil || !list[0].LastUsedAt.Equal(c.t.Add(-time.Second)) {
-		t.Fatalf("list shows unflushed use: %+v %v", list, err)
-	}
-	if err := s.Flush(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if f.version != version+1 {
-		t.Fatalf("%d writes for one flush", f.version-version)
-	}
-	if err := s.Flush(ctx); err != nil || f.version != version+1 {
-		t.Fatalf("nothing pending still wrote: %v", err)
-	}
-
-	fresh, _ := testStore(f)
-	list, _ = fresh.List(ctx)
-	if list[0].LastUsedAt == nil {
-		t.Fatal("last used not persisted")
 	}
 }

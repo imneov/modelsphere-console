@@ -7,6 +7,8 @@ cluster:
 
 server:
   addr: ":8080"
+  # Prometheus metrics, on a port of their own. "off" disables them.
+  metricsAddr: ":9090"
   auth:
     # HS256 signing key. In a cluster this comes from a Secret via env; never
     # commit a real one. Shared with Rise Global on upgrade.
@@ -40,9 +42,10 @@ backends:
     gateway:
       profile: llm/site-profile
 
-# Keys programs use to call models at <console>/v1, issued by admins on the API
-# keys page. console keeps their hashes in this Secret (creating it) and forwards
-# /v1 to the backend named here with that backend's own credential.
-apiKeys:
+# The router: programs call models at <console>/v1 with API keys admins issue on
+# the router's API keys page. console keeps their hashes in this Secret (creating
+# it) and forwards /v1 to the backend named here with that backend's own
+# credential. Usage is exported as router_* metrics on server.metricsAddr.
+router:
   secret: console/console-api-keys
   backend: llm
