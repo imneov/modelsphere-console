@@ -9,8 +9,10 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
+	"github.com/modelsphere/console/internal/apikey"
 	"github.com/modelsphere/console/internal/cluster"
 	"github.com/modelsphere/console/internal/config"
 	"github.com/modelsphere/console/internal/iam"
@@ -27,6 +29,10 @@ type Server struct {
 	signer *iam.Signer
 	store  *iam.Store
 	authz  *iam.Authorizer
+
+	keys *apikey.Store
+
+	draining atomic.Bool
 }
 
 func New(cfg *config.Config, kube *cluster.Kube, log *slog.Logger, version string) *Server {
@@ -43,13 +49,16 @@ func (s *Server) SetIAM(store *iam.Store, signer *iam.Signer, authn *iam.Authent
 	s.store, s.signer, s.authn, s.authz = store, signer, authn, authz
 }
 
+// SetAPIKeys installs key management and the /v1 endpoint.
+func (s *Server) SetAPIKeys(keys *apikey.Store) { s.keys = keys }
+
 // Handler builds the mux and wraps it in the middleware chain. Auth runs inside
 // logging and recovery, so an auth rejection is still logged and a panic in it
 // cannot take the process down.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
-	mux.HandleFunc("GET /readyz", s.handleHealthz)
+	mux.HandleFunc("GET /readyz", s.handleReadyz)
 
 	if s.authn != nil {
 		mux.HandleFunc("POST /oauth/token", s.handleToken)
@@ -75,7 +84,14 @@ func (s *Server) Handler() http.Handler {
 
 		// Federation: everything under a backend prefix. Needs the authorizer,
 		// hence inside this block.
-		s.mountBackends(mux)
+		resolvers := s.mountBackends(mux)
+
+		if s.keys != nil {
+			mux.HandleFunc("GET /api/iam/apikeys", s.handleListAPIKeys)
+			mux.HandleFunc("POST /api/iam/apikeys", s.handleCreateAPIKey)
+			mux.HandleFunc("DELETE /api/iam/apikeys/{id}", s.handleDeleteAPIKey)
+			s.mountInference(mux, resolvers[s.cfg.APIKeys.Backend])
+		}
 	}
 
 	if s.web != nil {
@@ -104,15 +120,33 @@ func (s *Server) Run(ctx context.Context) error {
 	case err := <-errc:
 		return err
 	case <-ctx.Done():
-		s.log.Info("shutting down")
-		down, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+		// Fail readiness first and give the endpoints controller time to take
+		// this pod out, then let in-flight generations finish.
+		s.draining.Store(true)
+		s.log.Info("draining", "delay", drainDelay, "grace", shutdownGrace)
+		time.Sleep(drainDelay)
+		down, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
 		defer cancel()
 		return srv.Shutdown(down)
 	}
 }
 
+// The chart's terminationGracePeriodSeconds has to exceed their sum.
+const (
+	drainDelay    = 5 * time.Second
+	shutdownGrace = 60 * time.Second
+)
+
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": s.version})
+}
+
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	if s.draining.Load() {
+		writeError(w, http.StatusServiceUnavailable, "draining")
+		return
+	}
+	s.handleHealthz(w, r)
 }
 
 func (s *Server) logRequests(next http.Handler) http.Handler {

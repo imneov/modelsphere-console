@@ -15,6 +15,15 @@ spec:
         {{- include "console.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "console.serviceAccountName" . }}
+      # Past console's drain delay plus the time it gives in-flight generations.
+      terminationGracePeriodSeconds: 75
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "console.selectorLabels" . | nindent 14 }}
       containers:
         - name: console
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

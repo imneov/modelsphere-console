@@ -171,6 +171,33 @@ func TestLoadGatewayBackend(t *testing.T) {
 	}
 }
 
+func TestValidateAPIKeys(t *testing.T) {
+	llm := Backend{Name: "llm", Prefix: "/api/llm", Gateway: &Gateway{Profile: "llm/site-profile"}}
+	cases := []struct {
+		name    string
+		keys    APIKeys
+		wantErr string
+	}{
+		{"off", APIKeys{}, ""},
+		{"on", APIKeys{Secret: "console/console-api-keys"}, ""},
+		{"secret without namespace", APIKeys{Secret: "console-api-keys"}, "namespace/name"},
+		{"unknown backend", APIKeys{Secret: "console/k", Backend: "swiss"}, "not a configured backend"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Config{Server: Server{Auth: Auth{JWTSecret: "s"}}, Backends: []Backend{llm}, APIKeys: tc.keys}
+			c.applyDefaults()
+			err := c.Validate()
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("unexpected error: %v", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("want error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
 // The example is documentation people copy; it has to be a config console would
 // actually accept.
 func TestExampleConfigLoads(t *testing.T) {
@@ -184,5 +211,8 @@ func TestExampleConfigLoads(t *testing.T) {
 	llm := c.Backends[1]
 	if llm.Gateway == nil || llm.Gateway.Profile == "" {
 		t.Fatalf("the example no longer shows a gateway backend: %+v", llm)
+	}
+	if !c.APIKeys.Enabled() || c.APIKeys.Backend != "llm" || c.APIKeys.MaxBodyBytes != DefaultMaxBodyBytes {
+		t.Fatalf("the example no longer shows api keys: %+v", c.APIKeys)
 	}
 }

@@ -25,3 +25,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "console.serviceAccountName" -}}
 {{ include "console.fullname" . }}
 {{- end -}}
+
+{{- /* API keys need the gateway: /v1 has nowhere else to go. */ -}}
+{{- define "console.apiKeys.enabled" -}}
+{{- if and .Values.apiKeys.enabled (or .Values.playground.gateway.profile .Values.playground.gateway.configMap) -}}true{{- end -}}
+{{- end -}}
+
+{{- define "console.apiKeys.secret" -}}
+{{ include "console.fullname" . }}-api-keys
+{{- end -}}
