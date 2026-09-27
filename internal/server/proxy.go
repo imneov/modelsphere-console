@@ -1,12 +1,15 @@
 package server
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
 
 	"github.com/modelsphere/console/internal/config"
+	"github.com/modelsphere/console/internal/gateway"
 )
 
 // backendResource is the RBAC resource a backend is authorized as; the backend's
@@ -14,38 +17,114 @@ import (
 // ["backends"], resourceNames ["swiss"] gives read-only access to swiss.
 const backendResource = "backends"
 
+// backendTarget is where one request goes and what credential it carries. Static
+// backends have one for their whole life; a gateway backend gets the one the
+// resolver currently knows.
+type backendTarget struct {
+	url    url.URL
+	header string
+	key    string
+}
+
+type targetKey struct{}
+
+func withTarget(ctx context.Context, t *backendTarget) context.Context {
+	return context.WithValue(ctx, targetKey{}, t)
+}
+
+func targetFrom(ctx context.Context) *backendTarget {
+	t, _ := ctx.Value(targetKey{}).(*backendTarget)
+	return t
+}
+
+// unresolved stands in for a request that reached the proxy without a target --
+// a bug in the mux rather than a configuration. It has to be something that fails
+// to connect: proxying it as-is would send the request back to console itself.
+var unresolved = &backendTarget{url: url.URL{Scheme: "http", Host: "backend-without-target.invalid"}}
+
 // mountBackends proxies each backend's prefix. Authentication and the
 // password-reset guard already ran (the prefix is under /api/); this adds
-// per-backend authorization and swaps the caller's identity into the
-// X-Remote-* headers the backend trusts -- the same headers Rise Global's
-// apiserver sets for a ReverseProxy, so a backend runs unchanged behind either.
+// per-backend authorization, swaps the caller's identity into the X-Remote-*
+// headers the backend trusts -- the same headers Rise Global's apiserver sets
+// for a ReverseProxy, so a backend runs unchanged behind either -- and adds the
+// backend's own credential, if it has one.
 //
 // Backend URLs were checked by config.Validate; one that still fails to parse
 // is skipped and logged rather than taking the server down.
 func (s *Server) mountBackends(mux *http.ServeMux) {
 	for _, b := range s.cfg.Backends {
-		target, err := url.Parse(b.URL)
+		resolve, err := s.targetFunc(b)
 		if err != nil {
-			s.log.Error("backend skipped: bad url", "backend", b.Name, "err", err)
+			s.log.Error("backend skipped", "backend", b.Name, "err", err)
 			continue
 		}
-		proxy := s.backendProxy(b, target)
+		proxy := s.backendProxy(b)
 		mux.HandleFunc(strings.TrimSuffix(b.Prefix, "/")+"/", func(w http.ResponseWriter, r *http.Request) {
 			if !s.authorize(w, r, backendVerb(r.Method), backendResource, b.Name) {
 				return
 			}
-			proxy.ServeHTTP(w, r)
+			target, err := resolve(r.Context())
+			if err != nil {
+				// A gateway backend that cannot be found is a 502 like any other
+				// unreachable backend, but the reason is the useful part.
+				writeError(w, http.StatusBadGateway, fmt.Sprintf("backend %s: %v", b.Name, err))
+				return
+			}
+			proxy.ServeHTTP(w, r.WithContext(withTarget(r.Context(), target)))
 		})
 	}
 }
 
-func (s *Server) backendProxy(b config.Backend, target *url.URL) *httputil.ReverseProxy {
+// targetFunc is how a backend finds its target: once and forever when the config
+// holds a URL, from the cluster on every request when it holds a gateway.
+func (s *Server) targetFunc(b config.Backend) (func(context.Context) (*backendTarget, error), error) {
+	if b.Gateway != nil {
+		if s.kube == nil {
+			return nil, fmt.Errorf("gateway %+v needs cluster access, and this console has none", *b.Gateway)
+		}
+		return gatewayResolver(gateway.NewResolver(b, s.kube, s.log)), nil
+	}
+
+	target, err := url.Parse(b.URL)
+	if err != nil {
+		return nil, fmt.Errorf("bad url %q: %w", b.URL, err)
+	}
+	key := b.APIKey()
+	if b.APIKeyEnv != "" && key == "" {
+		s.log.Warn("backend credential is empty: requests go without it", "backend", b.Name, "env", b.APIKeyEnv)
+	}
+	fixed := &backendTarget{url: *target, header: "Authorization"}
+	if key != "" {
+		fixed.key = "Bearer " + key
+	}
+	return func(context.Context) (*backendTarget, error) { return fixed, nil }, nil
+}
+
+func gatewayResolver(r *gateway.Resolver) func(context.Context) (*backendTarget, error) {
+	return func(ctx context.Context) (*backendTarget, error) {
+		entry, err := r.Resolve(ctx)
+		if err != nil {
+			return nil, err
+		}
+		target, err := url.Parse(entry.URL)
+		if err != nil {
+			return nil, err
+		}
+		return &backendTarget{url: *target, header: entry.Header, key: entry.Key}, nil
+	}
+}
+
+func (s *Server) backendProxy(b config.Backend) *httputil.ReverseProxy {
 	prefix := strings.TrimSuffix(b.Prefix, "/")
 	return &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
+			target := targetFrom(pr.In.Context())
+			if target == nil {
+				target = unresolved
+			}
 			pr.Out.URL.Path = strings.TrimPrefix(pr.In.URL.Path, prefix)
 			pr.Out.URL.RawPath = ""
-			pr.SetURL(target)
+			pr.SetURL(&target.url)
 			pr.SetXForwarded()
 
 			for k := range pr.Out.Header {
@@ -64,6 +143,11 @@ func (s *Server) backendProxy(b config.Backend, target *url.URL) *httputil.Rever
 			// only as a cookie, so a backend that verifies the JWT itself can.
 			if tok := bearerToken(pr.In); tok != "" {
 				pr.Out.Header.Set("Authorization", "Bearer "+tok)
+			}
+			// A backend with a credential of its own replaces that token: the
+			// session authorizes the caller to console, not to the gateway.
+			if target.key != "" {
+				pr.Out.Header.Set(target.header, target.key)
 			}
 		},
 		// Stream as it arrives: backends answer with SSE / chunked progress.

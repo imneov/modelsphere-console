@@ -23,8 +23,8 @@ apiserver -- not a data migration.
 
 ## Status
 
-Identity (P1–P3) and the module shell with backend federation (P4). See
-`docs/console-design.md` for the plan.
+Identity (P1–P3), the module shell with backend federation (P4) and the
+Playground (P6). See `docs/console-design.md` for the plan.
 
 ## Deploy
 
@@ -38,7 +38,8 @@ CONSOLE_REGISTRY=<registry>/<org> hack/image.sh
 
 # 2. install; re-run the same line to upgrade
 helm upgrade --install console ./helm/console -n console --create-namespace \
-  -f console-image.yaml
+  -f console-image.yaml \
+  --set playground.gateway.profile=<namespace>/<site-profile>
 ```
 
 The tag carries the commit, so an upgrade always changes the pod template and
@@ -46,6 +47,11 @@ rolls: a fixed tag would leave helm with nothing to do and every pod on the old
 image. `hack/image.sh --no-push` builds only, and `CONSOLE_REGISTRY` defaults to
 the repository in `helm/console/values.yaml`.
 
+`playground.gateway` is the one setting worth getting right, and it is optional:
+without it the Playground page says no backend is configured, and every other page
+works. Point it at swiss's site profile (`namespace/name`) and console reads the
+entrypoint Service, the route and the gateway key from the cluster — see
+[docs/console-design.md](docs/console-design.md#a-backend-that-resolves-itself-gateway).
 The chart logs in on the default `admin` / `P@88w0rd` unless the cluster already
 has that user (Rise Global's, say), in which case it is left alone and `NOTES`
 says so.

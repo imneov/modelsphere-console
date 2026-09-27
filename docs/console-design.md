@@ -47,16 +47,19 @@ turn the upgrade into a data migration. Consequences of sharing it:
 ```
 browser ─▶ web (Vite / React 19 / Tailwind 4 / @riseaicloud/ui)
              shell: login, layout, sidebar, route guards
-             modules: iam, swiss, …            (src/modules/*)
-                     │  same-origin /oauth, /api/iam, /api/deploy…
+             modules: iam, swiss, playground, …   (src/modules/*)
+                     │  same-origin /oauth, /api/iam, /api/deploy, /api/llm…
                      ▼
              console (Go BFF)
                internal/iam      identity kernel: CRD types + OAuth2 (HS256) + RBAC
+               internal/gateway  resolves the inference entrypoint from the cluster
                internal/server   mux + auth middleware + static SPA
                                  + backend proxy (proxy.go)
                      │
-                     ▼  HTTP: X-Remote-User / X-Remote-Group + Bearer JWT
-             swissd, and other backends
+                     ▼  HTTP: X-Remote-User / X-Remote-Group + Bearer JWT,
+                        or the backend's own key (apiKeyEnv, or the gateway's
+                        Secret read at runtime)
+             swissd, llm-openresty, and other backends
 ```
 
 Users and roles are read/written as **CRDs via the dynamic client** — no scheme,
@@ -68,7 +71,8 @@ unchanged. Moving either one moves both.
 ## Modules
 
 The console is a shell plus compile-time modules. A module is a feature area
-(iam, swiss, later container management); the shell owns everything around it.
+(iam, swiss, playground, later container management); the shell owns everything
+around it.
 
 | Owned by | What |
 |---|---|
@@ -120,11 +124,85 @@ browser  /api/deploy/catalog  ──▶ console
 | Prefix | must be under `/api/` (that is what puts it behind login), not `/api/iam` or `/api/me` |
 | Authorization | resource `backends`, resourceName = backend name; GET/HEAD/OPTIONS `get`, POST `create`, PUT/PATCH `update`, DELETE `delete` |
 | Identity | `X-Remote-User` / `X-Remote-Group`, as Rise Global's apiserver sets for a ReverseProxy — a backend runs unchanged behind either |
+| Credential | `apiKeyEnv` names an environment variable console sends as `Authorization: Bearer <value>`, replacing the caller's token. The browser never sees it. Empty means the token is forwarded unchanged (swissd's case: it verifies the JWT itself) |
 | Streaming | flushed as it arrives (SSE, chunked progress) |
 | Backend down | JSON `502` |
 
 A backend must trust `X-Remote-*` only from console (network policy / mTLS),
 never from browsers.
+
+In-cluster, a static backend's credential comes from a Secret rather than the
+chart's values: `helm/console` renders an env entry per `backendSecrets` key. A
+variable that is named but unset is logged at startup and the request goes without
+it — console starts, and the backend answers `401`, rather than the pod refusing
+to boot.
+
+### A backend that resolves itself (`gateway`)
+
+Naming an inference gateway in a values file means copying three things that all
+move: the Service address, which route serves every deployed model, and the key.
+The first goes stale when the gateway is reinstalled, the second lies about what
+is deployed the moment a model is added, and the third ends up in release history
+or in a second copy that nobody rotates.
+
+So the `llm` backend names *where the truth is* instead:
+
+```yaml
+backends:
+  - name: llm
+    prefix: /api/llm
+    gateway:
+      profile: llm/site-profile          # swiss's site profile, "namespace/name"
+      # ...or, with no swissd:
+      # configMap: llm/openresty-conf    # route keys: session_route_<route>.conf
+      # service: llm/openresty           # the entrypoint
+      # route: llm-gateway               # optional: pin one route
+      # secretRef: llm/openresty-keys    # optional: override where the key lives
+```
+
+| Step | Where it comes from |
+|---|---|
+| Entrypoint | profile `route.nginxService` + `route.nginxPort` (default 8080) → `http://<name>.<ns>.svc:<port>` |
+| Route | the aggregate route in the ConfigMap: the one whose config has `peers_by_model`, i.e. the one that serves several models and therefore lists them on `GET /v1/models`. A single route is used as-is; several non-aggregate routes are an error that names the candidates and asks for `route:` |
+| Key | profile `route.auth.secretRef`/`secretKey` (default entry `keys`, format `key1:owner1,…`; the first key is used), sent as `Authorization: Bearer <key>` — llm-openresty accepts nothing else. A bare Secret name means the entrypoint's namespace |
+| Overrides | `apiKeyEnv` (a copied key in the console's namespace), and `route` |
+
+Resolution is cached for 30s and re-read after that, so a model deployed later
+appears without redeploying the console; a refresh that fails keeps the last good
+answer and logs it, because a transient API error should not take inference down.
+An entrypoint that has *never* resolved answers `502` with the reason
+(`backend llm: site profile llm/absent: not found`) instead of a confusing 404.
+
+RBAC follows the references: `helm/console` renders one read-only Role and binding
+per namespace they name, on `configmaps` and `secrets`. No `resourceNames`,
+because the profile is what names the route ConfigMap and the key Secret, and a
+chart cannot know at render time what a ConfigMap will say later. Nothing reads
+the Service: the address is assembled from the reference.
+
+## Playground
+
+The Playground is chat against the inference gateway, for the question a
+deployment page cannot answer: does this model actually generate? swissd's own
+chat probe is one prompt, 32 tokens, non-streaming, and it lives on a release;
+the Playground is a conversation, streaming, for anyone with the permission.
+
+| Concern | Decision |
+|---|---|
+| Where it runs | `web/src/modules/playground/`, mounted at `/playground`; the page is one module declaration plus a page, API client and SSE parser |
+| Which backend | `llm` → the gateway's aggregate route, resolved from the cluster, so one picker lists every deployed model (`GET /v1/models`) |
+| Gateway key | read by console from the Secret the site profile names (or `apiKeyEnv`). Never in a values file, never in a chart value, never in the browser |
+| Conversation identity | the page sends a per-conversation `X-Session-Id`; the gateway pins that conversation to one engine, so its prefix cache stays warm across turns |
+| Token counts | the page does not send `stream_options`; the gateway injects `include_usage` for streaming requests |
+| Reasoning models | `delta.reasoning_content` is shown in a collapsible block above the answer |
+| Access | UI permission `playground.use` guards the page; the backend needs `get` **and** `create` on `backends/llm` (models are a GET, completions a POST) |
+
+A user therefore needs a role carrying both:
+
+```json
+{"uiPermissions": ["playground.use"],
+ "rules": [{"apiGroups": ["iam.theriseunion.io"], "resources": ["backends"],
+            "resourceNames": ["llm"], "verbs": ["get", "create"]}]}
+```
 
 ## Bringing swiss in
 
@@ -172,6 +250,7 @@ requests carry the same headers Global's apiserver sets.
 | P3 | Full roles: authorizer + role/binding CRUD + role/permission UI. |
 | P4 | Federation: module shell, stack aligned with swiss, backend proxy with identity headers and per-backend RBAC. **(done)** |
 | P5 | swiss module: swiss prepares its frontend (table above) and exports `openapi.json`; copy into `modules/swiss`; CODEOWNERS. |
-| P6 | Container management modules, moved over from Rise Global. |
+| P6 | Playground: chat module, `llm` backend resolved from the cluster (site profile or route ConfigMap) with the gateway key read from its Secret, streaming SSE end to end. **(done)** |
+| P7 | Container management modules, moved over from Rise Global. |
 
 Each phase is independently committable and verifiable.

@@ -18,6 +18,7 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	k8stesting "k8s.io/client-go/testing"
 
+	"github.com/modelsphere/console/internal/cluster"
 	"github.com/modelsphere/console/internal/config"
 	"github.com/modelsphere/console/internal/iam"
 )
@@ -73,7 +74,7 @@ func testServerWithConfig(t *testing.T, cfg *config.Config, objs ...runtime.Obje
 	store := iam.NewStore(dyn)
 	signer := iam.NewSigner("https://issuer.test", "secret", time.Hour)
 	log := slog.New(slog.DiscardHandler)
-	srv := New(cfg, nil, log, "test")
+	srv := New(cfg, cluster.NewKubeFrom(dyn), log, "test")
 	srv.SetIAM(store, signer, iam.NewAuthenticator(store, signer, log), iam.NewAuthorizer(store))
 	return srv
 }

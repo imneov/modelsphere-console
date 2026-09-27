@@ -1,0 +1,50 @@
+{{- /*
+Read access to the gateway's ConfigMaps and key Secret, in the namespaces the
+configured references point at. The console resolves its inference entrypoint at
+runtime (see the playground.gateway values), and what it has to read lives
+wherever the gateway does -- a different namespace than this release, usually.
+
+Deliberately without resourceNames: the profile names the route ConfigMap and the
+key Secret, so the chart cannot know those names at render time. The grant is
+therefore per namespace and read-only, which is the narrowest thing that still
+follows the profile.
+*/ -}}
+{{- $gw := .Values.playground.gateway -}}
+{{- if and .Values.rbac.create (or $gw.profile $gw.configMap) -}}
+{{- $namespaces := dict -}}
+{{- range $ref := list $gw.profile $gw.configMap $gw.service $gw.secretRef -}}
+{{-   if $ref -}}
+{{-     $_ := set $namespaces (ternary (first (splitList "/" $ref)) $.Release.Namespace (contains "/" $ref)) true -}}
+{{-   end -}}
+{{- end -}}
+{{- range $ns, $_ := $namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "console.fullname" $ }}-gateway
+  namespace: {{ $ns }}
+  labels:
+    {{- include "console.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "console.fullname" $ }}-gateway
+  namespace: {{ $ns }}
+  labels:
+    {{- include "console.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "console.fullname" $ }}-gateway
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "console.serviceAccountName" $ }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}

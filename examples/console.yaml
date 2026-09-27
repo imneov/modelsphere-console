@@ -23,3 +23,19 @@ backends:
   - name: swiss
     prefix: /api/deploy
     url: http://swissd.swiss.svc:8080/api
+
+  # The inference gateway the Playground talks to. Nothing here names a URL: the
+  # profile is swiss's site profile ConfigMap, the document swissd deploys from,
+  # and console reads the entrypoint Service, the route and the key Secret out of
+  # it -- then keeps reading, so a model deployed later shows up without a restart.
+  # Without swissd, name the route ConfigMap and its Service directly:
+  #
+  #   gateway:
+  #     configMap: llm/openresty-conf
+  #     service: llm/openresty
+  #     route: llm-gateway        # optional; the aggregate route is chosen
+  #     secretRef: llm/openresty-keys
+  - name: llm
+    prefix: /api/llm
+    gateway:
+      profile: llm/site-profile
