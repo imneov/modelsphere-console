@@ -188,13 +188,18 @@ the Playground is a conversation, streaming, for anyone with the permission.
 
 | Concern | Decision |
 |---|---|
-| Where it runs | `web/src/modules/playground/`, mounted at `/playground`; the page is one module declaration plus a page, API client and SSE parser |
+| Where it runs | `web/src/modules/playground/`, mounted at `/playground`; both pages are lazy-loaded (Markdown and highlighting are most of the weight) |
+| Pages | `/playground` — one conversation; `/playground/compare` — 2–4 columns, one prompt sent to every column, shared parameters in a dialog |
 | Which backend | `llm` → the gateway's aggregate route, resolved from the cluster, so one picker lists every deployed model (`GET /v1/models`) |
 | Gateway key | read by console from the Secret the site profile names (or `apiKeyEnv`). Never in a values file, never in a chart value, never in the browser |
-| Conversation identity | the page sends a per-conversation `X-Session-Id`; the gateway pins that conversation to one engine, so its prefix cache stays warm across turns |
+| Conversation identity | each conversation (each column, in compare) sends its own `X-Session-Id`; the gateway pins it to one engine, so its prefix cache stays warm across turns |
+| Parameters | system prompt, temperature, top_p, max_tokens, seed, stop (one per line), frequency/presence penalty, reasoning_effort; an empty field is left out of the request, so the engine's default applies |
 | Token counts | the page does not send `stream_options`; the gateway injects `include_usage` for streaming requests |
-| Reasoning models | `delta.reasoning_content` is shown in a collapsible block above the answer |
-| Access | UI permission `playground.use` guards the page; the backend needs `get` **and** `create` on `backends/llm` (models are a GET, completions a POST) |
+| Stats per answer | TTFT, total time, input/output tokens, tok/s over the decoding window (after TTFT), and cache hit rate = `prompt_tokens_details.cached_tokens / prompt_tokens`, shown only when the engine reports it |
+| Reasoning models | `delta.reasoning_content`, or a leading `<think>…</think>` in content, is shown in a collapsible block above the answer |
+| Reasoning in history | never sent back: the next turn's history carries only the answer, as the OpenAI-style APIs expect |
+| View code | cURL / Python / Node.js reproducing the current request against `<origin>/v1`, key read from `$MODELSPHERE_API_KEY`. That endpoint and its keys are the API-key work below; until it lands the snippets are a preview |
+| Access | UI permission `playground.use` guards the pages; the backend needs `get` **and** `create` on `backends/llm` (models are a GET, completions a POST) |
 
 A user therefore needs a role carrying both:
 
@@ -203,6 +208,25 @@ A user therefore needs a role carrying both:
  "rules": [{"apiGroups": ["iam.theriseunion.io"], "resources": ["backends"],
             "resourceNames": ["llm"], "verbs": ["get", "create"]}]}
 ```
+
+### API keys (next)
+
+Programs reach the models through console, not the gateway: console owns the
+user-facing key, the gateway keeps its single key.
+
+```
+client --Bearer user key--> console /v1 --gateway key--> llm-openresty
+            verify: hash, expiry, allowed models (reads `model`, body size capped)
+```
+
+| Concern | Decision |
+|---|---|
+| Endpoint | `/v1/*` passthrough, resolved like `backends.llm`; `X-Session-Id` forwarded unchanged; the gateway is not changed |
+| Issuing | admins only; format `prefix_access_secret`; plaintext shown once, masked in the list |
+| Expiry | 7 days, 1 month, 6 months, or never |
+| Scope | optional allowed-model list; last-used time recorded |
+| Storage | hashes in one Secret in console's namespace — no new CRD in the shared `iam.theriseunion.io` group |
+| Availability | console is now on the inference path: replicas and disruption budget have to reflect that |
 
 ## Bringing swiss in
 
@@ -250,7 +274,7 @@ requests carry the same headers Global's apiserver sets.
 | P3 | Full roles: authorizer + role/binding CRUD + role/permission UI. |
 | P4 | Federation: module shell, stack aligned with swiss, backend proxy with identity headers and per-backend RBAC. **(done)** |
 | P5 | swiss module: swiss prepares its frontend (table above) and exports `openapi.json`; copy into `modules/swiss`; CODEOWNERS. |
-| P6 | Playground: chat module, `llm` backend resolved from the cluster (site profile or route ConfigMap) with the gateway key read from its Secret, streaming SSE end to end. **(done)** |
+| P6 | Playground: chat module, `llm` backend resolved from the cluster (site profile or route ConfigMap) with the gateway key read from its Secret, streaming SSE end to end. **(done)** Then: Markdown, compare page, full parameters, stats, view code. **(done)** API keys and the `/v1` endpoint. |
 | P7 | Container management modules, moved over from Rise Global. |
 
 Each phase is independently committable and verifiable.
