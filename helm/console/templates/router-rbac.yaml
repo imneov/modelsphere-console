@@ -1,13 +1,13 @@
 {{- /*
-The issued keys' Secret, which console creates on first use rather than the chart
+The router's API keys Secret, which console creates on first use rather than the chart
 owning it: an upgrade or rollback must not touch issued keys. create cannot be
 limited to one name; everything else is.
 */ -}}
-{{- if and .Values.rbac.create (include "console.apiKeys.enabled" .) }}
+{{- if and .Values.rbac.create (include "console.router.enabled" .) }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "console.fullname" . }}-api-keys
+  name: {{ include "console.fullname" . }}-router
   labels:
     {{- include "console.labels" . | nindent 4 }}
 rules:
@@ -16,19 +16,19 @@ rules:
     verbs: ["create"]
   - apiGroups: [""]
     resources: ["secrets"]
-    resourceNames: [{{ include "console.apiKeys.secret" . | quote }}]
+    resourceNames: [{{ include "console.router.secret" . | quote }}]
     verbs: ["get", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "console.fullname" . }}-api-keys
+  name: {{ include "console.fullname" . }}-router
   labels:
     {{- include "console.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ include "console.fullname" . }}-api-keys
+  name: {{ include "console.fullname" . }}-router
 subjects:
   - kind: ServiceAccount
     name: {{ include "console.serviceAccountName" . }}

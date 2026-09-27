@@ -51,15 +51,13 @@ var unresolved = &backendTarget{url: url.URL{Scheme: "http", Host: "backend-with
 //
 // Backend URLs were checked by config.Validate; one that still fails to parse
 // is skipped and logged rather than taking the server down.
-func (s *Server) mountBackends(mux *http.ServeMux) map[string]targetResolver {
-	resolvers := map[string]targetResolver{}
+func (s *Server) mountBackends(mux *http.ServeMux) {
+	targets := s.backendTargets()
 	for _, b := range s.cfg.Backends {
-		resolve, err := s.targetFunc(b)
-		if err != nil {
-			s.log.Error("backend skipped", "backend", b.Name, "err", err)
+		resolve, ok := targets[b.Name]
+		if !ok {
 			continue
 		}
-		resolvers[b.Name] = resolve
 		proxy := s.backendProxy(b)
 		mux.HandleFunc(strings.TrimSuffix(b.Prefix, "/")+"/", func(w http.ResponseWriter, r *http.Request) {
 			if !s.authorize(w, r, backendVerb(r.Method), backendResource, b.Name) {
@@ -75,7 +73,23 @@ func (s *Server) mountBackends(mux *http.ServeMux) map[string]targetResolver {
 			proxy.ServeHTTP(w, r.WithContext(withTarget(r.Context(), target)))
 		})
 	}
-	return resolvers
+}
+
+// backendTargets resolves each backend once for the process: a gateway resolver
+// holds a cache, and the router and the backend's own prefix share it.
+func (s *Server) backendTargets() map[string]targetResolver {
+	s.targetsOnce.Do(func() {
+		s.targets = map[string]targetResolver{}
+		for _, b := range s.cfg.Backends {
+			resolve, err := s.targetFunc(b)
+			if err != nil {
+				s.log.Error("backend skipped", "backend", b.Name, "err", err)
+				continue
+			}
+			s.targets[b.Name] = resolve
+		}
+	})
+	return s.targets
 }
 
 type targetResolver func(context.Context) (*backendTarget, error)

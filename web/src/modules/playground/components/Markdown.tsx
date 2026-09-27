@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github.css";
 import "@/modules/playground/components/markdown.css";
-import { CopyButton } from "@/modules/playground/components/CopyButton";
+import { CopyButton } from "@/shell";
 
 const remarkPlugins = [remarkGfm];
 const rehypePlugins = [rehypeHighlight];

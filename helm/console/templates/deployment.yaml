@@ -13,6 +13,10 @@ spec:
     metadata:
       labels:
         {{- include "console.selectorLabels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.metrics.port | quote }}
+        prometheus.io/path: /metrics
     spec:
       serviceAccountName: {{ include "console.serviceAccountName" . }}
       # Past console's drain delay plus the time it gives in-flight generations.
@@ -47,6 +51,8 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
           readinessProbe:
             httpGet: { path: /readyz, port: http }
           livenessProbe:

@@ -1,22 +1,18 @@
-package server
+package router
 
 import (
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
-
-	"github.com/modelsphere/console/internal/apikey"
 )
 
-// apiKeyResource is the RBAC resource guarding key management: list, create,
-// delete. Only system:masters has it unless a role grants it.
-const apiKeyResource = "apikeys"
+// Key management over HTTP. The caller has already been authorized.
 
 // expiryDays are the lifetimes offered, 0 being never.
 var expiryDays = map[int]bool{0: true, 7: true, 30: true, 180: true}
 
-type apiKeyView struct {
+type keyView struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name"`
 	Description string     `json:"description,omitempty"`
@@ -25,41 +21,34 @@ type apiKeyView struct {
 	CreatedBy   string     `json:"createdBy"`
 	CreatedAt   time.Time  `json:"createdAt"`
 	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
-	LastUsedAt  *time.Time `json:"lastUsedAt,omitempty"`
 	Expired     bool       `json:"expired"`
 	// Value is the plaintext key, set only in the response that created it.
 	Value string `json:"value,omitempty"`
 }
 
-func toAPIKeyView(k apikey.Key, now time.Time) apiKeyView {
-	return apiKeyView{
+func toView(k Key, now time.Time) keyView {
+	return keyView{
 		ID: k.ID, Name: k.Name, Description: k.Description, MaskedValue: k.Masked(),
 		Models: k.Models, CreatedBy: k.CreatedBy, CreatedAt: k.CreatedAt,
-		ExpiresAt: k.ExpiresAt, LastUsedAt: k.LastUsedAt, Expired: k.Expired(now),
+		ExpiresAt: k.ExpiresAt, Expired: k.Expired(now),
 	}
 }
 
-func (s *Server) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
-	if !s.authorize(w, r, "list", apiKeyResource, "") {
-		return
-	}
-	keys, err := s.keys.List(r.Context())
+func (rt *Router) ListKeys(w http.ResponseWriter, r *http.Request) {
+	keys, err := rt.keys.List(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	now := time.Now()
-	out := make([]apiKeyView, 0, len(keys))
+	out := make([]keyView, 0, len(keys))
 	for _, k := range keys {
-		out = append(out, toAPIKeyView(k, now))
+		out = append(out, toView(k, now))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})
 }
 
-func (s *Server) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
-	if !s.authorize(w, r, "create", apiKeyResource, "") {
-		return
-	}
+func (rt *Router) CreateKey(w http.ResponseWriter, r *http.Request, createdBy string) {
 	var in struct {
 		Name          string   `json:"name"`
 		Description   string   `json:"description"`
@@ -74,42 +63,39 @@ func (s *Server) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "expiresInDays must be 7, 30, 180, or 0 for never")
 		return
 	}
-	key, value, err := s.keys.Create(r.Context(), apikey.Input{
+	key, value, err := rt.keys.Create(r.Context(), Input{
 		Name: in.Name, Description: in.Description, Models: in.Models,
 		ExpiresIn: time.Duration(in.ExpiresInDays) * 24 * time.Hour,
-		CreatedBy: identityFrom(r.Context()).Name,
+		CreatedBy: createdBy,
 	})
 	switch {
-	case errors.Is(err, apikey.ErrExists):
+	case errors.Is(err, ErrExists):
 		writeError(w, http.StatusConflict, err.Error())
 		return
-	case errors.Is(err, apikey.ErrBadInput):
+	case errors.Is(err, ErrBadInput):
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	case err != nil:
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	view := toAPIKeyView(key, time.Now())
+	view := toView(key, time.Now())
 	view.Value = value
-	s.log.Info("api key created", "id", key.ID, "name", key.Name, "by", key.CreatedBy)
+	rt.log.Info("api key created", "id", key.ID, "name", key.Name, "by", createdBy)
 	writeJSON(w, http.StatusCreated, view)
 }
 
-func (s *Server) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	if !s.authorize(w, r, "delete", apiKeyResource, id) {
-		return
-	}
-	err := s.keys.Delete(r.Context(), id)
+func (rt *Router) DeleteKey(w http.ResponseWriter, r *http.Request, id, deletedBy string) {
+	err := rt.keys.Delete(r.Context(), id)
 	switch {
-	case errors.Is(err, apikey.ErrNotFound):
+	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	case err != nil:
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.log.Info("api key deleted", "id", id, "by", identityFrom(r.Context()).Name)
+	rt.metrics.forget(id)
+	rt.log.Info("api key deleted", "id", id, "by", deletedBy)
 	w.WriteHeader(http.StatusNoContent)
 }

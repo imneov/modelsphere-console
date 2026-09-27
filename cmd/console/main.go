@@ -16,10 +16,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/modelsphere/console/internal/apikey"
 	"github.com/modelsphere/console/internal/cluster"
 	"github.com/modelsphere/console/internal/config"
 	"github.com/modelsphere/console/internal/iam"
+	"github.com/modelsphere/console/internal/router"
 	"github.com/modelsphere/console/internal/server"
 	"github.com/modelsphere/console/internal/version"
 	"github.com/modelsphere/console/web"
@@ -84,14 +84,11 @@ func run(configPath, addr, logLevel, webDir string) error {
 	signer := iam.NewSigner(cfg.Server.Auth.Issuer, cfg.Server.Auth.JWTSecret, cfg.Server.Auth.TokenTTL)
 	srv.SetIAM(store, signer, iam.NewAuthenticator(store, signer, log), iam.NewAuthorizer(store))
 
-	if cfg.APIKeys.Enabled() {
-		ns, name, _ := strings.Cut(cfg.APIKeys.Secret, "/")
-		keys := apikey.NewStore(kube, ns, name, log)
-		srv.SetAPIKeys(keys)
-		done := make(chan struct{})
-		go func() { keys.Run(ctx); close(done) }()
-		defer func() { <-done }()
-		log.Info("api keys enabled", "secret", keys.Ref(), "backend", cfg.APIKeys.Backend)
+	if cfg.Router.Enabled() {
+		ns, name, _ := strings.Cut(cfg.Router.Secret, "/")
+		keys := router.NewStore(kube, ns, name, log)
+		srv.EnableRouter(keys)
+		log.Info("router enabled", "secret", keys.Ref(), "backend", cfg.Router.Backend)
 	}
 
 	if webDir != "" {

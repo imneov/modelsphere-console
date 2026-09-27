@@ -9,7 +9,6 @@ export interface ApiKey {
   createdBy: string;
   createdAt: string;
   expiresAt?: string;
-  lastUsedAt?: string;
   expired: boolean;
 }
 
@@ -22,11 +21,13 @@ export interface ApiKeyInput {
   models?: string[];
 }
 
-export const keysApi = {
-  list: () => request<{ items: ApiKey[] }>("GET", "/api/iam/apikeys"),
+export const api = {
+  listKeys: () => request<{ items: ApiKey[] }>("GET", "/api/router/apikeys"),
   // value is the plaintext key, returned by this response only.
-  create: (k: ApiKeyInput) => request<ApiKey & { value: string }>("POST", "/api/iam/apikeys", k),
-  remove: (id: string) => request<void>("DELETE", `/api/iam/apikeys/${encodeURIComponent(id)}`),
+  createKey: (k: ApiKeyInput) => request<ApiKey & { value: string }>("POST", "/api/router/apikeys", k),
+  deleteKey: (id: string) => request<void>("DELETE", `/api/router/apikeys/${encodeURIComponent(id)}`),
+  // What a key can be limited to: the models the router's backend serves.
+  models: async () => (await request<{ data?: { id: string }[] }>("GET", "/api/llm/v1/models")).data ?? [],
 };
 
 export function formatTime(value: string) {

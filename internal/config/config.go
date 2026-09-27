@@ -23,14 +23,14 @@ type Config struct {
 	Cluster  Cluster   `yaml:"cluster,omitempty"`
 	Server   Server    `yaml:"server,omitempty"`
 	Backends []Backend `yaml:"backends,omitempty"`
-	APIKeys  APIKeys   `yaml:"apiKeys,omitempty"`
+	Router   Router    `yaml:"router,omitempty"`
 
 	Origin string `yaml:"-"`
 }
 
-// APIKeys turns on key management and the /v1 endpoint programs call models
-// through. Empty Secret leaves both off.
-type APIKeys struct {
+// Router is /v1, the endpoint programs call models through with API keys admins
+// issue. Empty Secret leaves it, and key management, off.
+type Router struct {
 	// Secret holding the issued keys, "namespace/name"; console creates it.
 	Secret string `yaml:"secret,omitempty"`
 	// Backend is the backend /v1 forwards to, by name. Default "llm".
@@ -41,11 +41,12 @@ type APIKeys struct {
 }
 
 const (
-	DefaultAPIKeysBackend = "llm"
-	DefaultMaxBodyBytes   = 16 << 20
+	DefaultRouterBackend = "llm"
+	DefaultMaxBodyBytes  = 16 << 20
+	DefaultMetricsAddr   = ":9090"
 )
 
-func (a APIKeys) Enabled() bool { return a.Secret != "" }
+func (r Router) Enabled() bool { return r.Secret != "" }
 
 // Cluster is where the iam CRDs (User/Role/RoleBinding) are read and written.
 // Empty kubeconfig means in-cluster, which is the normal deployment.
@@ -56,7 +57,10 @@ type Cluster struct {
 
 type Server struct {
 	Addr string `yaml:"addr,omitempty"`
-	Auth Auth   `yaml:"auth,omitempty"`
+	// MetricsAddr serves Prometheus metrics, apart from Addr so they are not
+	// reachable wherever the UI is. Default ":9090"; "off" disables it.
+	MetricsAddr string `yaml:"metricsAddr,omitempty"`
+	Auth        Auth   `yaml:"auth,omitempty"`
 }
 
 // Auth signs and verifies the HS256 tokens. The claim set and algorithm are
@@ -195,11 +199,14 @@ func (c *Config) applyDefaults() {
 	if c.Server.Auth.Issuer == "" {
 		c.Server.Auth.Issuer = "https://console.modelsphere.local"
 	}
-	if c.APIKeys.Backend == "" {
-		c.APIKeys.Backend = DefaultAPIKeysBackend
+	if c.Server.MetricsAddr == "" {
+		c.Server.MetricsAddr = DefaultMetricsAddr
 	}
-	if c.APIKeys.MaxBodyBytes == 0 {
-		c.APIKeys.MaxBodyBytes = DefaultMaxBodyBytes
+	if c.Router.Backend == "" {
+		c.Router.Backend = DefaultRouterBackend
+	}
+	if c.Router.MaxBodyBytes == 0 {
+		c.Router.MaxBodyBytes = DefaultMaxBodyBytes
 	}
 }
 
@@ -228,21 +235,21 @@ func (c *Config) Validate() error {
 		}
 		names[b.Name], prefixes[b.Prefix] = true, true
 	}
-	if a := c.APIKeys; a.Enabled() {
+	if a := c.Router; a.Enabled() {
 		switch {
 		case !refRE.MatchString(a.Secret):
-			return fmt.Errorf("%s: apiKeys.secret %q must be namespace/name", c.origin(), a.Secret)
+			return fmt.Errorf("%s: router.secret %q must be namespace/name", c.origin(), a.Secret)
 		case !names[a.Backend]:
-			return fmt.Errorf("%s: apiKeys.backend %q is not a configured backend; /v1 would have nowhere to go", c.origin(), a.Backend)
+			return fmt.Errorf("%s: router.backend %q is not a configured backend; /v1 would have nowhere to go", c.origin(), a.Backend)
 		case a.MaxBodyBytes < 0:
-			return fmt.Errorf("%s: apiKeys.maxBodyBytes must not be negative", c.origin())
+			return fmt.Errorf("%s: router.maxBodyBytes must not be negative", c.origin())
 		}
 	}
 	return nil
 }
 
 // reservedPrefixes are console's own API; a backend there would shadow them.
-var reservedPrefixes = []string{"/api/iam", "/api/me"}
+var reservedPrefixes = []string{"/api/iam", "/api/me", "/api/router"}
 
 func validateBackend(b Backend) error {
 	// Only /api/* passes the auth middleware's guard; anything else is served

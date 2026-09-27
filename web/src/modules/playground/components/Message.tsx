@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button, Textarea } from "@riseaicloud/ui";
 import { Pencil, RefreshCw, Trash2 } from "lucide-react";
-import { CopyButton } from "@/modules/playground/components/CopyButton";
+import { CopyButton } from "@/shell";
 import { Markdown } from "@/modules/playground/components/Markdown";
 import { statsParts } from "@/modules/playground/stats";
 import { splitThink } from "@/modules/playground/think";

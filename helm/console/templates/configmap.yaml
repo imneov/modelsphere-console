@@ -8,6 +8,7 @@ data:
   console.yaml: |
     server:
       addr: ":8080"
+      metricsAddr: {{ printf ":%d" (int .Values.metrics.port) | quote }}
       auth:
         issuer: {{ .Values.auth.issuer | quote }}
         tokenTTL: {{ .Values.auth.tokenTTL | quote }}
@@ -46,11 +47,11 @@ data:
           secretRef: {{ . | quote }}
           {{- end }}
       {{- end }}
-    {{- if include "console.apiKeys.enabled" . }}
-    apiKeys:
-      secret: {{ printf "%s/%s" .Release.Namespace (include "console.apiKeys.secret" .) | quote }}
+    {{- if include "console.router.enabled" . }}
+    router:
+      secret: {{ printf "%s/%s" .Release.Namespace (include "console.router.secret" .) | quote }}
       backend: llm
-      {{- with .Values.apiKeys.maxBodyBytes }}
+      {{- with .Values.router.maxBodyBytes }}
       maxBodyBytes: {{ . | int64 }}
       {{- end }}
     {{- end }}
