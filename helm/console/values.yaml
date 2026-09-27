@@ -98,8 +98,9 @@ router:
   # which model it asks for. Empty means 16 MiB.
   maxBodyBytes: ""
 
-# Prometheus metrics on a port of their own, so they are not reachable wherever
-# the UI is exposed. Pods carry prometheus.io/* scrape annotations; with the
+# Prometheus metrics on a port and a ClusterIP Service (<fullname>-metrics) of
+# their own, so they are not reachable wherever the UI is exposed -- a NodePort
+# service.type applies to the UI only. Pods carry prometheus.io/* scrape annotations; with the
 # Prometheus Operator, turn on the ServiceMonitor instead.
 metrics:
   port: 9090
