@@ -1,5 +1,5 @@
 image:
-  repository: swr.cn-east-3.myhuaweicloud.com/risecloud/consoled
+  repository: swr.cn-east-3.myhuaweicloud.com/risecloud/console
   tag: ""            # defaults to .Chart.AppVersion
   pullPolicy: IfNotPresent
 

@@ -1,5 +1,5 @@
 // Package web embeds the built SPA. `go build` works without a frontend build:
-// dist ships with a placeholder index.html, and consoled serves the API
+// dist ships with a placeholder index.html, and console serves the API
 // regardless. A real build overwrites dist before packaging.
 package web
 

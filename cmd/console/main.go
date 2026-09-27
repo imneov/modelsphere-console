@@ -1,4 +1,4 @@
-// Command consoled serves the ModelSphere community portal.
+// Command console serves the ModelSphere community portal.
 //
 // It owns identity -- users, roles and login, stored as iam.theriseunion.io
 // CRDs and kept wire-compatible with Rise Global so a later cutover to Global's
@@ -26,9 +26,9 @@ import (
 func main() {
 	var (
 		configPath = flag.String("config", "", "config file (default: $CONSOLE_CONFIG, ./console.yaml, ~/.config/console/console.yaml)")
-		addr       = flag.String("addr", os.Getenv("CONSOLED_ADDR"), "listen address (overrides config)")
-		logLevel   = flag.String("log-level", envOr("CONSOLED_LOG_LEVEL", "info"), "debug|info|warn|error")
-		webDir     = flag.String("web-dir", os.Getenv("CONSOLED_WEB_DIR"), "serve the UI from this directory instead of the embedded build")
+		addr       = flag.String("addr", os.Getenv("CONSOLE_ADDR"), "listen address (overrides config)")
+		logLevel   = flag.String("log-level", envOr("CONSOLE_LOG_LEVEL", "info"), "debug|info|warn|error")
+		webDir     = flag.String("web-dir", os.Getenv("CONSOLE_WEB_DIR"), "serve the UI from this directory instead of the embedded build")
 		showVer    = flag.Bool("version", false, "print version and exit")
 	)
 	flag.Parse()
@@ -38,7 +38,7 @@ func main() {
 		return
 	}
 	if err := run(*configPath, *addr, *logLevel, *webDir); err != nil {
-		fmt.Fprintln(os.Stderr, "consoled: "+err.Error())
+		fmt.Fprintln(os.Stderr, "console: "+err.Error())
 		os.Exit(1)
 	}
 }
@@ -59,7 +59,7 @@ func run(configPath, addr, logLevel, webDir string) error {
 	}
 	// The signing key comes from a Secret via env in a cluster, keeping it out
 	// of the ConfigMap-rendered config.
-	if v := os.Getenv("CONSOLED_JWT_SECRET"); v != "" {
+	if v := os.Getenv("CONSOLE_JWT_SECRET"); v != "" {
 		cfg.Server.Auth.JWTSecret = v
 	}
 	if err := cfg.Validate(); err != nil {

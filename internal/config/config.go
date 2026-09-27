@@ -1,6 +1,6 @@
-// Package config is consoled's one configuration document.
+// Package config is console's one configuration document.
 //
-// consoled is the community portal's BFF: it owns identity (users, roles,
+// console is the community portal's BFF: it owns identity (users, roles,
 // login) and federates every other capability to backends like swissd. The
 // config therefore has three sections -- how to reach Kubernetes (where users
 // and roles live as CRDs), how to sign and verify tokens, and which backends
@@ -50,7 +50,7 @@ type Auth struct {
 	TokenTTL time.Duration `yaml:"tokenTTL,omitempty"`
 }
 
-// Backend is one federated service consoled reverse-proxies to. Prefix is
+// Backend is one federated service console reverse-proxies to. Prefix is
 // replaced by URL's path: with prefix /api/deploy and url http://swissd/api,
 // /api/deploy/catalog reaches http://swissd/api/catalog. Name is the RBAC
 // resourceName under resource "backends".
@@ -116,7 +116,7 @@ func (c *Config) origin() string {
 	return c.Origin
 }
 
-// Validate covers what consoled needs to serve.
+// Validate covers what console needs to serve.
 func (c *Config) Validate() error {
 	if c.Server.Auth.JWTSecret == "" {
 		return fmt.Errorf("%s: server.auth.jwtSecret is required -- it signs every token", c.origin())
@@ -137,7 +137,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// reservedPrefixes are consoled's own API; a backend there would shadow them.
+// reservedPrefixes are console's own API; a backend there would shadow them.
 var reservedPrefixes = []string{"/api/iam", "/api/me"}
 
 func validateBackend(b Backend) error {
@@ -151,7 +151,7 @@ func validateBackend(b Backend) error {
 	}
 	for _, r := range reservedPrefixes {
 		if b.Prefix == r || strings.HasPrefix(b.Prefix, r+"/") {
-			return fmt.Errorf("prefix %q is reserved by consoled", b.Prefix)
+			return fmt.Errorf("prefix %q is reserved by console", b.Prefix)
 		}
 	}
 	u, err := url.Parse(b.URL)

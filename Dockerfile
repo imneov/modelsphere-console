@@ -1,4 +1,4 @@
-# consoled: the BFF, with the SPA embedded in it.
+# console: the BFF, with the SPA embedded in it.
 #
 # Three stages: the UI is compiled into the Go binary, so the web build has to
 # finish before the Go build starts, and neither toolchain belongs in the
@@ -39,12 +39,12 @@ COPY . .
 # lands here and is what gets embedded.
 COPY --from=web /src/web/dist ./web/dist
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
-      -o /out/consoled ./cmd/consoled
+      -o /out/console ./cmd/console
 
 # --- 3. runtime ------------------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/consoled /consoled
+COPY --from=build /out/console /console
 USER nonroot:nonroot
 EXPOSE 8080
-ENTRYPOINT ["/consoled"]
-CMD ["--config", "/etc/consoled/console.yaml"]
+ENTRYPOINT ["/console"]
+CMD ["--config", "/etc/console/console.yaml"]

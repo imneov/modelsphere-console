@@ -1,4 +1,4 @@
-// Package cluster is consoled's access to Kubernetes, where the iam CRDs
+// Package cluster is console's access to Kubernetes, where the iam CRDs
 // (User, IAMRole, IAMRoleBinding under iam.theriseunion.io) live.
 //
 // It uses the dynamic client rather than a typed clientset: the iam types are

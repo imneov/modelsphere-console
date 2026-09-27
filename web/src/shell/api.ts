@@ -1,4 +1,4 @@
-// Session and transport. Same-origin: consoled serves this SPA, its own API and
+// Session and transport. Same-origin: console serves this SPA, its own API and
 // every module backend it proxies. The token lives in a cookie (so a reload stays
 // logged in and the server can read it on navigations) and is also sent as a
 // Bearer header.

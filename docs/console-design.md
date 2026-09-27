@@ -50,7 +50,7 @@ browser ─▶ web (Vite / React 19 / Tailwind 4 / @riseaicloud/ui)
              modules: iam, swiss, …            (src/modules/*)
                      │  same-origin /oauth, /api/iam, /api/deploy…
                      ▼
-             consoled (Go BFF)
+             console (Go BFF)
                internal/iam      identity kernel: CRD types + OAuth2 (HS256) + RBAC
                internal/server   mux + auth middleware + static SPA
                                  + backend proxy (proxy.go)
@@ -105,10 +105,10 @@ when one of those is actually needed.
 
 ## Backends
 
-Each module's backend is a `backends` entry; consoled proxies it after login.
+Each module's backend is a `backends` entry; console proxies it after login.
 
 ```
-browser  /api/deploy/catalog  ──▶ consoled
+browser  /api/deploy/catalog  ──▶ console
    authenticate (token) ─▶ password-reset guard ─▶ RBAC: verb on backends/<name>
    strip client X-Remote-*, Cookie; set X-Remote-User, X-Remote-Group, Bearer
                              ──▶ swissd  /api/catalog
@@ -123,7 +123,7 @@ browser  /api/deploy/catalog  ──▶ consoled
 | Streaming | flushed as it arrives (SSE, chunked progress) |
 | Backend down | JSON `502` |
 
-A backend must trust `X-Remote-*` only from consoled (network policy / mTLS),
+A backend must trust `X-Remote-*` only from console (network policy / mTLS),
 never from browsers.
 
 ## Bringing swiss in

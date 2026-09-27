@@ -5,7 +5,7 @@ roles, login) and federates everything else to backends like
 [swiss](https://github.com/modelsphere/swiss).
 
 ```
-browser ─▶ web (shell + modules) ─▶ consoled (Go BFF)
+browser ─▶ web (shell + modules) ─▶ console (Go BFF)
                                          identity: iam CRDs + OAuth2 (HS256)
                                          + global-scope RBAC + reverse proxy
                                                         │ HTTP (Bearer JWT)
@@ -18,7 +18,7 @@ browser ─▶ web (shell + modules) ─▶ consoled (Go BFF)
 Identity is kept **wire-compatible with Rise Global**: the same
 `iam.theriseunion.io/v1alpha1` User/Role/RoleBinding CRDs and the same HS256
 token claims. Upgrading a community install to Global is then a config change --
-share the JWT secret and point consoled's identity endpoints at Global's
+share the JWT secret and point console's identity endpoints at Global's
 apiserver -- not a data migration.
 
 ## Status
@@ -33,7 +33,7 @@ writes the values file that pins it; the second installs, and is also what every
 later upgrade runs — unchanged:
 
 ```sh
-# 1. build + push consoled:<chart version>-dev.<commit>, then write console-image.yaml
+# 1. build + push console:<chart version>-dev.<commit>, then write console-image.yaml
 CONSOLE_REGISTRY=<registry>/<org> hack/image.sh
 
 # 2. install; re-run the same line to upgrade
@@ -60,9 +60,9 @@ kubectl -n console port-forward svc/console-console 8080:8080   # then http://lo
 
 ```sh
 go build ./...
-go build -o consoled ./cmd/consoled
-./consoled --config ./console.yaml
+go build -o console ./cmd/console
+./console --config ./console.yaml
 ```
 
 `go build` works without a frontend build: `web/dist` ships a placeholder and
-consoled serves the API regardless.
+console serves the API regardless.

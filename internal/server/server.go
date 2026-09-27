@@ -1,4 +1,4 @@
-// Package server is consoled's HTTP surface: the identity endpoints it owns
+// Package server is console's HTTP surface: the identity endpoints it owns
 // (/oauth, /api/iam, /api/me), the auth middleware that guards them, and the
 // reverse proxy that federates everything else to backends like swissd.
 package server
@@ -33,7 +33,7 @@ func New(cfg *config.Config, kube *cluster.Kube, log *slog.Logger, version strin
 	return &Server{cfg: cfg, kube: kube, log: log, version: version}
 }
 
-// SetWeb installs the SPA filesystem. Without one, consoled is API only.
+// SetWeb installs the SPA filesystem. Without one, console is API only.
 func (s *Server) SetWeb(f fs.FS) { s.web = f }
 
 // SetIAM installs the identity kernel: the user store, the token signer, and
@@ -95,7 +95,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	errc := make(chan error, 1)
 	go func() {
-		s.log.Info("consoled listening", "addr", s.cfg.Server.Addr, "version", s.version)
+		s.log.Info("console listening", "addr", s.cfg.Server.Addr, "version", s.version)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errc <- err
 		}

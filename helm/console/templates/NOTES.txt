@@ -1,4 +1,4 @@
-consoled is installed as {{ include "console.fullname" . }}.
+console is installed as {{ include "console.fullname" . }}.
 {{- $defaultPasswordHash := "$2b$12$Q44Y0B99hoByZY.6v30jl.D83rXFbSpOfh8iWLbndLZBEjFAZwaeO" }}
 {{- $existing := "" }}
 {{- if .Values.admin.username }}{{ $existing = lookup "iam.theriseunion.io/v1alpha1" "User" "" .Values.admin.username }}{{ end }}

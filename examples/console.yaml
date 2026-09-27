@@ -1,4 +1,4 @@
-# consoled configuration. One document; see internal/config for the schema.
+# console configuration. One document; see internal/config for the schema.
 
 cluster:
   # Empty means in-cluster. On a laptop, point at a kubeconfig:
@@ -14,7 +14,7 @@ server:
     issuer: "https://console.modelsphere.local"
     tokenTTL: 24h
 
-# Everything not owned by consoled is federated to a backend. Requests under
+# Everything not owned by console is federated to a backend. Requests under
 # prefix are reverse-proxied to url, the prefix replaced by url's path:
 # /api/deploy/catalog -> http://swissd.swiss.svc:8080/api/catalog. The backend
 # receives X-Remote-User / X-Remote-Group and the caller's Bearer token.

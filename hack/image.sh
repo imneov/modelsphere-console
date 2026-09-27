@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds consoled for the current commit, pushes it, and pins the tag in a values
+# Builds console for the current commit, pushes it, and pins the tag in a values
 # file so that installing and upgrading are the same helm command:
 #
 #   hack/image.sh
@@ -26,7 +26,7 @@ done
 version="$(awk '/^version:/ {print $2}' helm/console/Chart.yaml)"
 commit="$(git rev-parse --short HEAD)"
 tag="${version}-dev.${commit}"
-image="${registry}/consoled:${tag}"
+image="${registry}/console:${tag}"
 
 if [ -n "$(git status --porcelain)" ]; then
   echo "warning: the working tree is dirty; ${tag} will not be reproducible from this commit" >&2
@@ -48,7 +48,7 @@ fi
 cat > console-image.yaml <<EOF
 # Written by hack/image.sh — the image for this commit. Not committed.
 image:
-  repository: ${registry}/consoled
+  repository: ${registry}/console
   tag: "${tag}"
   pullPolicy: IfNotPresent
 EOF
