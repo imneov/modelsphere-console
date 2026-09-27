@@ -256,6 +256,43 @@ A deleted key's series are dropped on the replica that deleted it; elsewhere
 they stay until that pod restarts. Go runtime and process metrics are exported
 beside them.
 
+## One-command install
+
+`helm install modelsphere ./helm/console` on an empty cluster, with no values,
+has to end with a working Playground and `/v1`. So the chart carries the whole
+inference path, not just the portal:
+
+```
+browser ─► console ─/api/llm─┐
+program ─► console ─/v1──────┴─► gateway (llm-openresty) ─► demo model (llama.cpp)
+                                  route "llm": peers_by_model  └─ gateway.models …
+```
+
+| Concern | Decision |
+|---|---|
+| Gateway | built in unless `playground.gateway` names an existing one. llm-openresty `4pdosc/llm-openresty` plus the `autoconfig-reload` sidecar, one replica, in the release namespace |
+| Route | one aggregate route `llm` rendered by the chart: `peers_by_model` over the demo model and `gateway.models`. Peers must be IP literals, so each model gets a relay `server` on loopback that `proxy_pass`es to its URL, resolved once at load. No models is valid: `/v1/models` lists none, chat answers 400 |
+| Gateway key | generated at first install, kept across upgrades (`lookup`), in `<release>-gateway-keys`; console reads it like any gateway's |
+| Console wiring | the `llm` backend points at the built-in route ConfigMap, Service and Secret; the router turns on with it. No profile, no swiss |
+| Demo model | on by default: llama.cpp `server-b11206` serving Qwen2.5-0.5B-Instruct Q4_K_M on CPU, fetched once into a PVC (kept on uninstall) from ModelScope, then hf-mirror. `-t` matches the CPU limit (unpinned it ran 6 tok/s under throttling, pinned ~30). It reports `cached_tokens`, so the Playground's cache hit rate shows |
+| Selectors | the gateway and demo pods carry their own `app.kubernetes.io/name`: console's Service, PDB and metrics select on name+instance, which cannot change on an existing release |
+| Access | Service type NodePort by default, so the address works when the install returns; `NOTES` prints it |
+
+Verified on daocloud-ce (single node, 12 CPU, no GPU, local-path): install in
+2m12s including the model download; login and first password change, Playground
+chat with stats, API key issued, `/v1` with the official OpenAI SDK (list,
+stream, 401 on a bad key), `cached_tokens` 28/29 on a repeated prompt.
+
+### Still missing for a public one-command install
+
+| Gap | Why it matters | Where it is fixed |
+|---|---|---|
+| console image is not public | `swr…/risecloud/console` needs credentials; the verification loaded the image onto the node | publish `console:<appVersion>` anonymously (e.g. Docker Hub `4pdosc/console`) and default the chart to it |
+| llama.cpp comes from ghcr.io | slow or blocked in some networks | a mirror value, or a copy under the same public org |
+| models deployed by swiss do not reach the built-in route | nothing generates a `peers_by_model` route; autoconfig only writes flat per-model routes | console writes the aggregate route from what is deployed, or autoconfig learns it |
+| swiss is not part of the install | its image (`harbor.4pd.io`) is private, its catalog URL is a placeholder, its engines need GPUs and hostPath weights, and routing needs autoconfig with the ModelRoute and LLMSLORequirement CRDs | see "Bringing swiss in" |
+| swiss and console read the gateway key differently | swiss sends the Secret value verbatim (`apiKey`), console parses `key:owner` (`keys`) | one format, in swiss |
+
 ## Bringing swiss in
 
 swiss's frontend is copied into `web/src/modules/swiss/` and maintained there by
@@ -302,7 +339,7 @@ requests carry the same headers Global's apiserver sets.
 | P3 | Full roles: authorizer + role/binding CRUD + role/permission UI. |
 | P4 | Federation: module shell, stack aligned with swiss, backend proxy with identity headers and per-backend RBAC. **(done)** |
 | P5 | swiss module: swiss prepares its frontend (table above) and exports `openapi.json`; copy into `modules/swiss`; CODEOWNERS. |
-| P6 | Playground: chat module, `llm` backend resolved from the cluster (site profile or route ConfigMap) with the gateway key read from its Secret, streaming SSE end to end. **(done)** Then: Markdown, compare page, full parameters, stats, view code. **(done)** The router: `/v1`, API keys, usage metrics. **(done)** |
+| P6 | Playground: chat module, `llm` backend resolved from the cluster (site profile or route ConfigMap) with the gateway key read from its Secret, streaming SSE end to end. **(done)** Then: Markdown, compare page, full parameters, stats, view code. **(done)** The router: `/v1`, API keys, usage metrics. **(done)** One-command install: built-in gateway and a CPU demo model. **(done)** |
 | P7 | Container management modules, moved over from Rise Global. |
 
 Each phase is independently committable and verifiable.
