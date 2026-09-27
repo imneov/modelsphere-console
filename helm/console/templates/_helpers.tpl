@@ -26,11 +26,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{ include "console.fullname" . }}
 {{- end -}}
 
-{{- /* API keys need the gateway: /v1 has nowhere else to go. */ -}}
-{{- define "console.apiKeys.enabled" -}}
-{{- if and .Values.apiKeys.enabled (or .Values.playground.gateway.profile .Values.playground.gateway.configMap) -}}true{{- end -}}
+{{- /* The router needs the gateway: /v1 has nowhere else to go. */ -}}
+{{- define "console.router.enabled" -}}
+{{- if and .Values.router.enabled (or .Values.playground.gateway.profile .Values.playground.gateway.configMap) -}}true{{- end -}}
 {{- end -}}
 
-{{- define "console.apiKeys.secret" -}}
+{{- define "console.router.secret" -}}
 {{ include "console.fullname" . }}-api-keys
 {{- end -}}
