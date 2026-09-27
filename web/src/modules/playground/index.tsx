@@ -1,11 +1,12 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Columns2, MessageSquare } from "lucide-react";
+import { Columns2, KeyRound, MessageSquare } from "lucide-react";
 import type { ConsoleModule } from "@/shell";
 
 // Loaded on first visit: Markdown and syntax highlighting are most of the
 // module's weight, and no other page needs them.
 const Chat = lazy(() => import("@/modules/playground/Chat").then((m) => ({ default: m.Chat })));
 const Compare = lazy(() => import("@/modules/playground/Compare").then((m) => ({ default: m.Compare })));
+const ApiKeys = lazy(() => import("@/modules/playground/ApiKeys").then((m) => ({ default: m.ApiKeys })));
 
 const page = (node: ReactNode) => <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">加载中…</div>}>{node}</Suspense>;
 
@@ -18,5 +19,6 @@ export const playgroundModule: ConsoleModule = {
   pages: [
     { path: "", element: page(<Chat />), permission: "playground.use", menu: { label: "对话", icon: MessageSquare } },
     { path: "compare", element: page(<Compare />), permission: "playground.use", menu: { label: "多模型对比", icon: Columns2 } },
+    { path: "api-keys", element: page(<ApiKeys />), permission: "apikeys.view", menu: { label: "API 密钥", icon: KeyRound } },
   ],
 };
