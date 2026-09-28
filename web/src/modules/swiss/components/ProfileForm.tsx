@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
-import { type Site, type SiteProfile } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { type Site, type SiteProfile } from "@swiss/lib/api";
+import { Button } from "@swiss/components/ui/button";
+import { Field, Input } from "@swiss/components/ui/input";
+import { Switch } from "@swiss/components/ui/switch";
 
 // ProfileForm edits the site profile field by field, which is how it is
 // normally edited: the document is a fixed set of cluster facts, not free-form

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Field, Input } from "@/components/ui/input";
-import type { EntrypointAuth } from "@/lib/api";
+import { Badge } from "@swiss/components/ui/badge";
+import { Field, Input } from "@swiss/components/ui/input";
+import type { EntrypointAuth } from "@swiss/lib/api";
 
 // The credential inputs shared by the serving check and the health check.
 //

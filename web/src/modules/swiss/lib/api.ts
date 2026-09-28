@@ -1,3 +1,5 @@
+import { apiPath, hostFetch } from "@swiss/lib/host";
+
 // Types are hand-written and mirrored by a golden-file test in Go, so drift
 // fails in CI rather than turning up as an undefined in a browser.
 
@@ -292,7 +294,7 @@ async function fail(res: Response): Promise<never> {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: { Accept: "application/json" } });
+  const res = await hostFetch(apiPath(path), { headers: { Accept: "application/json" } });
   if (!res.ok) return fail(res);
   return res.json() as Promise<T>;
 }
@@ -586,7 +588,7 @@ export interface ProbeResult {
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await hostFetch(apiPath(path), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -596,7 +598,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function put<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await hostFetch(apiPath(path), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -606,7 +608,7 @@ async function put<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function del<T>(path: string): Promise<T> {
-  const res = await fetch(path, { method: "DELETE", headers: { Accept: "application/json" } });
+  const res = await hostFetch(apiPath(path), { method: "DELETE", headers: { Accept: "application/json" } });
   if (!res.ok) return fail(res);
   return res.json() as Promise<T>;
 }

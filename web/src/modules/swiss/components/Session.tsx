@@ -1,8 +1,8 @@
 import { createContext, use, useEffect } from "react";
-import { Navigate, useLocation } from "react-router";
+import { Navigate, useLocation } from "@swiss/lib/host";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { api, onUnauthorized, type Session } from "@/lib/api";
-import { ErrorState, Loading } from "@/components/States";
+import { api, onUnauthorized, type Session } from "@swiss/lib/api";
+import { ErrorState, Loading } from "@swiss/components/States";
 
 // The session is asked for once, at the root, and read from everywhere else.
 // Every page under it is already past the login, so nothing below has to think
@@ -43,10 +43,11 @@ export function Gate({ children }: { children: React.ReactNode }) {
   if (session.isPending) return <Loading what="the session" />;
   if (session.error) return <ErrorState what="the session" error={session.error} />;
 
+  // console is the login; a swissd behind it must run with server.auth.disabled.
   if (!session.data.authenticated) {
-    return <Navigate to="/login" replace state={{ from: pathname }} />;
+    return <ErrorState what="swissd" error={new Error("swissd asks for its own login; run it with server.auth.disabled behind console")} />;
   }
-  if (!session.data.initialized && pathname !== "/setup") {
+  if (!session.data.initialized && !pathname.endsWith("/setup")) {
     return <Navigate to="/setup" replace />;
   }
   return <SessionContext value={session.data}>{children}</SessionContext>;

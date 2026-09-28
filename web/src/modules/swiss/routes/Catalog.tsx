@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link } from "@swiss/lib/host";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
-import { api, type IndexModel } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
-import { Empty, ErrorState, Loading } from "@/components/States";
-import { gpuCount, gpuSupport, vendorLabel } from "@/lib/gpu";
-import { cn } from "@/lib/utils";
+import { api, type IndexModel } from "@swiss/lib/api";
+import { Badge } from "@swiss/components/ui/badge";
+import { Button, buttonVariants } from "@swiss/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { Dialog } from "@swiss/components/ui/dialog";
+import { Empty, ErrorState, Loading } from "@swiss/components/States";
+import { gpuCount, gpuSupport, vendorLabel } from "@swiss/lib/gpu";
+import { cn } from "@swiss/lib/utils";
 
 export function Catalog() {
   const { data, isPending, error } = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });

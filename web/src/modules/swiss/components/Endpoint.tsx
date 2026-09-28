@@ -9,14 +9,14 @@ import {
   type InferenceApi,
   type ProbeResult,
   type ReleaseStatus as Status,
-} from "@/lib/api";
-import { AuthFields, SentHeaders } from "@/components/EntrypointAuth";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Code } from "@/components/ui/code";
-import { Field, Input } from "@/components/ui/input";
-import { ErrorState } from "@/components/States";
+} from "@swiss/lib/api";
+import { AuthFields, SentHeaders } from "@swiss/components/EntrypointAuth";
+import { Badge } from "@swiss/components/ui/badge";
+import { Button } from "@swiss/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { Code } from "@swiss/components/ui/code";
+import { Field, Input } from "@swiss/components/ui/input";
+import { ErrorState } from "@swiss/components/States";
 
 // Endpoint is where this release is called and the two ways of asking whether
 // calling it works. One card, because an operator arrives with one question --

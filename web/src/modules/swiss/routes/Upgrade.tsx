@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "@swiss/lib/host";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowRight, ChevronLeft, TriangleAlert } from "lucide-react";
-import { api, deployApi, type ApplyResult, type DiffResult, type Plan } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field } from "@/components/ui/input";
+import { api, deployApi, type ApplyResult, type DiffResult, type Plan } from "@swiss/lib/api";
+import { Badge } from "@swiss/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { Field } from "@swiss/components/ui/input";
 import {
   DeploySettings,
   EMPTY,
@@ -13,9 +13,9 @@ import {
   imageOf,
   planRequest,
   type Form,
-} from "@/components/DeploySettings";
-import { Pipeline } from "@/components/Pipeline";
-import { ErrorState, Loading } from "@/components/States";
+} from "@swiss/components/DeploySettings";
+import { Pipeline } from "@swiss/components/Pipeline";
+import { ErrorState, Loading } from "@swiss/components/States";
 
 export function Upgrade() {
   const { namespace = "", release = "" } = useParams();

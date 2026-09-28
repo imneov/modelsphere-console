@@ -2,6 +2,13 @@
 @import "@fontsource-variable/inter";
 @config "../tailwind.config.ts";
 
+/* Status colours the Rise tokens do not define; the swiss module uses them.
+   Values are swiss's own (swiss/web/src/index.css). */
+@theme {
+  --color-warning: oklch(0.62 0.13 75);
+  --color-success: oklch(0.627 0.194 149.214);
+}
+
 /* Colour variables (:root and .dark) are injected by the @riseaicloud/tokens
    Tailwind preset. The blocks below override only what Rise Global sets
    differently; primary, border, muted and accent already match. Token values are

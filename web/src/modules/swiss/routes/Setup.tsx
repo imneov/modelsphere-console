@@ -1,10 +1,10 @@
-import { useNavigate } from "react-router";
+import { useNavigate } from "@swiss/lib/host";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ErrorState, Loading } from "@/components/States";
-import { ProfileEditor } from "@/components/ProfileEditor";
-import { useSessionQuery } from "@/components/Session";
+import { api } from "@swiss/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { ErrorState, Loading } from "@swiss/components/States";
+import { ProfileEditor } from "@swiss/components/ProfileEditor";
+import { useSessionQuery } from "@swiss/components/Session";
 
 // Setup is the first run: swissd owns the site profile, the chart writes none,
 // so a fresh install has nothing to compose against until this is filled in.

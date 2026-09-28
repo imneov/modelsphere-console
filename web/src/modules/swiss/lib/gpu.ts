@@ -1,4 +1,4 @@
-import type { Requires } from "@/lib/api";
+import type { Requires } from "@swiss/lib/api";
 
 // Vendor decides the extended resource a pod requests and the node label its
 // product is published under, so it is part of what a variant runs on rather

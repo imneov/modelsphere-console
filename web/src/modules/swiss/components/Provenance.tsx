@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import type { Plan } from "@/lib/api";
-import { Code } from "@/components/ui/code";
-import { toYaml } from "@/lib/yaml";
+import { Badge } from "@swiss/components/ui/badge";
+import type { Plan } from "@swiss/lib/api";
+import { Code } from "@swiss/components/ui/code";
+import { toYaml } from "@swiss/lib/yaml";
 
 // In merge order, and `edit` last because that is when it is applied. Leaving it
 // out of this list is how the one input exempt from ownership becomes the one

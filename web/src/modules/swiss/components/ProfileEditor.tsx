@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type SiteProfile } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { ErrorState } from "@/components/States";
-import { ProfileForm } from "@/components/ProfileForm";
+import { api, type SiteProfile } from "@swiss/lib/api";
+import { Button } from "@swiss/components/ui/button";
+import { ErrorState } from "@swiss/components/States";
+import { ProfileForm } from "@swiss/components/ProfileForm";
 
 type Mode = "form" | "yaml";
 

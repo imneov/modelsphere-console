@@ -1,5 +1,5 @@
-import { tokenize, type Kind } from "@/lib/syntax";
-import { cn } from "@/lib/utils";
+import { tokenize, type Kind } from "@swiss/lib/syntax";
+import { cn } from "@swiss/lib/utils";
 
 // Existing palette only: four greys plus the two accents already defined in
 // both themes. A syntax palette would be eight new values to pick blind.

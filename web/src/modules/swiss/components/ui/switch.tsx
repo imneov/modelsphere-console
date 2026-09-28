@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@swiss/lib/utils";
 
 // On is the success green, off is the muted track. The knob stays white in
 // both themes so the two states read at a glance rather than as black on white.

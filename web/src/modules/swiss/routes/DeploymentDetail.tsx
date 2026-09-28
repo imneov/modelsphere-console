@@ -1,16 +1,16 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "@swiss/lib/host";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, TriangleAlert } from "lucide-react";
-import { api, deployApi, type Plan, type PlanStatus, type ReleaseStatus as Status } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, Input } from "@/components/ui/input";
-import { Provenance } from "@/components/Provenance";
-import { ReleaseStatus } from "@/components/ReleaseStatus";
-import { SLOCard } from "@/components/SLOCard";
-import { ErrorState, Loading } from "@/components/States";
+import { api, deployApi, type Plan, type PlanStatus, type ReleaseStatus as Status } from "@swiss/lib/api";
+import { Badge } from "@swiss/components/ui/badge";
+import { Button } from "@swiss/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { Field, Input } from "@swiss/components/ui/input";
+import { Provenance } from "@swiss/components/Provenance";
+import { ReleaseStatus } from "@swiss/components/ReleaseStatus";
+import { SLOCard } from "@swiss/components/SLOCard";
+import { ErrorState, Loading } from "@swiss/components/States";
 
 export function DeploymentDetail() {
   const { namespace = "", release = "" } = useParams();

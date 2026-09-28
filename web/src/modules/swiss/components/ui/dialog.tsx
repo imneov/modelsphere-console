@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@swiss/lib/utils";
 
 // A modal, deliberately minimal: there is one in this app and it holds the
 // apply pipeline, so it needs to be dismissable, focus-trapping and scrollable,

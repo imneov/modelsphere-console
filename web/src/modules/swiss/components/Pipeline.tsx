@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleCheck, TriangleAlert } from "lucide-react";
-import { api, deployApi, type ApplyResult, type DiffResult, type Plan } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Tabs } from "@/components/ui/tabs";
-import { DiffView } from "@/components/DiffView";
-import { Provenance } from "@/components/Provenance";
-import { ReleaseStatus } from "@/components/ReleaseStatus";
-import { Empty, ErrorState } from "@/components/States";
+import { api, deployApi, type ApplyResult, type DiffResult, type Plan } from "@swiss/lib/api";
+import { Badge } from "@swiss/components/ui/badge";
+import { Button } from "@swiss/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { Dialog } from "@swiss/components/ui/dialog";
+import { Input } from "@swiss/components/ui/input";
+import { Tabs } from "@swiss/components/ui/tabs";
+import { DiffView } from "@swiss/components/DiffView";
+import { Provenance } from "@swiss/components/Provenance";
+import { ReleaseStatus } from "@swiss/components/ReleaseStatus";
+import { Empty, ErrorState } from "@swiss/components/States";
 
 // Pipeline is compose -> dry run -> apply -> status, shared by Deploy, Upgrade
 // and rollback.

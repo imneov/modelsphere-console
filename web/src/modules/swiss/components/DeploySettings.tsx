@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Info } from "lucide-react";
-import type { ClusterInfo, Plan, PlanRequest, Variant } from "@/lib/api";
-import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import type { ClusterInfo, Plan, PlanRequest, Variant } from "@swiss/lib/api";
+import { cn } from "@swiss/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { Input } from "@swiss/components/ui/input";
+import { Switch } from "@swiss/components/ui/switch";
 
 // One form, two routes. Deploy composes it against a catalog model and Upgrade
 // against a release's stored plan, but a setting that means one thing on one

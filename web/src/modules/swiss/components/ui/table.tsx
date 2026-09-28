@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@swiss/lib/utils";
 
 export function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (

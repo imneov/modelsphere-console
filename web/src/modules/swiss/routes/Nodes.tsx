@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Search, TriangleAlert } from "lucide-react";
-import { api, type GPUPod, type Node, type NodeCondition } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs } from "@/components/ui/tabs";
-import { Empty, ErrorState, Loading } from "@/components/States";
-import { VENDOR_RESOURCES } from "@/lib/gpu";
-import { cn } from "@/lib/utils";
+import { api, type GPUPod, type Node, type NodeCondition } from "@swiss/lib/api";
+import { Badge } from "@swiss/components/ui/badge";
+import { Button } from "@swiss/components/ui/button";
+import { Card, CardContent } from "@swiss/components/ui/card";
+import { Input } from "@swiss/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@swiss/components/ui/table";
+import { Tabs } from "@swiss/components/ui/tabs";
+import { Empty, ErrorState, Loading } from "@swiss/components/States";
+import { VENDOR_RESOURCES } from "@swiss/lib/gpu";
+import { cn } from "@swiss/lib/utils";
 
 // The GPU inventory: what each node has, what is free, and what is holding it.
 //

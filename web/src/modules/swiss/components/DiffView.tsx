@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@swiss/lib/utils";
 
 const ANSI = new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g");
 

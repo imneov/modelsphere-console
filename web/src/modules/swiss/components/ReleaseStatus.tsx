@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Endpoint } from "@/components/Endpoint";
-import { ErrorState, Loading } from "@/components/States";
+import { api } from "@swiss/lib/api";
+import { Badge } from "@swiss/components/ui/badge";
+import { Card, CardContent } from "@swiss/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@swiss/components/ui/table";
+import { Endpoint } from "@swiss/components/Endpoint";
+import { ErrorState, Loading } from "@swiss/components/States";
 
 export function ReleaseStatus({ namespace, release }: { namespace: string; release: string }) {
   const status = useQuery({

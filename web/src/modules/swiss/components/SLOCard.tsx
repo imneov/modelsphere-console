@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { deployApi, type SLOBound, type SLOConfig, type SLOMetric, type SLOSection } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { ErrorState, Loading } from "@/components/States";
-import { cn } from "@/lib/utils";
+import { deployApi, type SLOBound, type SLOConfig, type SLOMetric, type SLOSection } from "@swiss/lib/api";
+import { Button } from "@swiss/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { Input } from "@swiss/components/ui/input";
+import { ErrorState, Loading } from "@swiss/components/States";
+import { cn } from "@swiss/lib/utils";
 
 const TYPES = ["avg", "p50", "p80", "p90", "p95", "p99"];
 

@@ -1,13 +1,13 @@
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "@swiss/lib/host";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ExternalLink } from "lucide-react";
-import { api, type Node, type Variant } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { gpuCount, matchesVendor, vendorLabel } from "@/lib/gpu";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ErrorState, Loading } from "@/components/States";
-import { cn } from "@/lib/utils";
+import { api, type Node, type Variant } from "@swiss/lib/api";
+import { Badge } from "@swiss/components/ui/badge";
+import { gpuCount, matchesVendor, vendorLabel } from "@swiss/lib/gpu";
+import { Button, buttonVariants } from "@swiss/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { ErrorState, Loading } from "@swiss/components/States";
+import { cn } from "@swiss/lib/utils";
 
 export function Model() {
   const { name = "" } = useParams();

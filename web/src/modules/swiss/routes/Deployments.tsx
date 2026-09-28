@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link } from "@swiss/lib/host";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { api, type Deployment } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Empty, ErrorState, Loading } from "@/components/States";
+import { api, type Deployment } from "@swiss/lib/api";
+import { Badge } from "@swiss/components/ui/badge";
+import { Button } from "@swiss/components/ui/button";
+import { Card, CardContent } from "@swiss/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@swiss/components/ui/table";
+import { Empty, ErrorState, Loading } from "@swiss/components/States";
 
 const PER_PAGE = 25;
 

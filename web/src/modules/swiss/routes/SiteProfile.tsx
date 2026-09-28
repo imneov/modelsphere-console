@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { Navigate } from "react-router";
+import { Navigate } from "@swiss/lib/host";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ProfileEditor } from "@/components/ProfileEditor";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ErrorState, Loading } from "@/components/States";
-import { Code } from "@/components/ui/code";
-import { toYaml } from "@/lib/yaml";
+import { api } from "@swiss/lib/api";
+import { Badge } from "@swiss/components/ui/badge";
+import { Button } from "@swiss/components/ui/button";
+import { ProfileEditor } from "@swiss/components/ProfileEditor";
+import { Card, CardContent, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { ErrorState, Loading } from "@swiss/components/States";
+import { Code } from "@swiss/components/ui/code";
+import { toYaml } from "@swiss/lib/yaml";
 
 export function SiteProfile() {
   const [editing, setEditing] = useState(false);
