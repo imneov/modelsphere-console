@@ -23,8 +23,8 @@ apiserver -- not a data migration.
 
 ## Status
 
-Identity (P1–P3), the module shell with backend federation (P4) and the
-Playground and the router -- `/v1` with API keys (P6). See `docs/console-design.md` for the plan.
+Identity (P1–P3), the module shell with backend federation (P4), the swiss
+module (P5) and the Playground and the router -- `/v1` with API keys (P6). See `docs/console-design.md` for the plan.
 
 ## Install
 
