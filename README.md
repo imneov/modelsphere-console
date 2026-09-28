@@ -28,6 +28,36 @@ module (P5) and the Playground and the router -- `/v1` with API keys (P6). See `
 
 ## Install
 
+### Into a cluster that runs the stack: `./install.sh`
+
+For a cluster that already runs the inference gateway (llm-openresty + autoconfig)
+and, for 模型部署, swissd with `auth.disabled`. The installer finds them, installs
+console wired to them, and checks the result end to end.
+
+```sh
+export KUBECONFIG=...
+export CONSOLE_ADMIN_PASSWORD='...'                          # the admin's password after first login
+export REGISTRY_USERNAME=... REGISTRY_PASSWORD=...           # pull secret for the private image
+./install.sh                                                 # install or upgrade; safe to re-run
+```
+
+```
+preflight -> find swissd -> find gateway -> pull secret / admin -> helm upgrade --install -> verify
+```
+
+| Step | What it does |
+|---|---|
+| swissd | Service labelled `app.kubernetes.io/name=swiss`; checks it has no login of its own and reads its site profile → `backends: swiss` |
+| gateway | swissd's site profile; what it does not name (entrypoint Service, key Secret) is taken from the openresty Deployment mounting its route ConfigMap. No swiss: the one ConfigMap holding `session_route_*.conf` |
+| admin | a `User` of that name owned by something else (Rise Global, another console) is left alone and reported |
+| verify | log in (first login: change the password to `CONSOLE_ADMIN_PASSWORD`) → `/api/deploy/session` + catalog → Playground model list → one chat |
+
+`./install.sh verify | status | uninstall`, `--dry-run` to see the discovered values
+without installing, `--help` for overrides (`--swiss`, `--gateway-*`,
+`--admin-username`, `--image-tag`, `-f values.yaml`, …).
+
+### Standalone, with its own gateway and a demo model
+
 One command, no values:
 
 ```sh
