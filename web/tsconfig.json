@@ -15,7 +15,7 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true,
-    "paths": { "@/*": ["./src/*"] }
+    "paths": { "@/*": ["./src/*"], "@swiss/*": ["./src/modules/swiss/*"] }
   },
   "include": ["src", "vite.config.ts", "tailwind.config.ts"]
 }

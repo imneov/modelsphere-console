@@ -8,7 +8,10 @@ import path from "node:path";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: { "@": path.resolve(import.meta.dirname, "src") },
+    alias: {
+      "@swiss": path.resolve(import.meta.dirname, "src/modules/swiss"),
+      "@": path.resolve(import.meta.dirname, "src"),
+    },
   },
   server: {
     proxy: {

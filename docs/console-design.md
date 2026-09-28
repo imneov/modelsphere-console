@@ -124,7 +124,7 @@ browser  /api/deploy/catalog  ──▶ console
 | Prefix | must be under `/api/` (that is what puts it behind login), not `/api/iam` or `/api/me` |
 | Authorization | resource `backends`, resourceName = backend name; GET/HEAD/OPTIONS `get`, POST `create`, PUT/PATCH `update`, DELETE `delete` |
 | Identity | `X-Remote-User` / `X-Remote-Group`, as Rise Global's apiserver sets for a ReverseProxy — a backend runs unchanged behind either |
-| Credential | `apiKeyEnv` names an environment variable console sends as `Authorization: Bearer <value>`, replacing the caller's token. The browser never sees it. Empty means the token is forwarded unchanged (swissd's case: it verifies the JWT itself) |
+| Credential | `apiKeyEnv` names an environment variable console sends as `Authorization: Bearer <value>`, replacing the caller's token. The browser never sees it. Empty means the token is forwarded unchanged. swissd does not read console's JWT: behind console it runs with `server.auth.disabled` and trusts console's RBAC |
 | Streaming | flushed as it arrives (SSE, chunked progress) |
 | Backend down | JSON `502` |
 
@@ -336,9 +336,22 @@ stream, 401 on a bad key), `cached_tokens` 28/29 on a repeated prompt.
 
 ## Bringing swiss in
 
-swiss's frontend is copied into `web/src/modules/swiss/` and maintained there by
-the swiss team (CODEOWNERS). The aim is that the copy needs configuration, not
-page edits. What swiss prepares on its side first:
+swiss's frontend is copied into `web/src/modules/swiss/` without changes on the
+swiss side yet. The copy is two commits: a verbatim one naming the swiss commit,
+then the edits that mount it, so a resync is "copy again, replay the edits".
+
+| Concern | In the copy |
+|---|---|
+| Left out | `main.tsx`, `index.css`, `vite-env.d.ts`, `components/Layout.tsx`, `routes/Login.tsx`, `routes/PreviewDeploySettings.tsx` |
+| Imports | `@/…` → `@swiss/…` (alias to `src/modules/swiss`) |
+| Links | `Link`, `NavLink`, `Navigate`, `useNavigate` come from `lib/host.ts`, which prefixes absolute paths with `/swiss` |
+| API | `lib/api.ts` fetches through `hostFetch(apiPath(…))`: `/api/x` → `/api/deploy/x`, with the console session |
+| Login | console's. `components/Session.tsx`'s gate shows an error instead of swiss's login, and still sends an uninitialised site to setup |
+| Layout | console's. `index.tsx` keeps swiss's cluster warnings above each page; the site switcher is not carried over |
+| Theme | Rise tokens; `warning` and `success` added in `src/index.css` |
+| Access | every page needs UI permission `swiss.view`; calls need the verb on `backends/swiss` |
+
+What swiss could still take on so the copy needs configuration, not page edits:
 
 | # | Today in `swiss/web` | Change in swiss | Why |
 |---|---|---|---|
@@ -379,7 +392,7 @@ requests carry the same headers Global's apiserver sets.
 | P2 | User management: user CRUD API + UI, i18n (zh-CN/en-US). |
 | P3 | Full roles: authorizer + role/binding CRUD + role/permission UI. |
 | P4 | Federation: module shell, stack aligned with swiss, backend proxy with identity headers and per-backend RBAC. **(done)** |
-| P5 | swiss module: swiss prepares its frontend (table above) and exports `openapi.json`; copy into `modules/swiss`; CODEOWNERS. |
+| P5 | swiss module: copy into `modules/swiss`, mounted through `lib/host.ts` (see "Bringing swiss in"). **(done)** Then: swiss prepares its frontend (table above) and exports `openapi.json`; CODEOWNERS. |
 | P6 | Playground: chat module, `llm` backend resolved from the cluster (site profile or route ConfigMap) with the gateway key read from its Secret, streaming SSE end to end. **(done)** Then: Markdown, compare page, full parameters, stats, view code. **(done)** The router: `/v1`, API keys, usage metrics. **(done)** One-command install: built-in gateway and a CPU demo model. **(done)** |
 | P7 | Container management modules, moved over from Rise Global. |
 
