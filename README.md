@@ -28,6 +28,16 @@ module (P5) and the Playground and the router -- `/v1` with API keys (P6). See `
 
 ## Install
 
+### Package and install with Helm
+
+The `Helm chart` GitHub Actions workflow produces a package for every pushed commit on every branch:
+
+```
+push commit -> lint -> render install modes -> verify images -> package with SHA -> checksum -> upload artifact
+```
+
+For commit `<sha>`, the artifact is named `console-chart-<base-version>-git<commit-sha>` and contains the matching `.tgz` plus its SHA256 checksum. The same `hack/chart.sh` helper packages locally and can push to an SWR Enterprise Helm repository; exact build, push and Helm install commands live in the chart's [installation guide](helm/console/README.md). The chart is the installer; this path does not run `install.sh`.
+
 ### Into a cluster that runs the stack: `./install.sh`
 
 For a cluster that already runs the inference gateway (llm-openresty + autoconfig)
@@ -37,9 +47,10 @@ console wired to them, and checks the result end to end.
 ```sh
 export KUBECONFIG=...
 export CONSOLE_ADMIN_PASSWORD='...'                          # the admin's password after first login
-export REGISTRY_USERNAME=... REGISTRY_PASSWORD=...           # pull secret for the private image
 ./install.sh                                                 # install or upgrade; safe to re-run
 ```
+
+Registry credentials are only needed when overriding the chart with a private image repository.
 
 ```
 preflight -> find swissd -> find gateway -> pull secret / admin -> helm upgrade --install -> verify
@@ -56,15 +67,9 @@ preflight -> find swissd -> find gateway -> pull secret / admin -> helm upgrade 
 without installing, `--help` for overrides (`--swiss`, `--gateway-*`,
 `--admin-username`, `--image-tag`, `-f values.yaml`, …).
 
-### Standalone, with its own gateway and a demo model
+### Standalone defaults
 
-One command, no values:
-
-```sh
-helm install modelsphere ./helm/console -n modelsphere --create-namespace
-```
-
-What comes up, and what you can do right after:
+The packaged chart enables these components without additional application values:
 
 | Piece | What it gives you |
 |---|---|

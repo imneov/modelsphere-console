@@ -16,3 +16,6 @@
 
 # The image built from this working copy (hack/image.sh)
 /console-image.yaml
+
+# Locally packaged Helm charts
+/dist/
