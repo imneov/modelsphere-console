@@ -38,7 +38,9 @@ helm upgrade --install console "$PACKAGE" \
 kubectl -n modelsphere port-forward svc/console-console 8080:8080
 ```
 
-用 `admin` / `P@88w0rd` 登录，首次登录必须设置新密码。
+用 `admin` / `P@88w0rd` 登录。
+
+> **首次登录会要求修改密码**：按页面提示设置新密码后才能继续使用。
 
 ## 两种模式
 
@@ -161,7 +163,11 @@ kubectl -n modelsphere get pods,svc
 kubectl -n modelsphere port-forward svc/console-console 8080:8080
 ```
 
-浏览器打开 `http://127.0.0.1:8080`（Service 默认是 NodePort，也可用 NOTES 打印的节点地址），用 `admin` / `P@88w0rd` 登录并设置新密码。集群中已有同名 IAM User（例如 Rise Global 的）时，Chart 不会覆盖它，`helm status` 输出的 NOTES 会说明。
+浏览器打开 `http://127.0.0.1:8080`（Service 默认是 NodePort，也可用 NOTES 打印的节点地址），用 `admin` / `P@88w0rd` 登录。
+
+> **首次登录会要求修改密码**：按页面提示设置新密码后才能继续使用。
+
+集群中已有同名 IAM User（例如 Rise Global 的）时，Chart 不会覆盖它，`helm status` 输出的 NOTES 会说明。
 
 ## 卸载
 
