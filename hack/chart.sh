@@ -55,6 +55,7 @@ package="$output/console-${version}.tgz"
 helm package "$root/helm/console" --version "$version" --destination "$output"
 test -f "$package"
 test "$(helm show chart "$package" | sed -n 's/^version: *//p')" = "$version"
+cp "$root/helm/console/values-existing-stack.example.yaml" "$output/"
 (
   cd "$output"
   sha256sum "$(basename "$package")" >"$(basename "$package").sha256"

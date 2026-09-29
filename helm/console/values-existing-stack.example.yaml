@@ -1,0 +1,28 @@
+# Values for a cluster that already runs Swiss and its gateway. Copy to
+# console-values.yaml and replace each value; helm/console/README.md shows how
+# to find them.
+
+gateway:
+  enabled: false
+
+demo:
+  enabled: false
+
+backends:
+  - name: swiss
+    prefix: /api/deploy
+    # http://<swiss-service>.<namespace>.svc:<port>/api
+    url: "http://swissd.swiss.svc:8080/api"
+
+playground:
+  gateway:
+    # Swiss's cluster.profile.configMap. Do not also set configMap: the profile
+    # already names it, and console refuses both.
+    profile: "swiss/site-profile"
+    # The profile's route.nginxService and route.auth.secretRef, as
+    # namespace/name; a bare secretRef name lives in Swiss's namespace. The chart
+    # grants read-only access in each namespace named here; the profile's
+    # route.nginxConfigMap must live in one of them, or needs a Role of its own.
+    # Drop secretRef when the profile names no Secret.
+    service: "llm-route/openresty"
+    secretRef: "llm-route/openresty-api-keys"

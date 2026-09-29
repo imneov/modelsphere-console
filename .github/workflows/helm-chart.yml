@@ -28,6 +28,14 @@ jobs:
       - name: Lint
         run: helm lint --strict helm/console
 
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+
+      - name: Validate documented values
+        run: go test ./internal/config -run TestHelmExistingStackExampleProducesValidConfig
+
       - name: Render supported modes
         run: |
           set -eu
@@ -38,9 +46,7 @@ jobs:
           helm template console-external helm/console \
             --namespace modelsphere \
             --include-crds \
-            --set gateway.enabled=false \
-            --set demo.enabled=false \
-            --set playground.gateway.profile=swiss/site \
+            --values helm/console/values-existing-stack.example.yaml \
             >/tmp/console-external-rendered.yaml
 
       - name: Default images are publicly pullable
