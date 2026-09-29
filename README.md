@@ -26,83 +26,9 @@ apiserver -- not a data migration.
 Identity (P1–P3), the module shell with backend federation (P4), the swiss
 module (P5) and the Playground and the router -- `/v1` with API keys (P6). See `docs/console-design.md` for the plan.
 
-## Install
+## Quick start
 
-### Package and install with Helm
-
-The `Helm chart` GitHub Actions workflow produces a package for every pushed commit on every branch:
-
-```
-push commit -> lint -> render install modes -> verify images -> package with SHA -> checksum -> upload artifact
-```
-
-For commit `<sha>`, the artifact is named `console-chart-<base-version>-git<commit-sha>` and contains the matching `.tgz` plus its SHA256 checksum. The same `hack/chart.sh` helper packages locally and can push to an SWR Enterprise Helm repository; exact build, push and Helm install commands live in the chart's [installation guide](helm/console/README.md). The chart is the installer; this path does not run `install.sh`.
-
-### Into a cluster that runs the stack: `./install.sh`
-
-For a cluster that already runs the inference gateway (llm-openresty + autoconfig)
-and, for 模型部署, swissd with `auth.disabled`. The installer finds them, installs
-console wired to them, and checks the result end to end.
-
-```sh
-export KUBECONFIG=...
-export CONSOLE_ADMIN_PASSWORD='...'                          # the admin's password after first login
-./install.sh                                                 # install or upgrade; safe to re-run
-```
-
-Registry credentials are only needed when overriding the chart with a private image repository.
-
-```
-preflight -> find swissd -> find gateway -> pull secret / admin -> helm upgrade --install -> verify
-```
-
-| Step | What it does |
-|---|---|
-| swissd | Service labelled `app.kubernetes.io/name=swiss`; checks it has no login of its own and reads its site profile → `backends: swiss` |
-| gateway | swissd's site profile; what it does not name (entrypoint Service, key Secret) is taken from the openresty Deployment mounting its route ConfigMap. No swiss: the one ConfigMap holding `session_route_*.conf` |
-| admin | a `User` of that name owned by something else (Rise Global, another console) is left alone and reported |
-| verify | log in (first login: change the password to `CONSOLE_ADMIN_PASSWORD`) → `/api/deploy/session` + catalog → Playground model list → one chat |
-
-`./install.sh verify | status | uninstall`, `--dry-run` to see the discovered values
-without installing, `--help` for overrides (`--swiss`, `--gateway-*`,
-`--admin-username`, `--image-tag`, `-f values.yaml`, …).
-
-### Standalone defaults
-
-The packaged chart enables these components without additional application values:
-
-| Piece | What it gives you |
-|---|---|
-| console (2 replicas, NodePort) | log in as `admin` / `P@88w0rd` (you set a new password first); `NOTES` prints the URL |
-| built-in gateway (llm-openresty) | the Playground lists and chats with the models it serves |
-| demo model (llama.cpp, Qwen2.5-0.5B, CPU) | something to chat with on any cluster, GPU or not; ~500 MB downloaded once |
-| router | admins issue API keys under 路由 → API 密钥; programs call `http://<console>/v1` with any OpenAI SDK |
-
-Needs a default StorageClass (for the demo model's weights) and roughly 2 CPU /
-2 GiB free. Grow from there with values:
-
-| Value | For |
-|---|---|
-| `gateway.models` | your own OpenAI-compatible endpoints, served next to (or instead of) the demo |
-| `demo.enabled=false` | once real models are in |
-| `playground.gateway.profile=<ns>/<site-profile>` | use an existing gateway (swiss's site profile) instead of the built-in one |
-| `playground.gateway.{configMap,service,secretRef}` | the modelsphere stack's gateway (`llm-route/openresty-conf`, `llm-route/openresty`): every model autoconfig routes shows up in one list |
-| `service.type`, `metrics.serviceMonitor.enabled` | exposure and Prometheus Operator scraping |
-
-See [docs/console-design.md](docs/console-design.md#one-command-install).
-
-### Building your own image
-
-```sh
-# build + push console:<chart version>-dev.<commit>, then write console-image.yaml
-CONSOLE_REGISTRY=<registry>/<org> hack/image.sh
-helm upgrade --install modelsphere ./helm/console -n modelsphere --create-namespace -f console-image.yaml
-```
-
-The tag carries the commit, so an upgrade always changes the pod template and
-rolls. `hack/image.sh --no-push` builds only. The chart logs in on the default
-`admin` / `P@88w0rd` unless the cluster already has that user (Rise Global's,
-say), in which case it is left alone and `NOTES` says so.
+Install with the Helm chart built for every commit. The [chart guide](helm/console/README.md) is the only install reference: prerequisites, the standalone and existing-Swiss modes, commands, and uninstall. Start at its [快速上手](helm/console/README.md#快速上手) (quick start) section.
 
 ## Build
 
@@ -110,7 +36,7 @@ say), in which case it is left alone and `NOTES` says so.
 go build ./...
 go build -o console ./cmd/console
 ./console --config ./console.yaml
+CONSOLE_REGISTRY=<registry>/<org> hack/image.sh   # build and push a dev image; --no-push builds only
 ```
 
-`go build` works without a frontend build: `web/dist` ships a placeholder and
-console serves the API regardless.
+`go build` works without a frontend build: `web/dist` ships a placeholder and console serves the API regardless. Chart packaging and publishing are covered in the [chart guide](helm/console/README.md).
