@@ -326,9 +326,10 @@ stream, 401 on a bad key), `cached_tokens` 28/29 on a repeated prompt.
 
 ### Still missing for a public one-command install
 
+The chart currently pins `swr.cn-east-3.myhuaweicloud.com/risecloud/console:0.1.0-dev.4f512ab`; the `risecloud/console` SWR repository is public. Per-commit charts are always available as GitHub Actions artifacts. `hack/chart.sh --push` additionally supports an SWR Enterprise Helm Chart repository; the current `cn-east-3` account has no Enterprise instance, and basic-edition image repositories reject Helm OCI manifests.
+
 | Gap | Why it matters | Where it is fixed |
 |---|---|---|
-| console image is not public | `swr…/risecloud/console` needs credentials; the verification loaded the image onto the node | publish `console:<appVersion>` anonymously (e.g. Docker Hub `4pdosc/console`) and default the chart to it |
 | llama.cpp comes from ghcr.io | slow or blocked in some networks | a mirror value, or a copy under the same public org |
 | models deployed through swiss reach console only via the stack's gateway | the built-in gateway's route is rendered by the chart; autoconfig writes per-model routes into the stack's own `llm-route/openresty-conf` | point `playground.gateway` at the stack's gateway (see "Models across routes"); a built-in gateway fed by autoconfig is a later step |
 | swiss is not part of the install | its image (`harbor.4pd.io`) is private, its catalog URL is a placeholder, its engines need GPUs and hostPath weights, and routing needs autoconfig with the ModelRoute and LLMSLORequirement CRDs | see "Bringing swiss in" |
