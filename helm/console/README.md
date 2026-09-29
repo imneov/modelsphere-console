@@ -32,7 +32,6 @@ PACKAGE=$(find "$ARTIFACT_DIR" -name 'console-*.tgz')
 # 2. 安装
 helm upgrade --install console "$PACKAGE" \
   --namespace modelsphere --create-namespace \
-  --set service.type=ClusterIP \
   --wait --timeout 20m
 
 # 3. 访问 http://127.0.0.1:8080
@@ -150,7 +149,6 @@ kubectl -n <route-namespace> create rolebinding console-console-gateway \
 ```bash
 helm upgrade --install console "$PACKAGE" \
   --namespace modelsphere --create-namespace \
-  --set service.type=ClusterIP \
   --values console-values.yaml \
   --wait --timeout 20m
 ```
@@ -163,9 +161,7 @@ kubectl -n modelsphere get pods,svc
 kubectl -n modelsphere port-forward svc/console-console 8080:8080
 ```
 
-浏览器打开 `http://127.0.0.1:8080`，用 `admin` / `P@88w0rd` 登录并设置新密码。集群中已有同名 IAM User（例如 Rise Global 的）时，Chart 不会覆盖它，`helm status` 输出的 NOTES 会说明。
-
-默认密码是公开的，所以本文命令把 Service 设为 ClusterIP（Chart 默认是 NodePort）。改完密码后再按需改用 NodePort 或 Ingress。
+浏览器打开 `http://127.0.0.1:8080`（Service 默认是 NodePort，也可用 NOTES 打印的节点地址），用 `admin` / `P@88w0rd` 登录并设置新密码。集群中已有同名 IAM User（例如 Rise Global 的）时，Chart 不会覆盖它，`helm status` 输出的 NOTES 会说明。
 
 ## 卸载
 
@@ -197,8 +193,8 @@ kubectl delete crd users.iam.theriseunion.io iamroles.iam.theriseunion.io \
 |---|---|
 | `gateway.models` | 独立模式下，在演示模型之外接入自己的 OpenAI 兼容服务 |
 | `demo.enabled=false` | 已有真实模型后关闭演示模型 |
-| `service.type` | 暴露方式，Chart 默认 `NodePort` |
-| `admin.encryptedPassword` | 预先设定管理员密码的 bcrypt 哈希，避免使用公开的默认密码 |
+| `service.type` | 暴露方式，默认 `NodePort` |
+| `admin.encryptedPassword` | 预先设定管理员密码的 bcrypt 哈希 |
 | `metrics.serviceMonitor.enabled` | 使用 Prometheus Operator 采集指标 |
 | `auth.jwtSecret` | 与 Rise Global 共享签名密钥；为空时首次安装自动生成 |
 
