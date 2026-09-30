@@ -64,31 +64,50 @@ admin:
 # <value>` instead of the caller's token, so the key stays in the cluster and out
 # of the browser. The value comes from a Secret: see backendSecrets.
 #
-# With swiss.enabled the chart adds the "swiss" backend itself. For a swissd
-# installed separately, name it here:
-#   - name: swiss
-#     prefix: /api/deploy
-#     url: http://<swiss-service>.<namespace>.svc:<port>/api
+# swissd (model deployment) is not listed here: see swiss and externalSwiss.
 backends: []
 
-# swissd, installed from the swiss chart (a dependency in Chart.yaml). Everything
-# under this key is that chart's values (its values.yaml); what console
-# sets differently is here. On, console wires itself to it:
+# swissd, the model deployment backend. Pick one:
 #
-#   the "swiss" backend   /api/deploy -> this release's swissd Service
-#   swissd's login        stays on; console sends swissd's front-proxy key
-#                         (auth.proxyKey), so only console gets in without the
-#                         password, and swissd takes console's user as the caller
-#   playground.gateway    swissd's site profile, unless demo.enabled or
-#                         playground.gateway names something else
+#   swiss.enabled: true   install it with this release, from the swiss chart
+#   externalSwiss.url     use one installed elsewhere
 #
-# The swiss chart refuses to render without rbac.namespaces, the namespaces
-# holding model releases:
+# Either way console wires itself to it the same way:
+#
+#   /api/deploy         proxied to swissd
+#   swissd's login      stays on; console sends swissd's front-proxy key, so only
+#                       console gets in without the password, and swissd takes
+#                       console's user as the caller
+#   playground.gateway  swissd's site profile, unless demo.enabled or
+#                       playground.gateway names something else
+#
+# swiss is that chart's values (a dependency in Chart.yaml); what console sets
+# differently is here. The chart refuses to render without rbac.namespaces, the
+# namespaces holding model releases:
 #   --set swiss.enabled=true --set 'swiss.rbac.namespaces={models}'
 swiss:
   enabled: false
   auth:
     proxyKey: true
+
+# A swissd installed elsewhere, with swiss.enabled off.
+#
+#   url       its API: http://<service>.<namespace>.svc:<port>/api
+#   proxyKey  a Secret in THIS release's namespace holding the swissd's front-proxy
+#             key (swiss chart auth.proxyKey, 0.6.0+). A Secret cannot be read
+#             across namespaces, so copy it from swissd's auth Secret:
+#               kubectl -n <swiss-ns> get secret <swiss-release>-auth \
+#                 -o jsonpath='{.data.proxyKey}' | base64 -d > proxyKey
+#               kubectl -n <this-ns> create secret generic swiss-proxy-key --from-file=proxyKey
+#             Leave secretName empty only for a swissd running with auth.disabled.
+#   profile   its site profile ConfigMap, "namespace/name", for the Playground --
+#             the swiss chart's is <swiss-release>-profile in its namespace.
+externalSwiss:
+  url: ""
+  proxyKey:
+    secretName: ""
+    key: proxyKey
+  profile: ""
 
 # A small CPU model for a cluster with no inference gateway, so the Playground
 # and /v1 have something to talk to: llama.cpp serving Qwen2.5-0.5B-Instruct

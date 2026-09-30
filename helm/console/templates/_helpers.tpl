@@ -32,14 +32,46 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- toJson (dict "Values" .Values.swiss "Release" .Release "Chart" (dict "Name" "swiss")) -}}
 {{- end -}}
 
-{{- /* The site profile the Playground reads: playground.gateway.profile, or the
-       swiss subchart's when it is on and nothing else names the models. */ -}}
+{{- /* swissd, installed with this release (swiss.enabled) or elsewhere
+       (externalSwiss.url), as JSON: url, and secretName/secretKey of the
+       front-proxy key console sends. Empty when there is no swissd. */ -}}
+{{- define "console.swiss.backend" -}}
+{{- $ext := .Values.externalSwiss -}}
+{{- if and .Values.swiss.enabled $ext.url -}}
+{{- fail "swiss.enabled installs a swissd and externalSwiss.url names another; set one" -}}
+{{- else if .Values.swiss.enabled -}}
+{{- if not (or .Values.swiss.auth.proxyKey .Values.swiss.auth.disabled) -}}
+{{- fail "swiss.enabled needs swiss.auth.proxyKey: it is how console gets into swissd without the password" -}}
+{{- end -}}
+{{- $swiss := include "console.swiss" . | fromJson -}}
+{{- $b := dict "url" (printf "http://%s.%s.svc:%d/api" (include "swiss.fullname" $swiss) .Release.Namespace (int .Values.swiss.service.port)) -}}
+{{- if not .Values.swiss.auth.disabled -}}
+{{- $_ := set $b "secretName" (include "swiss.authSecretName" $swiss) -}}
+{{- $_ := set $b "secretKey" "proxyKey" -}}
+{{- end -}}
+{{- toJson $b -}}
+{{- else if $ext.url -}}
+{{- $b := dict "url" $ext.url -}}
+{{- if $ext.proxyKey.secretName -}}
+{{- $_ := set $b "secretName" $ext.proxyKey.secretName -}}
+{{- $_ := set $b "secretKey" ($ext.proxyKey.key | default "proxyKey") -}}
+{{- end -}}
+{{- toJson $b -}}
+{{- end -}}
+{{- end -}}
+
+{{- /* The site profile the Playground reads: playground.gateway.profile, or
+       swissd's when nothing else names the models. */ -}}
 {{- define "console.gateway.profile" -}}
 {{- $gw := .Values.playground.gateway -}}
 {{- if $gw.profile -}}
 {{- $gw.profile -}}
-{{- else if and .Values.swiss.enabled (not $gw.configMap) (not .Values.demo.enabled) -}}
+{{- else if and (not $gw.configMap) (not .Values.demo.enabled) -}}
+{{- if .Values.swiss.enabled -}}
 {{- include "swiss.effectiveProfileRef" (include "console.swiss" . | fromJson) -}}
+{{- else -}}
+{{- .Values.externalSwiss.profile -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
