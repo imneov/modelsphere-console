@@ -10,6 +10,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// helm refuses to render the chart before its dependencies are fetched, even
+// with swiss.enabled off. CI fetches them; locally that is one command.
+func requireChartDependencies(t *testing.T, root string) {
+	t.Helper()
+	if m, _ := filepath.Glob(filepath.Join(root, "helm", "console", "charts", "swiss-*.tgz")); len(m) == 0 {
+		t.Skip("chart dependencies not fetched: helm dependency build helm/console")
+	}
+}
+
 // renderChartConfig templates the chart's ConfigMap and loads the console.yaml
 // out of it, so the chart and the loader are checked against each other rather
 // than against a copy of what the chart is believed to emit.
@@ -20,6 +29,7 @@ func renderChartConfig(t *testing.T, args ...string) *Config {
 	}
 
 	root := filepath.Join("..", "..")
+	requireChartDependencies(t, root)
 	argv := append([]string{
 		"template", "console", filepath.Join(root, "helm", "console"),
 		"--namespace", "modelsphere",
@@ -112,9 +122,40 @@ func TestHelmDemoWithAGatewayIsRefused(t *testing.T) {
 	if _, err := exec.LookPath("helm"); err != nil {
 		t.Skip("helm is not installed")
 	}
+	requireChartDependencies(t, filepath.Join("..", ".."))
 	out, err := exec.Command("helm", "template", "console", filepath.Join("..", "..", "helm", "console"),
 		"--set", "demo.enabled=true", "--set", "playground.gateway.profile=swiss/site-profile").CombinedOutput()
 	if err == nil || !bytes.Contains(out, []byte("demo.enabled and playground.gateway")) {
 		t.Fatalf("want a refusal naming both values, got err=%v\n%s", err, out)
+	}
+}
+
+// The swiss subchart: console proxies to its Service with swissd's front-proxy
+// key and reads its site profile, and swissd keeps its own login on.
+func TestHelmSwissSubchartIsWiredIn(t *testing.T) {
+	on := []string{"--set", "swiss.enabled=true", "--set", "swiss.rbac.namespaces={models}"}
+	c := renderChartConfig(t, on...)
+	c.Server.Auth.JWTSecret = "test"
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]Backend{}
+	for _, b := range c.Backends {
+		byName[b.Name] = b
+	}
+	if b := byName["swiss"]; b.URL != "http://console-swiss.modelsphere.svc:80/api" || b.APIKeyEnv != "SWISS_PROXY_KEY" {
+		t.Fatalf("swiss backend = %+v, want the subchart's Service with its proxy key", b)
+	}
+	if g := byName["llm"].Gateway; g == nil || g.Profile != "modelsphere/console-swiss-profile" {
+		t.Fatalf("llm backend = %+v, want swissd's site profile", byName["llm"])
+	}
+
+	out, err := exec.Command("helm", append([]string{"template", "console", filepath.Join("..", "..", "helm", "console"),
+		"--namespace", "modelsphere", "--show-only", "charts/swiss/templates/configmap.yaml"}, on...)...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("helm template: %v\n%s", err, out)
+	}
+	if bytes.Contains(out, []byte("disabled: true")) || !bytes.Contains(out, []byte("dir: /etc/swiss-auth")) {
+		t.Fatalf("swissd's login must stay on behind console:\n%s", out)
 	}
 }

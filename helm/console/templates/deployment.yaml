@@ -43,6 +43,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "console.fullname" . }}
                   key: jwtSecret
+            {{- if and .Values.swiss.enabled (not .Values.swiss.auth.disabled) }}
+            # swissd's front-proxy key, from the swiss subchart's auth Secret.
+            - name: SWISS_PROXY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "swiss.authSecretName" (include "console.swiss" . | fromJson) | quote }}
+                  key: proxyKey
+            {{- end }}
             {{- /* Backend credentials, keyed by the env var a backend's apiKeyEnv
                    names. An existing Secret, not one this chart writes. */}}
             {{- range $env, $ref := .Values.backendSecrets }}

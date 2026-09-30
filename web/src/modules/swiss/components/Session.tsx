@@ -43,10 +43,10 @@ export function Gate({ children }: { children: React.ReactNode }) {
   if (session.isPending) return <Loading what="the session" />;
   if (session.error) return <ErrorState what="the session" error={session.error} />;
 
-  // Under console there is no swiss login, so a swissd behind it must run with server.auth.disabled.
+  // Under console there is no swiss login: console gets in with swissd's front-proxy key.
   if (!session.data.authenticated) {
     if (loginPath) return <Navigate to={loginPath} replace state={{ from: pathname }} />;
-    return <ErrorState what="swissd" error={new Error("swissd asks for its own login; run it with server.auth.disabled behind console")} />;
+    return <ErrorState what="swissd" error={new Error("swissd did not accept console; give console swissd's proxyKey (swiss chart auth.proxyKey)")} />;
   }
   if (!session.data.initialized && !pathname.endsWith("/setup")) {
     return <Navigate to="/setup" replace />;

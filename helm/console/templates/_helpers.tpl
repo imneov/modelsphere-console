@@ -26,9 +26,26 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{ include "console.fullname" . }}
 {{- end -}}
 
-{{- /* playground.gateway names an existing gateway to resolve from the cluster. */ -}}
+{{- /* The swiss subchart's own helpers, called with the context they expect. Only
+       defined while swiss.enabled: a disabled subchart is not loaded at all. */ -}}
+{{- define "console.swiss" -}}
+{{- toJson (dict "Values" .Values.swiss "Release" .Release "Chart" (dict "Name" "swiss")) -}}
+{{- end -}}
+
+{{- /* The site profile the Playground reads: playground.gateway.profile, or the
+       swiss subchart's when it is on and nothing else names the models. */ -}}
+{{- define "console.gateway.profile" -}}
+{{- $gw := .Values.playground.gateway -}}
+{{- if $gw.profile -}}
+{{- $gw.profile -}}
+{{- else if and .Values.swiss.enabled (not $gw.configMap) (not .Values.demo.enabled) -}}
+{{- include "swiss.effectiveProfileRef" (include "console.swiss" . | fromJson) -}}
+{{- end -}}
+{{- end -}}
+
+{{- /* An existing gateway to resolve from the cluster. */ -}}
 {{- define "console.gateway" -}}
-{{- if or .Values.playground.gateway.profile .Values.playground.gateway.configMap -}}true{{- end -}}
+{{- if or (include "console.gateway.profile" .) .Values.playground.gateway.configMap -}}true{{- end -}}
 {{- end -}}
 
 {{- /* The router needs somewhere to send /v1: a gateway, or the demo model. */ -}}

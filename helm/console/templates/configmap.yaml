@@ -25,6 +25,22 @@ data:
         apiKeyEnv: {{ . | quote }}
         {{- end }}
       {{- end }}
+      {{- if .Values.swiss.enabled }}
+      {{- range .Values.backends }}
+      {{- if eq .name "swiss" }}{{ fail "backends names \"swiss\" and swiss.enabled installs one; drop the backends entry or turn swiss.enabled off" }}{{ end }}
+      {{- end }}
+      {{- if not (or .Values.swiss.auth.proxyKey .Values.swiss.auth.disabled) }}
+      {{- fail "swiss.enabled needs swiss.auth.proxyKey: it is how console gets into swissd without the password" }}
+      {{- end }}
+      {{- $swiss := include "console.swiss" . | fromJson }}
+      # The swiss subchart's swissd: see the swiss section of values.
+      - name: swiss
+        prefix: /api/deploy
+        url: {{ printf "http://%s.%s.svc:%d/api" (include "swiss.fullname" $swiss) .Release.Namespace (int .Values.swiss.service.port) | quote }}
+        {{- if not .Values.swiss.auth.disabled }}
+        apiKeyEnv: SWISS_PROXY_KEY
+        {{- end }}
+      {{- end }}
       {{- $gw := .Values.playground.gateway }}
       {{- if and (include "console.gateway" .) .Values.demo.enabled }}
       {{- fail "demo.enabled and playground.gateway both name the Playground's models; set one" }}
@@ -37,7 +53,7 @@ data:
         apiKeyEnv: {{ . | quote }}
         {{- end }}
         gateway:
-          {{- with $gw.profile }}
+          {{- with include "console.gateway.profile" . }}
           profile: {{ . | quote }}
           {{- end }}
           {{- with $gw.configMap }}

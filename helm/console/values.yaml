@@ -63,10 +63,32 @@ admin:
 # variable holding it in apiKeyEnv. console then sends `Authorization: Bearer
 # <value>` instead of the caller's token, so the key stays in the cluster and out
 # of the browser. The value comes from a Secret: see backendSecrets.
-backends:
-  - name: swiss
-    prefix: /api/deploy
-    url: http://swissd.swiss.svc:8080/api
+#
+# With swiss.enabled the chart adds the "swiss" backend itself. For a swissd
+# installed separately, name it here:
+#   - name: swiss
+#     prefix: /api/deploy
+#     url: http://<swiss-service>.<namespace>.svc:<port>/api
+backends: []
+
+# swissd, installed from the swiss chart (a dependency in Chart.yaml). Everything
+# under this key is that chart's values (its values.yaml); what console
+# sets differently is here. On, console wires itself to it:
+#
+#   the "swiss" backend   /api/deploy -> this release's swissd Service
+#   swissd's login        stays on; console sends swissd's front-proxy key
+#                         (auth.proxyKey), so only console gets in without the
+#                         password, and swissd takes console's user as the caller
+#   playground.gateway    swissd's site profile, unless demo.enabled or
+#                         playground.gateway names something else
+#
+# The swiss chart refuses to render without rbac.namespaces, the namespaces
+# holding model releases:
+#   --set swiss.enabled=true --set 'swiss.rbac.namespaces={models}'
+swiss:
+  enabled: false
+  auth:
+    proxyKey: true
 
 # A small CPU model for a cluster with no inference gateway, so the Playground
 # and /v1 have something to talk to: llama.cpp serving Qwen2.5-0.5B-Instruct
