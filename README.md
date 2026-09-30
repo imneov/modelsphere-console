@@ -1,42 +1,141 @@
-# console
+# ModelSphere Console
 
-The ModelSphere community portal. A full-stack BFF: it owns identity (users,
-roles, login) and federates everything else to backends like
-[swiss](https://github.com/modelsphere/swiss).
+<p align="center">
+  <a href="https://github.com/modelsphere/console/actions/workflows/helm-chart.yml"><img alt="Helm chart" src="https://github.com/modelsphere/console/actions/workflows/helm-chart.yml/badge.svg"></a>
+  <a href="go.mod"><img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white"></a>
+  <a href="web/package.json"><img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black"></a>
+  <a href="helm/console/README.md"><img alt="Docs" src="https://img.shields.io/badge/docs-install%20guide-blue"></a>
+</p>
 
-```
-browser ─▶ web (shell + modules) ─▶ console (Go BFF)
-                                         identity: iam CRDs + OAuth2 (HS256)
-                                         + global-scope RBAC + reverse proxy
-                                                        │ HTTP (Bearer JWT)
-                                            ┌───────────┴───────────┐
-                                            ▼                        ▼
-                                        swissd                  other backends
-                                      deploy / catalog          (router, operator…)
-```
+## Overview
 
-Identity is kept **wire-compatible with Rise Global**: the same
-`iam.theriseunion.io/v1alpha1` User/Role/RoleBinding CRDs and the same HS256
-token claims. Upgrading a community install to Global is then a config change --
-share the JWT secret and point console's identity endpoints at Global's
-apiserver -- not a data migration.
+ModelSphere Console is the web portal and API entry point of [ModelSphere](https://github.com/modelsphere/modelsphere). It adds what the open-source inference stack does not have on its own: users, roles and login; a single UI for deploying models, chatting with them and managing API keys; and an OpenAI-compatible endpoint that programs call with those keys.
 
-## Status
+Console is a Go backend-for-frontend with a React UI compiled into the same binary. It owns identity and federates everything else — model deployment to [Swiss](https://github.com/modelsphere/swiss), inference to the [llm-openresty](https://github.com/modelsphere/llm-openresty) gateway — behind one login.
 
-Identity (P1–P3), the module shell with backend federation (P4), the swiss
-module (P5) and the Playground and the router -- `/v1` with API keys (P6). See `docs/console-design.md` for the plan.
+## Highlights
+
+- **Identity and access control.** Users, roles and login history stored as Kubernetes CRDs; OAuth2 password login with HS256 tokens; Kubernetes-RBAC-style roles that gate both pages and backend APIs. The seeded administrator must set a new password on first login.
+- **Model deployment.** With [Swiss](https://github.com/modelsphere/swiss) on the cluster, browse the model catalog and deploy, upgrade and uninstall models, with a diff before every change and the GPU nodes they run on.
+- **Playground.** Streaming chat with any model behind the gateway, a 2–4 column compare view, full sampling parameters, per-answer TTFT, tokens/s and cache hit rate, reasoning output, and "view code" for cURL, Python and Node.js.
+- **OpenAI-compatible router.** Programs call `/v1` with API keys that administrators issue — with expiry and optional per-model scope. Keys are stored hashed; usage is exported as Prometheus metrics.
+- **Gateway discovery.** The inference entrypoint, routes and gateway key are read from the cluster (Swiss's site profile or the route ConfigMap) and followed as they change — no URLs or keys copied into configuration.
+- **Runs anywhere with one `helm install`.** With no Swiss present, the chart brings its own gateway and a small CPU model, so a fresh cluster has something to chat with.
+- **Upgrade path to Rise Global.** Identity is wire-compatible with Rise Global (same CRDs, same token claims), so upgrading is a configuration change, not a data migration.
 
 ## Quick start
 
-Install with the Helm chart built for every commit. The [chart guide](helm/console/README.md) is the only install reference: prerequisites, the standalone and existing-Swiss modes, commands, and uninstall. Start at its [快速上手](helm/console/README.md#快速上手) (quick start) section.
+**Prerequisites**
 
-## Build
+1. a Kubernetes cluster with linux/amd64 nodes and a default StorageClass, and `kubectl` pointing at it with cluster-admin rights;
+2. `helm` 3.8 or later (Helm 4 works too).
 
-```sh
-go build ./...
-go build -o console ./cmd/console
-./console --config ./console.yaml
-CONSOLE_REGISTRY=<registry>/<org> hack/image.sh   # build and push a dev image; --no-push builds only
+**Step 1: install**
+
+```bash
+git clone https://github.com/modelsphere/console.git && cd console
+helm upgrade --install console ./helm/console \
+  --namespace modelsphere --create-namespace \
+  --wait --timeout 20m
 ```
 
-`go build` works without a frontend build: `web/dist` ships a placeholder and console serves the API regardless. Chart packaging and publishing are covered in the [chart guide](helm/console/README.md).
+This is the standalone mode: Console, a built-in gateway, and a CPU demo model (`qwen2.5-0.5b-instruct`, about 500 MB downloaded on first start). To connect to a cluster that already runs Swiss, see the [install guide](helm/console/README.md).
+
+**Step 2: log in**
+
+```bash
+kubectl -n modelsphere port-forward svc/console-console 8080:8080
+```
+
+Open <http://127.0.0.1:8080> and sign in as `admin` / `P@88w0rd`.
+
+> **The first login asks you to change the password.** Set a new one to continue.
+
+**Step 3: call a model**
+
+In the UI, go to **路由 → API 密钥** and create a key, then:
+
+```bash
+export MODELSPHERE_API_KEY=<the key you created>
+curl http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer $MODELSPHERE_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"qwen2.5-0.5b-instruct",
+       "messages":[{"role":"user","content":"hello"}],"max_tokens":32}'
+```
+
+Any OpenAI SDK works the same way, with `base_url` set to `http://<console address>/v1`.
+
+## Architecture
+
+```
+browser ──▶ web UI (shell + modules)          program ──▶ /v1 (API key)
+                  │ /oauth, /api/*                              │
+                  ▼                                             ▼
+            ┌──────────────────────── console (Go) ────────────────────────┐
+            │ identity: iam CRDs, OAuth2 (HS256), RBAC                      │
+            │ backend proxy: per-backend RBAC, X-Remote-User/Group headers  │
+            │ router: API keys, model scope, metrics                        │
+            │ gateway resolver: site profile / route ConfigMap → entrypoint │
+            └──────────────┬───────────────────────────────┬────────────────┘
+                           ▼                               ▼
+                   swissd (deploy, catalog)        llm-openresty gateway → models
+```
+
+The design, with the reasoning behind each decision, is in [`docs/console-design.md`](docs/console-design.md).
+
+## Repository layout
+
+| Path | What it contains |
+|---|---|
+| `cmd/console` | the server binary |
+| `internal/iam` | identity: CRD types, password login, authorization |
+| `internal/server` | HTTP server: OAuth2, auth middleware, backend proxy, embedded UI |
+| `internal/router` | `/v1`: API keys, model scope, metrics |
+| `internal/gateway` | resolves the inference entrypoint from the cluster |
+| `internal/config` | configuration schema and validation |
+| `web/src/shell` | UI shell: login, layout, navigation, route guards |
+| `web/src/modules` | UI modules: `swiss` (模型部署), `playground`, `router` (API 密钥), `iam` (users and roles) |
+| `helm/console` | the Helm chart and its [install guide](helm/console/README.md) |
+| `examples/console.yaml` | an annotated configuration file |
+
+## Development
+
+Requirements: Go 1.26, Node.js 24.
+
+```bash
+# backend
+go build -o console ./cmd/console
+go test ./...
+
+# frontend
+cd web
+npm ci
+npm run typecheck && npm test
+npm run build            # writes web/dist, which the Go binary embeds
+```
+
+To run against a cluster from a workstation, copy `examples/console.yaml` to `console.yaml`, set `cluster.kubeconfig`, and start `./console --config console.yaml`. `npm run dev` in `web/` serves the UI with hot reload and proxies `/api` and `/oauth` to it on port 8080.
+
+`web/dist` is committed, so `go build` alone produces a working binary. Rebuild it after changing the UI.
+
+Images and charts:
+
+| Command | Output |
+|---|---|
+| `CONSOLE_REGISTRY=<registry>/<org> hack/image.sh` | builds and pushes a dev image (`--no-push` builds only) |
+| `hack/chart.sh --output ./dist` | packages the chart as `console-<version>-git<sha>.tgz`, the same package CI uploads for every commit |
+
+Code conventions are in [`AGENTS.md`](AGENTS.md). Commits follow [Conventional Commits](https://www.conventionalcommits.org/).
+
+## Documentation
+
+| Document | What is in it |
+|---|---|
+| [`helm/console/README.md`](helm/console/README.md) | the complete install: prerequisites, standalone and existing-Swiss modes, downloading CI-built packages, uninstall |
+| [`docs/console-design.md`](docs/console-design.md) | design and decisions: identity and Rise Global compatibility, modules, backends, Playground, router |
+| [`helm/console/values.yaml`](helm/console/values.yaml) | every chart setting, with comments |
+
+## License
+
+No license has been chosen yet. The repository cannot be released as open source until the UI's dependency on the closed-source `@riseaicloud/ui` package is replaced — see [Known debt](docs/console-design.md#known-debt).
