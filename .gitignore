@@ -4,7 +4,12 @@
 *.db
 *.db-*
 
-# Frontend build artefacts (web/dist ships a placeholder; real builds overwrite it)
+# Frontend build artefacts. web/dist is committed empty: the build output is
+# content-hashed, so committing it means a rewritten bundle in every UI diff,
+# and the Dockerfile rebuilds it regardless. .gitkeep is what //go:embed needs
+# to find, so `go build` works without node.
+/web/dist/*
+!/web/dist/.gitkeep
 /web/node_modules/
 /web/vendor/*/*/node_modules/
 /web/*.tsbuildinfo
@@ -19,3 +24,28 @@
 
 # Locally packaged Helm charts
 /dist/
+
+/web/dist-swiss/
+# Created by https://www.toptal.com/developers/gitignore/api/tags
+# Edit at https://www.toptal.com/developers/gitignore?templates=tags
+
+### Tags ###
+# Ignore tags created by etags, ctags, gtags (GNU global) and cscope
+TAGS
+.TAGS
+!TAGS/
+tags
+.tags
+!tags/
+gtags.files
+GTAGS
+GRTAGS
+GPATH
+GSYMS
+cscope.files
+cscope.out
+cscope.in.out
+cscope.po.out
+
+
+# End of https://www.toptal.com/developers/gitignore/api/tags

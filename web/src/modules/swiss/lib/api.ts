@@ -12,13 +12,31 @@ export interface ClusterInfo {
   schedulerName?: string;
   namespace?: string;
   chartRepo?: string;
+  // The first catalog's location and ref, for pages that predate the list.
   catalog: string;
+  // Which document named the catalogs: "profile" when the site profile lists
+  // any, "config" when it falls back to swissd's config file.
+  catalogFrom?: string;
   catalogRef?: string;
+  // Every catalog a page may select, in the profile's order.
+  catalogs?: CatalogInfo[];
   version: string;
   allowDeploy: boolean;
   // The other swissd instances this site knows about, from its profile.
   sites?: Site[];
   warnings?: string[];
+}
+
+// One selectable catalog. source is its location as a plan records it, which
+// is how a release's catalog is found again; ref is empty when it could not be
+// read.
+export interface CatalogInfo {
+  name: string;
+  url: string;
+  source: string;
+  ref?: string;
+  // The catalog a page opens in when none is named.
+  default?: boolean;
 }
 
 // One other swissd, by name and address. The url is where a browser goes; no
@@ -38,6 +56,9 @@ export interface Deployment {
   model?: string;
   variant?: string;
   catalogRef?: string;
+  // The configured catalog this was deployed from; absent when the site no
+  // longer lists it.
+  catalog?: string;
   version?: string;
   phase?: string;
   drift?: string;
@@ -97,15 +118,34 @@ export interface IndexModel {
   description?: string;
   family?: string;
   tags?: string[];
+  // true, or the reason as a string. Existing deploys still resolve it.
+  deprecated?: boolean | string;
+  tuning?: Tuning[];
   source: { hf: string; revision?: string; sizeGiB?: number };
   latest: string;
   versions: IndexVersion[];
 }
 
+// A measured result from metadata.yaml: a tuned variant against a baseline, in
+// one version. Display only, and not checked by swissd -- ids may dangle.
+export interface Tuning {
+  version: string;
+  baseline: string;
+  optimized: string;
+  // The headline: percent gained on the tuning benchmark, 44 meaning +44%.
+  uplift?: number;
+  // Every workload the benchmark ran, when it ran more than one.
+  workloads?: { name: string; uplift: number }[];
+  // A file beside metadata.yaml in the catalog, such as an AutoTune report.
+  report?: string;
+}
+
 export interface CatalogResponse {
+  name: string;
   ref: string;
   source: string;
-  index: { apiVersion: string; count: number; models: IndexModel[] };
+  // site is where the catalog's own site is published, perf reports included.
+  index: { apiVersion: string; site?: string; count: number; models: IndexModel[] };
 }
 
 export interface Variant extends IndexVariant {
@@ -179,6 +219,12 @@ export interface RouteAuth {
 export interface SiteProfile {
   name: string;
   namespace?: string;
+  // The catalogs this site deploys from. Set here they win over swissd's config
+  // file; empty falls back to it.
+  catalogs?: { name: string; url: string; default?: boolean }[];
+  // The single-catalog spelling from before the list, read as one catalog
+  // named "default". The form rewrites it as catalogs.
+  catalog?: string;
   chartRepo?: string;
   chartPath?: string;
   registry?: { mirror?: string };
@@ -210,7 +256,8 @@ export interface SiteProfile {
 
 export interface ProfileResponse {
   source: string;
-  cluster: string;
+  // The profile's name, once one exists. Absent until setup.
+  cluster?: string;
   // Absent when the stored document does not parse: there is then nothing
   // swissd can compose against, which is the same state as having no profile.
   profile?: SiteProfile;
@@ -293,6 +340,13 @@ async function fail(res: Response): Promise<never> {
   throw new ApiError(msg, res.status);
 }
 
+// A query string from the set values only.
+function query(params: Record<string, string | undefined>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
+  return q.size ? `?${q}` : "";
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await hostFetch(apiPath(path), { headers: { Accept: "application/json" } });
   if (!res.ok) return fail(res);
@@ -323,8 +377,11 @@ export const api = {
   sites: () => get<{ self: string; sites?: Site[] }>("/api/sites"),
   deployments: (page = 1, perPage = 25) =>
     get<DeploymentsResponse>(`/api/deployments?page=${page}&perPage=${perPage}`),
-  catalog: () => get<CatalogResponse>("/api/catalog"),
-  model: (name: string, version?: string) =>
+  // A catalog is named whenever several are configured; with one, the name
+  // may be left out.
+  catalog: (catalog?: string) =>
+    get<CatalogResponse>("/api/catalog" + (catalog ? `?catalog=${encodeURIComponent(catalog)}` : "")),
+  model: (name: string, version?: string, catalog?: string) =>
     // localPath is what the site's template resolves to for this model, so a
     // form can show the real default rather than describe the template.
     // imageRepository is each variant's image after the site's mirror rewrite,
@@ -335,9 +392,7 @@ export const api = {
       localPath?: string;
       pathTemplate?: string;
       imageRepository?: Record<string, string>;
-    }>(
-      `/api/catalog/${encodeURIComponent(name)}` + (version ? `?version=${encodeURIComponent(version)}` : ""),
-    ),
+    }>(`/api/catalog/${encodeURIComponent(name)}` + query({ version, catalog })),
   nodes: () => get<NodesResponse>("/api/nodes"),
   profile: () => get<ProfileResponse>("/api/profile"),
   runs: (f: RunFilter = {}) => {
@@ -387,6 +442,9 @@ export interface Plan {
   release: { name: string; namespace: string };
   source: {
     catalog?: string;
+    // The site's name for that catalog. Absent from plans written before sites
+    // listed several catalogs, and from the CLI's.
+    catalogName?: string;
     ref?: string;
     model: string;
     version?: string;
@@ -424,6 +482,8 @@ export interface ApplyResult {
 }
 
 export interface PlanRequest {
+  // The configured catalog to compose from; an upgrade stays on its own.
+  catalog?: string;
   model?: string;
   fromRelease?: string;
   version?: string;
@@ -619,8 +679,11 @@ export const deployApi = {
   // expectRevision is the optimistic lock a diff computed. It is left out when
   // no diff was run, and the server reads a missing revision as asserting
   // nothing rather than as revision zero.
-  apply: (planHash: string, expectRevision?: number, note?: string) =>
-    post<ApplyResult>("/api/apply", { planHash, expectRevision, note }),
+  // forceConflicts is per apply and never stored in the plan: it says "take the
+  // fields a hand kubectl edit left another manager owning", which is a
+  // decision about this one upgrade rather than about the release.
+  apply: (planHash: string, expectRevision?: number, note?: string, forceConflicts?: boolean) =>
+    post<ApplyResult>("/api/apply", { planHash, expectRevision, note, forceConflicts }),
   install: (planHash: string, note?: string) =>
     post<ApplyResult>("/api/install", { planHash, note }),
   probe: (ns: string, release: string, auth: EntrypointAuth = {}) =>
@@ -682,13 +745,15 @@ export interface SLOBound {
   value: number;
 }
 
-// Public shape of slo-api GET/PUT /config/{route}. The installed CR is often
-// only a service id and a minimum replica count, which arrives here as
-// highPriority false and minimumDeployment, with no ttft or otps.
+// What swissd returns for /slo: slo-api's own shape, plus `found`, plus the
+// CRD integer swissd derives from highPriority. The installed CR is often only
+// a service id and a minimum replica count, which arrives here as highPriority
+// false and minimumDeployment, with no ttft or otps.
 export interface SLOConfig {
   found: boolean;
   route?: string;
-  // CRD field, 0..10. highPriority on the wire is only true when this is 10.
+  // CRD field, 0..10, but slo-api only ever stores 10 or 0, so this is
+  // derived from highPriority and never lands in between.
   priority?: number;
   highPriority?: boolean;
   minimumDeployment?: SLOBound;
@@ -697,8 +762,12 @@ export interface SLOConfig {
   otps?: SLOSection;
 }
 
+// A save merges: fields left out keep their stored value, and only a reset
+// clears them. swissd accepts either priority or highPriority and sends the
+// SLO server the boolean; a priority of 1..9 is refused rather than flattened.
 export interface SLOEdit {
   route?: string;
+  highPriority?: boolean;
   priority?: number;
   minimumDeployment?: SLOBound;
   maximumDeployment?: SLOBound;
