@@ -132,7 +132,7 @@ Images and charts:
 
 CI ([`publish`](.github/workflows/publish.yml)) publishes `ghcr.io/modelsphere/console` and `oci://ghcr.io/modelsphere/charts/console` at one version for every commit on `main` and every release tag, the same scheme as Swiss.
 
-Code conventions are in [`AGENTS.md`](AGENTS.md). Commits follow [Conventional Commits](https://www.conventionalcommits.org/).
+Before contributing, read [`CONTRIBUTING.md`](CONTRIBUTING.md): issues, branches, Conventional Commits, pull requests and review. The full developer guide is in [`docs/development/`](docs/development/README.md); comment and doc style in [`AGENTS.md`](AGENTS.md).
 
 ## Documentation
 
@@ -141,6 +141,8 @@ Code conventions are in [`AGENTS.md`](AGENTS.md). Commits follow [Conventional C
 | [`helm/console/README.md`](helm/console/README.md) | the complete install: prerequisites, versions, the demo model and existing-Swiss modes, uninstall, publishing |
 | [`docs/console-design.md`](docs/console-design.md) | design and decisions: identity and Rise Global compatibility, modules, backends, Playground, router |
 | [`helm/console/values.yaml`](helm/console/values.yaml) | every chart setting, with comments |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/development/`](docs/development/README.md) | how to contribute: local development, workflow, conventions, issues, pull requests, review, design proposals |
+| [`SECURITY.md`](SECURITY.md) | reporting a vulnerability privately |
 
 ## License
 
