@@ -220,10 +220,7 @@ func (s *Server) handleChangeOwnPassword(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusUnauthorized, "当前密码错误")
 		return
 	}
-	if iam.VerifyPassword(in.NewPassword, u.Spec.EncryptedPassword) {
-		writeError(w, http.StatusBadRequest, "新密码不能与当前密码相同")
-		return
-	}
+	// Keeping the current password is allowed: the UI warns instead of refusing.
 	if err := iam.ValidateComplexity(in.NewPassword); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

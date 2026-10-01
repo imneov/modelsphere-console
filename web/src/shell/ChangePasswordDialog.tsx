@@ -11,7 +11,7 @@ import {
   Label,
 } from "@riseaicloud/ui";
 import { api } from "@/shell/api";
-import { PasswordStrength, passwordMeetsRequirements } from "@/shell/PasswordStrength";
+import { PasswordStrength, SamePasswordHint, passwordMeetsRequirements } from "@/shell/PasswordStrength";
 
 export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [oldPassword, setOldPassword] = useState("");
@@ -91,6 +91,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; on
             />
           </div>
           <PasswordStrength password={newPassword} />
+          <SamePasswordHint current={oldPassword} next={newPassword} />
           <div className="space-y-2">
             <Label htmlFor="change-confirm-password">确认新密码</Label>
             <Input
