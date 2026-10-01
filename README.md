@@ -1,7 +1,9 @@
 # ModelSphere Console
 
 <p align="center">
-  <a href="https://github.com/modelsphere/console/actions/workflows/helm-chart.yml"><img alt="Helm chart" src="https://github.com/modelsphere/console/actions/workflows/helm-chart.yml/badge.svg"></a>
+  <a href="https://github.com/modelsphere/console/actions/workflows/publish.yml"><img alt="publish" src="https://github.com/modelsphere/console/actions/workflows/publish.yml/badge.svg"></a>
+  <a href="https://github.com/modelsphere/console/pkgs/container/console"><img alt="image" src="https://img.shields.io/badge/image-ghcr.io%2Fmodelsphere%2Fconsole-2496ED?logo=docker&logoColor=white"></a>
+  <a href="https://github.com/modelsphere/console/pkgs/container/charts%2Fconsole"><img alt="chart" src="https://img.shields.io/badge/chart-oci%3A%2F%2Fghcr.io%2Fmodelsphere%2Fcharts%2Fconsole-0F1689?logo=helm&logoColor=white"></a>
   <a href="go.mod"><img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white"></a>
   <a href="web/package.json"><img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black"></a>
   <a href="helm/console/README.md"><img alt="Docs" src="https://img.shields.io/badge/docs-install%20guide-blue"></a>
@@ -20,26 +22,26 @@ Console is a Go backend-for-frontend with a React UI compiled into the same bina
 - **Playground.** Streaming chat with any model behind the gateway, a 2–4 column compare view, full sampling parameters, per-answer TTFT, tokens/s and cache hit rate, reasoning output, and "view code" for cURL, Python and Node.js.
 - **OpenAI-compatible router.** Programs call `/v1` with API keys that administrators issue — with expiry and optional per-model scope. Keys are stored hashed; usage is exported as Prometheus metrics.
 - **Gateway discovery.** The inference entrypoint, routes and gateway key are read from the cluster (Swiss's site profile or the route ConfigMap) and followed as they change — no URLs or keys copied into configuration.
-- **Runs anywhere with one `helm install`.** With no Swiss present, the chart brings its own gateway and a small CPU model, so a fresh cluster has something to chat with.
+- **One `helm install`.** The image and chart are published together to GHCR. With no gateway on the cluster, `demo.enabled=true` adds a small CPU model so there is something to chat with.
 - **Upgrade path to Rise Global.** Identity is wire-compatible with Rise Global (same CRDs, same token claims), so upgrading is a configuration change, not a data migration.
 
 ## Quick start
 
 **Prerequisites**
 
-1. a Kubernetes cluster with linux/amd64 nodes and a default StorageClass, and `kubectl` pointing at it with cluster-admin rights;
+1. a Kubernetes cluster with linux/amd64 nodes that can reach `ghcr.io`, a default StorageClass, and `kubectl` pointing at it with cluster-admin rights;
 2. `helm` 3.8 or later (Helm 4 works too).
 
 **Step 1: install**
 
 ```bash
-git clone https://github.com/modelsphere/console.git && cd console
-helm upgrade --install console ./helm/console \
+helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
   --namespace modelsphere --create-namespace \
+  --set demo.enabled=true \
   --wait --timeout 20m
 ```
 
-This is the standalone mode: Console, a built-in gateway, and a CPU demo model (`qwen2.5-0.5b-instruct`, about 500 MB downloaded on first start). To connect to a cluster that already runs Swiss, see the [install guide](helm/console/README.md).
+This installs Console with a CPU demo model (`qwen2.5-0.5b-instruct`, about 500 MB downloaded on first start). To connect to a cluster that already runs Swiss, or to pick a version, see the [install guide](helm/console/README.md).
 
 **Step 2: log in**
 
@@ -113,18 +115,22 @@ cd web
 npm ci
 npm run typecheck && npm test
 npm run build            # writes web/dist, which the Go binary embeds
+npm run build:swiss      # the standalone Swiss UI variant, into web/dist-swiss
 ```
 
 To run against a cluster from a workstation, copy `examples/console.yaml` to `console.yaml`, set `cluster.kubeconfig`, and start `./console --config console.yaml`. `npm run dev` in `web/` serves the UI with hot reload and proxies `/api` and `/oauth` to it on port 8080.
 
-`web/dist` is committed, so `go build` alone produces a working binary. Rebuild it after changing the UI.
+`web/dist` is committed empty, so `go build` works without Node but serves no UI until `npm run build` has run. The image build (`Dockerfile`) does both.
 
 Images and charts:
 
 | Command | Output |
 |---|---|
-| `CONSOLE_REGISTRY=<registry>/<org> hack/image.sh` | builds and pushes a dev image (`--no-push` builds only) |
-| `hack/chart.sh --output ./dist` | packages the chart as `console-<version>-git<sha>.tgz`, the same package CI uploads for every commit |
+| `CONSOLE_REGISTRY=<registry>/<org> hack/image.sh` | builds and pushes an image of your own (`--no-push` builds only) |
+| `hack/chart.sh --output ./dist` | packages the chart as `console-<appVersion>-git<sha7>.tgz`, with the script CI uses |
+| `hack/bump.sh patch --tag` | bumps the version and tags it; pushing the tag publishes a release |
+
+CI ([`publish`](.github/workflows/publish.yml)) publishes `ghcr.io/modelsphere/console` and `oci://ghcr.io/modelsphere/charts/console` at one version for every commit on `main` and every release tag, the same scheme as Swiss.
 
 Code conventions are in [`AGENTS.md`](AGENTS.md). Commits follow [Conventional Commits](https://www.conventionalcommits.org/).
 
@@ -132,7 +138,7 @@ Code conventions are in [`AGENTS.md`](AGENTS.md). Commits follow [Conventional C
 
 | Document | What is in it |
 |---|---|
-| [`helm/console/README.md`](helm/console/README.md) | the complete install: prerequisites, standalone and existing-Swiss modes, downloading CI-built packages, uninstall |
+| [`helm/console/README.md`](helm/console/README.md) | the complete install: prerequisites, versions, the demo model and existing-Swiss modes, uninstall, publishing |
 | [`docs/console-design.md`](docs/console-design.md) | design and decisions: identity and Rise Global compatibility, modules, backends, Playground, router |
 | [`helm/console/values.yaml`](helm/console/values.yaml) | every chart setting, with comments |
 

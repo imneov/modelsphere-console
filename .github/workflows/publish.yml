@@ -1,0 +1,174 @@
+name: publish
+
+# The console image and the console chart, both on GHCR, at one version. The
+# chart is packaged pointing at the image pushed beside it (image.repository,
+# appVersion). Same scheme as modelsphere/swiss.
+#
+#   push to main     <appVersion>-git<sha7>
+#   tag <X>          <X>, which must be Chart.yaml's appVersion (hack/bump.sh --tag); the image is also latest
+#   pull request     test, build, lint and package; nothing pushed
+on:
+  push:
+    branches: [main]
+    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PUSH: ${{ github.event_name != 'pull_request' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Version
+        id: v
+        run: |
+          set -eu
+          owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          app=$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/p' helm/console/Chart.yaml)
+          image="ghcr.io/$owner/console"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            version=${GITHUB_REF#refs/tags/}
+            if [ "$version" != "$app" ]; then
+              echo "tag $version, but helm/console/Chart.yaml appVersion is $app" >&2
+              exit 1
+            fi
+            tags="$image:$version,$image:latest"
+          else
+            sha=${{ github.event.pull_request.head.sha || github.sha }}
+            version="$app-git${sha:0:7}"
+            tags="$image:$version"
+          fi
+          {
+            echo "version=$version"
+            echo "image=$image"
+            echo "tags=$tags"
+            echo "charts=oci://ghcr.io/$owner/charts"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v4.3.0
+
+      - name: Lint and render the supported modes
+        run: |
+          set -eu
+          helm lint --strict helm/console
+          helm template console helm/console --namespace modelsphere --include-crds \
+            >/tmp/console-rendered.yaml
+          helm template console-external helm/console --namespace modelsphere --include-crds \
+            --values helm/console/values-existing-stack.example.yaml \
+            >/tmp/console-external-rendered.yaml
+          helm template console-demo helm/console --namespace modelsphere --include-crds \
+            --set demo.enabled=true \
+            >/tmp/console-demo-rendered.yaml
+
+      # console's own image is built below and checked once pushed.
+      - name: Third-party images are publicly pullable
+        env:
+          IMAGE: ${{ steps.v.outputs.image }}
+        run: |
+          set -eu
+          auth="$RUNNER_TEMP/docker-anonymous"
+          mkdir -p "$auth"
+          printf '{"auths":{}}\n' >"$auth/config.json"
+          sed -nE 's/^[[:space:]-]*image:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/p' \
+            /tmp/console-rendered.yaml /tmp/console-demo-rendered.yaml \
+            | grep -v -e '/console:' | sort -u >/tmp/console-images.txt
+          test -s /tmp/console-images.txt
+          while IFS= read -r image; do
+            echo "checking $image"
+            for attempt in 1 2 3; do
+              if DOCKER_CONFIG="$auth" docker manifest inspect "$image" >/dev/null; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "could not read $image after $attempt attempts" >&2
+                exit 1
+              fi
+              sleep "$((attempt * 5))"
+            done
+          done </tmp/console-images.txt
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.v.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.v.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Package the chart
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          IMAGE: ${{ steps.v.outputs.image }}
+        run: hack/chart.sh --version "$VERSION" --image "$IMAGE" --output dist
+
+      - name: Push the chart
+        if: env.PUSH == 'true'
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          CHARTS: ${{ steps.v.outputs.charts }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          printf '%s' "$TOKEN" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+          helm push "dist/console-$VERSION.tgz" "$CHARTS"
+
+      # What an operator installs must be pullable without credentials. A new
+      # GHCR package starts private: make it public once in its package settings.
+      - name: Published image and chart are publicly pullable
+        if: env.PUSH == 'true'
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          IMAGE: ${{ steps.v.outputs.image }}
+          CHARTS: ${{ steps.v.outputs.charts }}
+        run: |
+          set -eu
+          auth="$RUNNER_TEMP/anonymous"
+          mkdir -p "$auth"
+          printf '{"auths":{}}\n' >"$auth/config.json"
+          DOCKER_CONFIG="$auth" docker manifest inspect "$IMAGE:$VERSION" >/dev/null
+          app=$(DOCKER_CONFIG="$auth" helm show chart "$CHARTS/console" --version "$VERSION" \
+            --registry-config "$auth/config.json" | sed -n 's/^appVersion: *//p')
+          test "$app" = "$VERSION"
