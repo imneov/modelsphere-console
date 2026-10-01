@@ -17,7 +17,7 @@ Console is a Go backend-for-frontend with a React UI compiled into the same bina
 
 ## Highlights
 
-- **Identity and access control.** Users, roles and login history stored as Kubernetes CRDs; OAuth2 password login with HS256 tokens; Kubernetes-RBAC-style roles that gate both pages and backend APIs. The seeded administrator must set a new password on first login.
+- **Identity and access control.** Users, roles and login history stored as Kubernetes CRDs; OAuth2 password login with HS256 tokens; Kubernetes-RBAC-style roles that gate both pages and backend APIs. The seeded administrator is asked to set a password on first login.
 - **Model deployment.** With [Swiss](https://github.com/modelsphere/swiss) on the cluster, browse the model catalog and deploy, upgrade and uninstall models, with a diff before every change and the GPU nodes they run on.
 - **Playground.** Streaming chat with any model behind the gateway, a 2–4 column compare view, full sampling parameters, per-answer TTFT, tokens/s and cache hit rate, reasoning output, and "view code" for cURL, Python and Node.js.
 - **OpenAI-compatible router.** Programs call `/v1` with API keys that administrators issue — with expiry and optional per-model scope. Keys are stored hashed; usage is exported as Prometheus metrics.
@@ -51,7 +51,7 @@ kubectl -n modelsphere port-forward svc/console-console 8080:8080
 
 Open <http://127.0.0.1:8080> and sign in as `admin` / `P@88w0rd`.
 
-> **The first login asks you to change the password.** Set a new one to continue.
+> **The first login asks you to set a password.** Keeping the initial one is allowed, with a warning; choose your own.
 
 **Step 3: call a model**
 

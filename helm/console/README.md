@@ -27,7 +27,7 @@ kubectl -n modelsphere port-forward svc/console-console 8080:8080
 
 浏览器打开 `http://127.0.0.1:8080`，用 `admin` / `P@88w0rd` 登录。
 
-> **首次登录会要求修改密码**：按页面提示设置新密码后才能继续使用。
+> **首次登录会要求设置密码**：设置后才能继续使用。可以沿用初始密码（页面会提醒），建议换成自己的密码。
 
 不写 `--version` 时安装最新正式版；重复执行即升级。版本见[选择版本](#选择版本)。
 
@@ -145,7 +145,7 @@ kubectl -n modelsphere port-forward svc/console-console 8080:8080
 
 浏览器打开 `http://127.0.0.1:8080`（Service 默认是 NodePort，也可用 NOTES 打印的节点地址），用 `admin` / `P@88w0rd` 登录。
 
-> **首次登录会要求修改密码**：按页面提示设置新密码后才能继续使用。
+> **首次登录会要求设置密码**：设置后才能继续使用。可以沿用初始密码（页面会提醒），建议换成自己的密码。
 
 集群中已有同名 IAM User（例如 Rise Global 的）时，Chart 不会覆盖它，`helm status` 输出的 NOTES 会说明。
 

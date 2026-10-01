@@ -177,9 +177,6 @@ func TestChangeOwnPassword(t *testing.T) {
 	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"admin-pw","newPassword":"weak"}`); rec.Code != http.StatusBadRequest {
 		t.Fatalf("weak new password: expected 400, got %d (body %s)", rec.Code, rec.Body.String())
 	}
-	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"admin-pw","newPassword":"admin-pw"}`); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "新密码不能与当前密码相同") {
-		t.Fatalf("reused password: expected explicit 400, got %d (body %s)", rec.Code, rec.Body.String())
-	}
 	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"admin-pw","newPassword":"NewPass1!"}`); rec.Code != http.StatusOK {
 		t.Fatalf("change password: expected 200, got %d (body %s)", rec.Code, rec.Body.String())
 	}
@@ -198,6 +195,32 @@ func TestChangeOwnPassword(t *testing.T) {
 		t.Fatalf("same token after password change: expected 200, got %d (body %s)", rec.Code, rec.Body.String())
 	}
 	_ = login(t, h, "admin", "NewPass1!")
+}
+
+// Keeping the current password is allowed -- the UI warns, it does not refuse --
+// and still completes a required reset.
+func TestChangeOwnPasswordToTheSamePassword(t *testing.T) {
+	srv := testServer(t)
+	h := srv.Handler()
+	token := login(t, h, "admin", "admin-pw")
+	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"admin-pw","newPassword":"Same-Pass1"}`); rec.Code != http.StatusOK {
+		t.Fatalf("set a complex password: expected 200, got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	setRequirePasswordReset(t, srv, true)
+
+	if rec := do(h, "POST", "/api/me/password", token, `{"oldPassword":"Same-Pass1","newPassword":"Same-Pass1"}`); rec.Code != http.StatusOK {
+		t.Fatalf("same password: expected 200, got %d (body %s)", rec.Code, rec.Body.String())
+	}
+	u, err := srv.store.GetUser(t.Context(), "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !iam.VerifyPassword("Same-Pass1", u.Spec.EncryptedPassword) {
+		t.Fatal("password no longer verifies")
+	}
+	if u.RequiresPasswordReset() {
+		t.Fatal("require-password-reset annotation was not cleared")
+	}
 }
 
 func TestMePermissionsFromBoundRoles(t *testing.T) {

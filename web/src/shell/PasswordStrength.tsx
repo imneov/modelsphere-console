@@ -1,4 +1,4 @@
-import { Check, X } from "lucide-react";
+import { Check, TriangleAlert, X } from "lucide-react";
 
 interface PasswordRequirement {
   id: string;
@@ -16,6 +16,17 @@ export const PASSWORD_REQUIREMENTS: PasswordRequirement[] = [
 
 export function passwordMeetsRequirements(password: string): boolean {
   return PASSWORD_REQUIREMENTS.every((requirement) => requirement.test(password));
+}
+
+// A reminder, not a rule: keeping the current password is allowed.
+export function SamePasswordHint({ current, next }: { current: string; next: string }) {
+  if (!current || current !== next) return null;
+  return (
+    <p className="flex items-center gap-2 text-sm text-amber-700" role="status">
+      <TriangleAlert className="h-4 w-4 shrink-0" />
+      新密码与当前密码相同。可以继续，但建议换一个只有你知道的密码。
+    </p>
+  );
 }
 
 export function PasswordStrength({ password }: { password: string }) {

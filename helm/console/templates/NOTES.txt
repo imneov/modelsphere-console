@@ -46,14 +46,14 @@ No administrator user was seeded. Configure an administrator before signing in.
 {{- else if and (eq .Values.admin.username "admin") (or (not .Values.admin.encryptedPassword) (eq .Values.admin.encryptedPassword $defaultPasswordHash)) }}
 Default login: admin / P@88w0rd
 {{- if .Values.admin.requirePasswordReset }}
-首次登录将要求设置新密码。
+首次登录将要求设置密码（可沿用当前密码，建议更换）。
 {{- else }}
 Change the default password immediately after signing in.
 {{- end }}
 {{- else }}
 Administrator user {{ .Values.admin.username | quote }} was seeded. Sign in with the password matching admin.encryptedPassword.
 {{- if .Values.admin.requirePasswordReset }}
-首次登录将要求设置新密码。
+首次登录将要求设置密码（可沿用当前密码，建议更换）。
 {{- end }}
 {{- end }}
 

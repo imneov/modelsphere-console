@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@riseaicloud/ui";
 import { KeyRound } from "lucide-react";
-import { PasswordStrength, passwordMeetsRequirements } from "@/shell/PasswordStrength";
+import { PasswordStrength, SamePasswordHint, passwordMeetsRequirements } from "@/shell/PasswordStrength";
 import { api } from "@/shell/api";
 
 export function ChangePassword() {
@@ -41,7 +41,7 @@ export function ChangePassword() {
           </div>
           <div>
             <CardTitle>设置新密码</CardTitle>
-            <CardDescription className="mt-1.5">首次登录需要设置新密码后继续使用控制台。</CardDescription>
+            <CardDescription className="mt-1.5">首次登录请设置密码后继续使用控制台，建议不要沿用初始密码。</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
@@ -70,6 +70,7 @@ export function ChangePassword() {
               />
             </div>
             <PasswordStrength password={newPassword} />
+            <SamePasswordHint current={oldPassword} next={newPassword} />
             <div className="space-y-2">
               <Label htmlFor="confirm-password">确认新密码</Label>
               <Input
