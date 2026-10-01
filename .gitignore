@@ -1,6 +1,8 @@
 /console
 /console.yaml
 /console.local.yaml
+# The pod environment telepresence writes (docs/development/local-development.md); holds secrets
+/console.env
 *.db
 *.db-*
 

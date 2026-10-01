@@ -27,6 +27,17 @@ compose -> diff -> apply -> status
 
 - One sentence of context, then the structure. Not three paragraphs building to it.
 
+## Issues, commits and PRs
+
+Same rules as for people, in `docs/development/`:
+
+| Doing | Follow |
+|---|---|
+| filing an issue | `issues.md`: search first, one problem, `<area>: <symptom>` title, a template, `kind/*` + `area/*` labels |
+| committing | Conventional Commits, scopes from `development-workflow.md` |
+| opening a PR | `.github/PULL_REQUEST_TEMPLATE.md` filled in, `Fixes #N`, release-note block (`None` if invisible) |
+| a new API, CRD field or config key | a design proposal first (`design-proposals.md`) |
+
 ## Exceptions
 
 - `../charts/*/values.yaml` keeps its heavy prose commentary — existing convention in that repo, do not strip it.
