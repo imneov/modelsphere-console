@@ -3,12 +3,13 @@
 # 用法见 ./install.sh --help
 set -euo pipefail
 
-CONSOLE_IMAGE_REPO=${CONSOLE_IMAGE_REPO:-swr.cn-east-3.myhuaweicloud.com/risecloud/console}
-CONSOLE_IMAGE_TAG=${CONSOLE_IMAGE_TAG:-0.1.0-dev.4f512ab}
+here=$(cd "$(dirname "$0")" && pwd)
+
+# 默认使用 CI 发布到 GHCR 的镜像，tag 与本仓库 Chart 的 appVersion 一致。
+CONSOLE_IMAGE_REPO=${CONSOLE_IMAGE_REPO:-ghcr.io/modelsphere/console}
+CONSOLE_IMAGE_TAG=${CONSOLE_IMAGE_TAG:-$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/p' "$here/helm/console/Chart.yaml")}
 DEFAULT_ADMIN_PASSWORD='P@88w0rd'
 REGISTRY_SECRET_NAME=console-registry
-
-here=$(cd "$(dirname "$0")" && pwd)
 
 usage() {
   cat <<'EOF'

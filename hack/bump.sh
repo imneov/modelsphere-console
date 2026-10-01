@@ -4,6 +4,7 @@
 #   hack/bump.sh                 show the current version
 #   hack/bump.sh patch|minor|major
 #   hack/bump.sh 0.3.1           set it explicitly
+#   hack/bump.sh minor --tag     and commit it with an annotated git tag
 #
 # Chart.yaml (version and appVersion) and internal/version move together; a test
 # in internal/version refuses a commit where they disagree. image.tag stays empty
@@ -30,12 +31,19 @@ case "$1" in
     esac
     ;;
   [0-9]*) next=$1 ;;
-  *) echo "usage: $0 [major|minor|patch|X.Y.Z]" >&2; exit 2 ;;
+  *) echo "usage: $0 [major|minor|patch|X.Y.Z] [--tag]" >&2; exit 2 ;;
 esac
 
 if ! [[ "$next" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
   echo "not a semver: $next" >&2
   exit 2
+fi
+
+tag=false
+[ "${2:-}" = "--tag" ] && tag=true
+if $tag && [ -n "$(git status --porcelain)" ]; then
+  echo "working tree is dirty; commit before tagging" >&2
+  exit 1
 fi
 
 # Line-targeted, so the rest of Chart.yaml -- the dependencies included -- is untouched.
@@ -45,3 +53,17 @@ sed -e "s/^const Version = .*/const Version = \"$next\"/" "$gofile" >"$tmp" && m
 
 go test ./internal/version >/dev/null
 echo "$current -> $next"
+
+if $tag; then
+  git add "$chart" "$gofile"
+  git commit -m "chore: release $next"
+  git tag -a "$next" -m "console $next"
+  echo "tagged $next"
+fi
+
+cat <<NEXT
+
+publish: push the tag; CI builds ghcr.io/modelsphere/console:$next and
+oci://ghcr.io/modelsphere/charts/console:$next. Then:
+  helm upgrade console oci://ghcr.io/modelsphere/charts/console --version $next -n modelsphere
+NEXT

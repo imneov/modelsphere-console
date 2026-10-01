@@ -383,7 +383,7 @@ stream, 401 on a bad key), `cached_tokens` 28/29 on a repeated prompt.
 
 ### Still missing for a public one-command install
 
-The chart currently pins `swr.cn-east-3.myhuaweicloud.com/risecloud/console:0.1.0-dev.4f512ab`; the `risecloud/console` SWR repository is public. Per-commit charts are always available as GitHub Actions artifacts. `hack/chart.sh --push` additionally supports an SWR Enterprise Helm Chart repository; the current `cn-east-3` account has no Enterprise instance, and basic-edition image repositories reject Helm OCI manifests.
+CI (`.github/workflows/publish.yml`, the same scheme as swiss) publishes the image to `ghcr.io/modelsphere/console` and the chart to `oci://ghcr.io/modelsphere/charts/console` at one version: `<appVersion>-git<sha7>` for every commit on `main`, `X.Y.Z` for a release tag. The packaged chart points at the image published beside it.
 
 | Gap | Why it matters | Where it is fixed |
 |---|---|---|

@@ -13,7 +13,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-registry="${CONSOLE_REGISTRY:-swr.cn-east-3.myhuaweicloud.com/risecloud}"
+# CI publishes main and release builds to ghcr.io/modelsphere; this is for a
+# build of your own, pushed to a registry you are logged in to.
 push=1
 for arg in "$@"; do
   case "$arg" in
@@ -22,6 +23,7 @@ for arg in "$@"; do
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
+registry="${CONSOLE_REGISTRY:?set CONSOLE_REGISTRY, e.g. ghcr.io/<you>}"
 
 version="$(awk '/^version:/ {print $2}' helm/console/Chart.yaml)"
 commit="$(git rev-parse --short HEAD)"
@@ -35,8 +37,8 @@ fi
 echo "building ${image}"
 # Both indexes are build args because a build host behind a firewall has to point
 # at a mirror; the Dockerfile is explicit about that.
-# No provenance attestation: it turns the image into an index SWR rejects
-# ("fail to parse manifest.json").
+# No provenance attestation: it turns the image into an index some registries
+# (Huawei SWR) reject ("fail to parse manifest.json").
 docker build -t "${image}" --provenance=false \
   --build-arg "GOPROXY=${GOPROXY:-$(go env GOPROXY)}" \
   --build-arg "NPM_REGISTRY=${NPM_REGISTRY:-https://registry.npmjs.org}" \

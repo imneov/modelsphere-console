@@ -1,5 +1,6 @@
 image:
-  repository: swr.cn-east-3.myhuaweicloud.com/risecloud/console
+  # Published by CI with the chart (.github/workflows/publish.yml).
+  repository: ghcr.io/modelsphere/console
   tag: ""            # defaults to .Chart.AppVersion
   pullPolicy: IfNotPresent
 
