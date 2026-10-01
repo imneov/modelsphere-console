@@ -21,11 +21,13 @@
 # Local npm auth for the private @riseaicloud/* registry — never commit
 .npmrc
 
-# The image built from this working copy (hack/image.sh)
 /console-image.yaml
 
 # Locally packaged Helm charts
 /dist/
+
+# Chart dependencies, fetched by `helm dependency build helm/console`
+/helm/console/charts/
 
 /web/dist-swiss/
 # Created by https://www.toptal.com/developers/gitignore/api/tags

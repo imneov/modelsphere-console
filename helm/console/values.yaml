@@ -1,5 +1,6 @@
 image:
-  # Published by CI with the chart (.github/workflows/publish.yml).
+  # The OCI chart (oci://ghcr.io/modelsphere/charts/console) uses this GHCR image. The
+  # copy in the modelsphere helm-charts repo uses 4pdosc/console on Docker Hub instead.
   repository: ghcr.io/modelsphere/console
   tag: ""            # defaults to .Chart.AppVersion
   pullPolicy: IfNotPresent
@@ -49,9 +50,11 @@ admin:
   username: admin
   # bcrypt of the default password `P@88w0rd`. Change on first login, or set a
   # different hash here: htpasswd -bnBC 12 "" '<pw>' | tr -d ':\n'
+  # Read at first install only: an upgrade keeps whatever password the User has.
   encryptedPassword: "$2b$12$Q44Y0B99hoByZY.6v30jl.D83rXFbSpOfh8iWLbndLZBEjFAZwaeO"
   # Require the seeded administrator to change its password after first login.
   # Set false when encryptedPassword already contains an operator-chosen secret.
+  # Also first install only: an upgrade does not ask for the reset again.
   requirePasswordReset: true
 
 # Backends federated behind the portal. Each prefix is reverse-proxied to url,
