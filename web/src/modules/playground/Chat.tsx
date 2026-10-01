@@ -73,7 +73,15 @@ export function Chat() {
             empty={
               <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
                 <FlaskConical className="h-8 w-8 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">选择一个模型开始对话。</p>
+                <p className="text-sm text-muted-foreground">
+                  {model ? (
+                    <>
+                      在下方输入消息，开始与 <span className="font-mono text-foreground">{model}</span> 对话。
+                    </>
+                  ) : (
+                    "选择一个模型开始对话。"
+                  )}
+                </p>
                 <p className="max-w-md text-xs text-muted-foreground">请求经 console 转到推理网关，网关密钥保存在服务端，不下发到浏览器。</p>
               </div>
             }
