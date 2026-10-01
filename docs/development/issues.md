@@ -20,7 +20,7 @@ opened ──▶ needs-triage ──▶ triage/accepted ──▶ assigned ─�
    | Symptom in the UI | Usually lives in |
    |---|---|
    | login, users, roles, API keys, menus, Playground rendering | console |
-   | 模型部署 pages: catalog, deploy diff, apply | [swiss](https://github.com/modelsphere/swiss) (console only mounts its pages) |
+   | model deployment pages: catalog, deploy diff, apply | [swiss](https://github.com/modelsphere/swiss) (console only mounts its pages) |
    | a chat that errors or never answers, `/v1` returning gateway errors | [llm-openresty](https://github.com/modelsphere/llm-openresty) or the model server |
 
    Not sure? File it here; triage will move it.
@@ -86,7 +86,7 @@ Maintainers apply labels during triage; the templates add the first ones. Create
 | `area/gateway` | `internal/gateway`: resolving the inference entrypoint |
 | `area/router` | `internal/router`, `web/src/modules/router`: `/v1`, API keys, metrics |
 | `area/playground` | `web/src/modules/playground` |
-| `area/swiss` | `web/src/modules/swiss`: the mounted 模型部署 pages |
+| `area/swiss` | `web/src/modules/swiss`: the mounted model deployment pages |
 | `area/shell` | `web/src/shell`: layout, navigation, permissions, preferences |
 | `area/helm` | `helm/console`, `install.sh` |
 | `area/ci` | `.github/`, `hack/` |

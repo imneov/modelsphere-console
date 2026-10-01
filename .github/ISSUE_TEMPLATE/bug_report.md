@@ -32,7 +32,7 @@ This comment is not shown on the issue page; no need to delete it.
 - Installed with: <!-- `helm install` (chart version, non-default values) / `./install.sh` (flags) / from source -->
 - Kubernetes:
 - Browser, for UI problems:
-- Swiss / gateway, if the problem is in 模型部署 or chat:
+- Swiss / gateway, if the problem is in model deployment or chat:
 
 **Evidence**
 <!--

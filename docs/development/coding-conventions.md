@@ -56,7 +56,7 @@ r.log.Warn("gateway unresolved", "backend", r.backend.Name, "err", err)
 | Shell | `web/src/shell` is shared: layout, auth, permissions, preferences. Changes there affect every module — keep them deliberate |
 | Permissions | pages and actions are gated with UI permissions (`swiss.view`, …) via `usePermissions` / `PermissionGuard`; the server enforces the same — the UI check is not the security boundary |
 | API calls | through the module's `api.ts`, same-origin (`/api/...`, `/oauth/...`); no absolute URLs |
-| Text | UI strings in Chinese, consistent with existing menus (模型部署, 路由 → API 密钥) |
+| Text | UI strings in the same language and wording as the existing menus |
 
 ### The swiss module is a copy
 
