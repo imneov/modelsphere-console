@@ -1,14 +1,14 @@
 import { cn } from "@swiss/lib/utils";
 import {
-  Dialog as RiseDialog,
+  Dialog as KitDialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@riseaicloud/ui";
+} from "@modelsphere/ui";
 
-// The apply pipeline's modal. Rise's DialogContent is a max-w-lg grid with its
-// own close button and p-6; this holds a diff thousands of lines long, so it is
+// The apply pipeline's modal. The kit's DialogContent is a small padded grid
+// (sm:max-w-sm, p-4); this holds a diff thousands of lines long, so it is
 // re-laid-out as a column: fixed header, scrolling body, pinned footer.
 //
 // Dismissing is not the same as cancelling. Closing this leaves the composed
@@ -36,7 +36,7 @@ export function Dialog({
   children: React.ReactNode;
 }) {
   return (
-    <RiseDialog
+    <KitDialog
       open={open}
       onOpenChange={(next) => {
         if (!next) onClose();
@@ -45,16 +45,17 @@ export function Dialog({
       <DialogContent
         className={cn(
           "flex max-h-[calc(100vh-2rem)] w-full flex-col gap-0 overflow-hidden p-0",
-          size === "sm" ? "max-w-md" : "max-w-5xl",
+          // sm: as well, or the kit's sm:max-w-sm wins from the sm breakpoint up.
+          size === "sm" ? "max-w-md sm:max-w-md" : "max-w-5xl sm:max-w-5xl",
         )}
       >
-        <DialogHeader className="space-y-0 border-b p-4 text-left">
+        <DialogHeader className="gap-0 border-b p-4 text-left">
           <DialogTitle className="pr-6">{title}</DialogTitle>
-          {/* asChild: a subtitle carries badges and spans, which cannot nest in
-              the <p> the description renders by default. */}
+          {/* render a <div>: a subtitle carries badges and spans, which cannot
+              nest in the <p> the description renders by default. */}
           {subtitle ? (
-            <DialogDescription asChild>
-              <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div>
+            <DialogDescription render={<div className="mt-1 text-sm text-muted-foreground" />}>
+              {subtitle}
             </DialogDescription>
           ) : null}
         </DialogHeader>
@@ -63,6 +64,6 @@ export function Dialog({
 
         {footer ? <div className="border-t p-4">{footer}</div> : null}
       </DialogContent>
-    </RiseDialog>
+    </KitDialog>
   );
 }

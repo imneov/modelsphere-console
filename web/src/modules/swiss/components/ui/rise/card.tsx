@@ -1,1 +1,1 @@
-export { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@riseaicloud/ui";
+export { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@modelsphere/ui";

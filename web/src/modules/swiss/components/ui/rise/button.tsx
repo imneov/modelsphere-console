@@ -1,1 +1,1 @@
-export { Button, buttonVariants } from "@riseaicloud/ui";
+export { Button, buttonVariants } from "@modelsphere/ui";
