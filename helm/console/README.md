@@ -1,20 +1,22 @@
 # Console Helm Chart
 
-**把 ModelSphere Console 装进 Kubernetes 的安装包。** CI 把镜像和 Chart 以同一个版本发布到 GHCR，无需登录即可拉取：
+[中文](README.zh-CN.md)
 
-| 制品 | 地址 |
+**The package that installs ModelSphere Console into Kubernetes.** CI publishes the image and the chart to GHCR at the same version; both can be pulled without logging in:
+
+| Artifact | Location |
 |---|---|
 | Chart | `oci://ghcr.io/modelsphere/charts/console` |
-| 镜像 | `ghcr.io/modelsphere/console`（linux/amd64），tag 与 Chart 版本相同 |
+| Image | `ghcr.io/modelsphere/console` (linux/amd64), tagged with the chart version |
 
-## 它不做什么
+## What it does not do
 
-- **不安装、不修改已有的 Swiss 和推理网关** —— 只读取它们的 ConfigMap / Secret。
-- **不需要 `install.sh`** —— 它是源码仓库里的可选辅助脚本（自动发现 Swiss 和网关、生成 values、安装后做端到端验证），不在 Chart 包内，本文流程不使用它。用法见 `./install.sh --help`。
+- **It does not install or modify an existing Swiss or inference gateway** — it only reads their ConfigMaps and Secrets.
+- **It does not need `install.sh`** — that is an optional helper in the source repository (discovers Swiss and the gateway, generates values, runs an end-to-end check after install). It is not in the chart package and this guide does not use it. See `./install.sh --help`.
 
-## 快速上手
+## Quick start
 
-先确认[前置条件](#前置条件)。以下装 Console 和一个 CPU 演示模型，装完就能在 Playground 对话、用 `/v1` 调用：
+Check the [prerequisites](#prerequisites) first. This installs Console with a CPU demo model; afterwards you can chat in the Playground and call `/v1`:
 
 ```bash
 helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
@@ -25,69 +27,69 @@ helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
 kubectl -n modelsphere port-forward svc/console-console 8080:8080
 ```
 
-浏览器打开 `http://127.0.0.1:8080`，用 `admin` / `P@88w0rd` 登录。
+Open `http://127.0.0.1:8080` and sign in as `admin` / `P@88w0rd`.
 
-> **首次登录会要求设置密码**：设置后才能继续使用。可以沿用初始密码（页面会提醒），建议换成自己的密码。
+> **The first login asks you to set a password** before you can continue. Keeping the initial one is allowed (with a warning); choose your own.
 
-不写 `--version` 时安装最新正式版；重复执行即升级。版本见[选择版本](#选择版本)。
+Without `--version` the latest release is installed; running the command again upgrades. See [Choosing a version](#choosing-a-version).
 
-## 三种装法
+## Three ways to install
 
-| 装法 | 适用 | 额外 values | 得到什么 |
+| Mode | For | Extra values | What you get |
 |---|---|---|---|
-| 只装 Console | 先看界面、管用户 | 无 | 登录、用户和角色；没有模型，Playground 和 `/v1` 不可用 |
-| 演示模型 | 集群里没有推理网关 | `--set demo.enabled=true` | 加一个 llama.cpp 跑的 Qwen2.5-0.5B（CPU），Playground 和 `/v1` 可用 |
-| 接入已有 Swiss | 集群已运行 Swiss 和 OpenResty 推理网关 | `--values console-values.yaml`，见[接入已有 Swiss](#接入已有-swiss) | 模型部署页面，以及网关上的全部模型 |
+| Console only | trying the UI, managing users | none | login, users and roles; no models, so Playground and `/v1` are unavailable |
+| Demo model | a cluster without an inference gateway | `--set demo.enabled=true` | adds Qwen2.5-0.5B on llama.cpp (CPU); Playground and `/v1` work |
+| Existing Swiss | a cluster already running Swiss and the OpenResty gateway | `--values console-values.yaml`, see [Connecting to an existing Swiss](#connecting-to-an-existing-swiss) | the model deployment pages, and every model on the gateway |
 
-接入 Swiss 时不要再开 `demo.enabled`：开了之后 Playground 和 `/v1` 只连演示模型，Swiss 网关上的模型不会出现。
+Do not enable `demo.enabled` when connecting to Swiss: with it on, Playground and `/v1` talk only to the demo model and the models on the Swiss gateway do not appear.
 
-## 选择版本
+## Choosing a version
 
-| 来源 | 版本 | 用法 |
+| Source | Version | Usage |
 |---|---|---|
-| 正式版（推送 `X.Y.Z` tag） | `X.Y.Z` | 不写 `--version` 即最新正式版；固定版本用 `--version X.Y.Z` |
-| `main` 的每个 commit | `<appVersion>-git<commit 前 7 位>`，例如 `0.1.1-git3affbe6` | `--version 0.1.1-git3affbe6` |
+| Release (a pushed `X.Y.Z` tag) | `X.Y.Z` | omit `--version` for the latest release; pin with `--version X.Y.Z` |
+| Every commit on `main` | `<appVersion>-git<first 7 of the commit>`, e.g. `0.1.1-git3affbe6` | `--version 0.1.1-git3affbe6` |
 
-`main` 的构建要写完整版本号。**不要用 `--devel` 取"最新"构建**：这类版本之间按 commit 哈希的字母顺序比较，选出来的不是最新的 commit。可用版本列在 [GitHub Packages](https://github.com/modelsphere/console/pkgs/container/charts%2Fconsole) 页面。
+Builds from `main` need the full version. **Do not use `--devel` to get the "latest" build**: those versions compare by the alphabetical order of the commit hash, so it does not pick the newest commit. Available versions are listed on [GitHub Packages](https://github.com/modelsphere/console/pkgs/container/charts%2Fconsole).
 
-## 前置条件
+## Prerequisites
 
-| 条件 | 适用 | 原因 | 检查 |
+| Requirement | Applies to | Why | Check |
 |---|---|---|---|
-| `helm` 3.8 及以上（Helm 4 也可）、`kubectl` | 全部 | 从 OCI 仓库安装需要 Helm 3.8+ | `helm version` |
-| Helm 使用 cluster-admin 级权限 | 全部 | Chart 创建 IAM CRD、ClusterRole/ClusterRoleBinding（platform-admin 角色含 `*` 权限，Kubernetes 只允许已持有这些权限的用户创建），接入 Swiss 时还要在其他 namespace 创建 Role | `kubectl auth can-i '*' '*' --all-namespaces` 输出 `yes` |
-| linux/amd64 节点 | 全部 | 镜像只有 amd64 | `kubectl get nodes -L kubernetes.io/arch` |
-| 节点能访问 `ghcr.io` | 全部 | Console 镜像（演示模式下还有 llama.cpp 镜像）在 GHCR | — |
-| 默认 StorageClass、约 2 CPU / 2 GiB 空闲 | 演示模型 | 模型权重存在 PVC 中 | `kubectl get storageclass` |
-| 节点能访问 modelscope.cn 或 hf-mirror.com | 演示模型 | 首次启动下载约 500 MB 权重 | — |
-| Swiss Chart 0.6.0 及以上且开启 `auth.proxyKey`，或 Swiss 以 `auth.disabled=true` 运行 | 接入 Swiss | Console 用 proxyKey 代表登录用户访问 Swiss | 见[找到 Swiss 和网关](#1-找到-swiss-和网关) |
-| Swiss site profile 已存在，且 `cluster.profile.key` 为 `profile.yaml`（默认值） | 接入 Swiss | Console 从 profile 读取网关入口，且只读 `profile.yaml` 这个 key；profile 在 Swiss 网页首次保存设置时才创建 | 同上 |
+| `helm` 3.8 or later (Helm 4 works), `kubectl` | all | installing from an OCI registry needs Helm 3.8+ | `helm version` |
+| Helm runs with cluster-admin rights | all | the chart creates IAM CRDs and a ClusterRole/ClusterRoleBinding (the platform-admin role has `*`, and Kubernetes only lets a user who already holds those rights create it); with Swiss it also creates Roles in other namespaces | `kubectl auth can-i '*' '*' --all-namespaces` prints `yes` |
+| linux/amd64 nodes | all | the image is amd64 only | `kubectl get nodes -L kubernetes.io/arch` |
+| nodes can reach `ghcr.io` | all | the Console image (and in demo mode the llama.cpp image) is on GHCR | — |
+| a default StorageClass, about 2 CPU / 2 GiB free | demo model | the weights are stored in a PVC | `kubectl get storageclass` |
+| nodes can reach modelscope.cn or hf-mirror.com | demo model | about 500 MB of weights are downloaded on first start | — |
+| Swiss chart 0.6.0 or later with `auth.proxyKey` on, or Swiss running with `auth.disabled=true` | existing Swiss | Console calls Swiss on behalf of the signed-in user with the proxyKey | see [Find Swiss and the gateway](#1-find-swiss-and-the-gateway) |
+| a Swiss site profile exists and `cluster.profile.key` is `profile.yaml` (the default) | existing Swiss | Console reads the gateway entrypoint from the profile, and only from the `profile.yaml` key; Swiss creates the profile the first time settings are saved in its UI | same as above |
 
-## 接入已有 Swiss
+## Connecting to an existing Swiss
 
 ```text
-找到 Swiss 和网关 -> 复制 proxyKey 到 modelsphere -> 写 console-values.yaml -> helm upgrade --install
+find Swiss and the gateway -> copy the proxyKey into modelsphere -> write console-values.yaml -> helm upgrade --install
 ```
 
-### 1. 找到 Swiss 和网关
+### 1. Find Swiss and the gateway
 
 ```bash
-# Swiss Service：记下 NAMESPACE、NAME、PORT
+# The Swiss Service: note NAMESPACE, NAME and PORT
 kubectl get svc -A -l app.kubernetes.io/name=swiss
 
-# Swiss 配置（ConfigMap 与 Service 同名）：
-#   server.auth.disabled       为 true 时跳过第 2 步
-#   cluster.profile.configMap  即 site profile，格式 namespace/name
-#   cluster.profile.key        必须为 profile.yaml
+# The Swiss configuration (a ConfigMap named like the Service):
+#   server.auth.disabled       if true, skip step 2
+#   cluster.profile.configMap  the site profile, as namespace/name
+#   cluster.profile.key        must be profile.yaml
 kubectl -n <swiss-namespace> get configmap <swiss-name> -o jsonpath='{.data.swiss\.yaml}'
 
-# site profile：记下 route.nginxService、route.nginxConfigMap、route.auth.secretRef
+# The site profile: note route.nginxService, route.nginxConfigMap and route.auth.secretRef
 kubectl -n <profile-namespace> get configmap <profile-name> -o jsonpath='{.data.profile\.yaml}'
 ```
 
-### 2. 复制 proxyKey
+### 2. Copy the proxyKey
 
-Secret 不能跨 namespace 读取，所以把 Swiss 的 proxyKey 复制一份到 Console 所在的 namespace。Swiss 的登录 Secret 默认名为 `<swiss-name>-auth`：
+A Secret cannot be read across namespaces, so copy Swiss's proxyKey into Console's namespace. Swiss's auth Secret is named `<swiss-name>-auth` by default:
 
 ```bash
 kubectl create namespace modelsphere --dry-run=client -o yaml | kubectl apply -f -
@@ -96,29 +98,29 @@ kubectl -n modelsphere create secret generic swiss-proxy-key --from-file=proxyKe
 rm proxyKey
 ```
 
-第二条没有输出时，说明这个 Swiss 没有 proxyKey：升级 Swiss Chart 到 0.6.0 及以上，或让它以 `auth.disabled=true` 运行。
+If the second command prints nothing, this Swiss has no proxyKey: upgrade the Swiss chart to 0.6.0 or later, or run it with `auth.disabled=true`.
 
-### 3. 写 values
+### 3. Write the values
 
-示例 values 在 Chart 包里，取出后用编辑器按下表修改：
+The example values file is in the chart package. Pull it, then edit it as in the table below:
 
 ```bash
 helm pull oci://ghcr.io/modelsphere/charts/console --untar --untardir /tmp/console-chart
 cp /tmp/console-chart/console/values-existing-stack.example.yaml console-values.yaml
 ```
 
-所有引用写成 `namespace/name`。
+Write every reference as `namespace/name`.
 
-| values | 填什么 | Chart 在该 namespace 创建只读 Role |
+| Value | What to put | The chart creates a read-only Role in that namespace |
 |---|---|---|
-| `externalSwiss.url` | `http://<swiss-name>.<swiss-namespace>.svc:<port>/api`，必须以 `/api` 结尾 | — |
-| `externalSwiss.proxyKey.secretName` | 第 2 步的 `swiss-proxy-key`；Swiss 以 `auth.disabled=true` 运行时删除此行 | — |
-| `externalSwiss.profile` | Swiss 的 `cluster.profile.configMap` | 是 |
-| `playground.gateway.service` | profile 的 `route.nginxService` | 是 |
-| `playground.gateway.secretRef` | profile 的 `route.auth.secretRef`；它只有 name 时，namespace 是 **Swiss 所在的 namespace**。profile 没有此字段时删除此行 | 是 |
-| `playground.gateway.configMap` | **不设置**：已有 profile 时 Console 拒绝启动 | — |
+| `externalSwiss.url` | `http://<swiss-name>.<swiss-namespace>.svc:<port>/api`; must end in `/api` | — |
+| `externalSwiss.proxyKey.secretName` | `swiss-proxy-key` from step 2; delete the line if Swiss runs with `auth.disabled=true` | — |
+| `externalSwiss.profile` | Swiss's `cluster.profile.configMap` | yes |
+| `playground.gateway.service` | the profile's `route.nginxService` | yes |
+| `playground.gateway.secretRef` | the profile's `route.auth.secretRef`; if it is a bare name, its namespace is **Swiss's namespace**. Delete the line if the profile has no such field | yes |
+| `playground.gateway.configMap` | **leave unset**: Console refuses to start when a profile is also set | — |
 
-只读 Role 名为 `console-console-gateway`，只授予 `configmaps`、`secrets` 的 `get`。Console 还会读取 profile 中的 `route.nginxConfigMap`；它在上表以外的 namespace 时，安装后手动授权：
+The read-only Role is named `console-console-gateway` and grants only `get` on `configmaps` and `secrets`. Console also reads the profile's `route.nginxConfigMap`; if that is in a namespace not covered by the table, grant access by hand after installing:
 
 ```bash
 kubectl -n <route-namespace> create role console-console-gateway --verb=get --resource=configmaps,secrets
@@ -126,7 +128,7 @@ kubectl -n <route-namespace> create rolebinding console-console-gateway \
   --role=console-console-gateway --serviceaccount=modelsphere:console-console
 ```
 
-### 4. 安装
+### 4. Install
 
 ```bash
 helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
@@ -135,7 +137,7 @@ helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
   --wait --timeout 10m
 ```
 
-## 检查和登录
+## Check and sign in
 
 ```bash
 helm -n modelsphere status console
@@ -143,97 +145,90 @@ kubectl -n modelsphere get pods,svc
 kubectl -n modelsphere port-forward svc/console-console 8080:8080
 ```
 
-浏览器打开 `http://127.0.0.1:8080`（Service 默认是 NodePort，也可用 NOTES 打印的节点地址），用 `admin` / `P@88w0rd` 登录。
+Open `http://127.0.0.1:8080` (the Service is a NodePort by default, so the node address printed in NOTES works too) and sign in as `admin` / `P@88w0rd`.
 
-> **首次登录会要求设置密码**：设置后才能继续使用。可以沿用初始密码（页面会提醒），建议换成自己的密码。
+> **The first login asks you to set a password** before you can continue. Keeping the initial one is allowed (with a warning); choose your own.
 
-集群中已有同名 IAM User（例如 Rise Global 的）时，Chart 不会覆盖它，`helm status` 输出的 NOTES 会说明。
+If the cluster already has an IAM User of the same name (for example Rise Global's), the chart does not overwrite it; the NOTES printed by `helm status` say so.
 
-## 卸载
+## Uninstall
 
 ```bash
 helm -n modelsphere uninstall console
 ```
 
-以下对象不会随 release 删除，重新安装时会继续使用：
+These objects are not deleted with the release, and are reused on reinstall:
 
-| 对象 | 原因 | 手动清理 |
+| Object | Why | Manual cleanup |
 |---|---|---|
-| 演示模型 PVC `console-console-demo` | 带 `helm.sh/resource-policy: keep`，避免重装时重新下载权重 | `kubectl -n modelsphere delete pvc console-console-demo` |
-| 路由 API 密钥 Secret `console-console-api-keys` | Console 运行时创建，不属于 release | `kubectl -n modelsphere delete secret console-console-api-keys` |
-| 复制的 `swiss-proxy-key` | 手动创建 | `kubectl -n modelsphere delete secret swiss-proxy-key` |
-| IAM 数据：User、IAMRole、IAMRoleBinding、LoginRecord（集群级） | Console 运行时创建（Chart 种下的管理员 User 属于 release，会被删除） | 见下 |
-| IAM CRD `*.iam.theriseunion.io` | Helm 不删除 `crds/` 中的资源 | 见下 |
+| demo model PVC `console-console-demo` | annotated `helm.sh/resource-policy: keep`, so a reinstall does not download the weights again | `kubectl -n modelsphere delete pvc console-console-demo` |
+| router API key Secret `console-console-api-keys` | created by Console at runtime, not part of the release | `kubectl -n modelsphere delete secret console-console-api-keys` |
+| the copied `swiss-proxy-key` | created by hand | `kubectl -n modelsphere delete secret swiss-proxy-key` |
+| IAM data: User, IAMRole, IAMRoleBinding, LoginRecord (cluster-scoped) | created by Console at runtime (the administrator User seeded by the chart belongs to the release and is deleted) | see below |
+| IAM CRDs `*.iam.theriseunion.io` | Helm does not delete resources in `crds/` | see below |
 
-IAM CRD 和数据与 Rise Global 共用同一套定义。集群中还有 Rise Global 或其他 Console 时**不要删除**；确认只有本 Console 使用后，删除 CRD 会连同全部用户、角色和登录记录一起删除：
+The IAM CRDs and data share one definition with Rise Global. **Do not delete them** while Rise Global or another Console still runs on the cluster. Once you are sure only this Console uses them, deleting the CRDs deletes every user, role and login record with them:
 
 ```bash
 kubectl delete crd users.iam.theriseunion.io iamroles.iam.theriseunion.io \
   iamrolebindings.iam.theriseunion.io loginrecords.iam.theriseunion.io
 ```
 
-## 常用 values
+## Common values
 
-完整说明见 `values.yaml` 的注释（`helm show values oci://ghcr.io/modelsphere/charts/console`）。
+Every setting is documented in the comments of `values.yaml` (`helm show values oci://ghcr.io/modelsphere/charts/console`).
 
-| values | 作用 |
+| Value | Effect |
 |---|---|
-| `demo.enabled=true` | 安装 CPU 演示模型 |
-| `externalSwiss.*` | 接入已有 Swiss，见上文 |
-| `playground.gateway.*` | 直接指定推理网关（没有 Swiss 时用 `configMap` + `service`） |
-| `service.type` | 暴露方式，默认 `NodePort` |
-| `admin.encryptedPassword` | 预先设定管理员密码的 bcrypt 哈希 |
-| `metrics.serviceMonitor.enabled` | 使用 Prometheus Operator 采集指标 |
-| `auth.jwtSecret` | 与 Rise Global 共享签名密钥；为空时首次安装自动生成 |
-| `auth.disabled=true` | 关闭登录，所有请求以本地管理员身份执行；见下节 |
+| `demo.enabled=true` | installs the CPU demo model |
+| `externalSwiss.*` | connects to an existing Swiss, see above |
+| `playground.gateway.*` | points at an inference gateway directly (without Swiss, use `configMap` + `service`) |
+| `service.type` | how the UI is exposed; `NodePort` by default |
+| `admin.encryptedPassword` | presets the administrator password as a bcrypt hash |
+| `metrics.serviceMonitor.enabled` | scrapes metrics with the Prometheus Operator |
+| `auth.jwtSecret` | a signing key shared with Rise Global; generated on first install when empty |
+| `auth.disabled=true` | turns login off; every request runs as the local administrator, see the next section |
 
-## 关闭登录（auth.disabled）
+## Turning login off (auth.disabled)
 
-笔记本、演示环境，或者外层已有认证的单租户集群，可以不要登录页：
+For a laptop, a demo, or a single-tenant cluster that already has authentication in front, the login page can go:
 
 ```sh
 helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
   --namespace modelsphere --create-namespace --set auth.disabled=true
 ```
 
-这时 console 不再签发或校验 token，每个请求都带一个合成的 `admin`
-身份（`system:masters`），授权器的短路分支让它通过所有检查。前端不再显示登录
-页，用户菜单里的"修改密码"和"退出登录"一并隐藏——两者都没有可操作的对象。
+Console then neither issues nor checks tokens. Every request carries a synthetic `admin` identity (`system:masters`), which the authorizer's short-circuit lets through every check. The UI shows no login page, and "Change password" and "Sign out" are hidden from the user menu, since neither has anything to act on.
 
-| 影响 | 说明 |
+| Consequence | Detail |
 |---|---|
-| 整条链路都没有鉴权 | Console 是 Swiss 前面唯一做授权的一层。这里关掉，栈里就没有任何一层做授权了 |
-| 不要暴露在共享网络上 | 任何能访问到这个地址的人都是管理员 |
-| 签名密钥照常生成 | Secret 仍然存在，`auth.jwtSecret` 仍可用于与 Rise Global 共享 |
-| 管理员 User 照常创建 | 没人用它登录，但保留它意味着改回 `auth.disabled=false` 只是改一个值；把它从 manifest 里去掉会让 helm 删除它 |
+| nothing in the chain authorizes | Console is the only layer in front of Swiss that authorizes. Turn it off here and no layer in the stack does |
+| do not expose it on a shared network | anyone who can reach the address is an administrator |
+| the signing key is still generated | the Secret still exists, and `auth.jwtSecret` can still be shared with Rise Global |
+| the administrator User is still created | nobody signs in with it, but keeping it makes switching back to `auth.disabled=false` a one-value change; removing it from the manifest would make helm delete it |
 
-启动时会打印一条 warning，`helm install` 的 NOTES 也会提示。改回来时在同一条命令里改为 `--set auth.disabled=false`。
+Console logs a warning at startup, and the NOTES of `helm install` say so too. To switch back, run the same command with `--set auth.disabled=false`.
 
-## 发布
+## Publishing
 
-[`publish` workflow](https://github.com/modelsphere/console/actions/workflows/publish.yml) 与 Swiss 的相同：
+Two workflows, [`ci`](https://github.com/modelsphere/console/actions/workflows/ci.yml) and [`publish`](https://github.com/modelsphere/console/actions/workflows/publish.yml) (the same scheme as Swiss):
 
-| 触发 | 版本 | 推送 |
+| Trigger | Version | Pushed |
 |---|---|---|
-| push 到 `main` | `<appVersion>-git<sha7>` | 镜像和 Chart |
-| 推送 tag `X.Y.Z`（必须等于 `Chart.yaml` 的 `appVersion`） | `X.Y.Z` | 镜像（另打 `latest`）和 Chart |
-| pull request | `<appVersion>-git<sha7>` | 不推送，只测试、构建、打包 |
+| push to `main` | `<appVersion>-git<sha7>` | image and chart |
+| a pushed tag `X.Y.Z` (must equal `appVersion` in `Chart.yaml`) | `X.Y.Z` | image (also tagged `latest`) and chart |
+| pull request | `<appVersion>-git<sha7>` | nothing: tests, build and package only |
 
 ```text
-go test -> helm lint、渲染三种装法 -> 第三方镜像可匿名拉取 -> 构建镜像 -> 打包 Chart -> 推送 -> 匿名拉取验证
+ci:      go vet, go test, web typecheck and tests, repository gate
+publish: build the image -> helm dependency build, lint --strict, package -> push image and chart
 ```
 
-发布正式版：
+To release:
 
 ```bash
-hack/bump.sh patch --tag     # 改 Chart.yaml 与 internal/version，提交并打 tag
+hack/bump.sh patch --tag     # updates Chart.yaml and internal/version, commits and tags
 git push origin main --follow-tags
 ```
 
-本地打包，与 CI 同一个脚本（拒绝 dirty worktree，保证版本中的 commit 与内容一致）：
-
-```bash
-hack/chart.sh --output ./dist
-```
-
-新建的 GHCR package 默认是私有的。第一次发布后，要在 package 设置里改为 Public，否则 workflow 最后一步的匿名拉取验证会失败。
+A newly created GHCR package is private by default. After the first publish, set it to Public in the package settings, or anonymous pulls fail.
