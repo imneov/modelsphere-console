@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, Boxes, Rocket, Server, SlidersHorizontal } fro
 import type { ConsoleModule } from "@/shell";
 import { api } from "@swiss/lib/api";
 import { Gate } from "@swiss/components/Session";
+import { ToastProvider } from "@swiss/components/ui/toast";
 
 function load<K extends string>(name: K, loader: () => Promise<Record<K, ComponentType>>) {
   return lazy(() => loader().then((m) => ({ default: m[name] })));
@@ -38,10 +39,12 @@ function ClusterWarnings() {
 
 const page = (node: ReactNode) => (
   <Suspense fallback={<div className="text-sm text-muted-foreground">加载中…</div>}>
-    <Gate>
-      <ClusterWarnings />
-      {node}
-    </Gate>
+    <ToastProvider>
+      <Gate>
+        <ClusterWarnings />
+        {node}
+      </Gate>
+    </ToastProvider>
   </Suspense>
 );
 
