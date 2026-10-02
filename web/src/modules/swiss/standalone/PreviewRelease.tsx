@@ -150,6 +150,30 @@ const CASES: Record<string, { status: ReleaseStatus; objects: ObjectResult[] }> 
   bare: { status: status(1, 1, "applied"), objects: [] },
 };
 
+// A plan with the SLO requirement on, so the SLO card -- and the button that
+// jumps to it -- show for the cases that have one.
+const plan = (name: string) => ({
+  apiVersion: "swiss/v1",
+  release: { name, namespace: "models" },
+  source: { model: "glm-5.3", version: "1.0.0", variant: "sglang-tp8-h100" },
+  chart: { name: "sglang", version: "0.8.0" },
+  engine: "sglang",
+  profile: "preview",
+  layers: { form: { sloRequirement: { enabled: true } } },
+  hash: "sha256:preview",
+});
+
+const sloConfig = {
+  found: true,
+  route: "glm-53",
+  highPriority: true,
+  priority: 10,
+  minimumDeployment: { type: "replica", value: 1 },
+  maximumDeployment: { type: "replica", value: 6 },
+  ttft: { default: { metrics: [{ type: "p80", threshold: 2 }] } },
+  otps: { default: { metrics: [{ type: "p80", threshold: 30 }] } },
+};
+
 function installStub() {
   if (!import.meta.env.DEV || Reflect.get(window, "__releaseStub")) return;
   Reflect.set(window, "__releaseStub", true);
@@ -158,13 +182,21 @@ function installStub() {
     new Response(JSON.stringify(body), { status: code, headers: { "Content-Type": "application/json" } });
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    if (url.endsWith("/api/cluster")) return json({ name: "preview", allowDeploy: false });
-    const m = url.match(/\/api\/releases\/models\/(healthy|scaling|broken|bare)\/(status|objects|plan)$/);
+    if (url.endsWith("/api/cluster")) return json({ name: "preview", allowDeploy: true });
+    // Uninstall: healthy succeeds outright, scaling leaves its plan behind.
+    const del = url.match(/\/api\/releases\/models\/(healthy|scaling|broken|bare)$/);
+    if (del && init?.method === "DELETE") {
+      await new Promise((r) => setTimeout(r, 400));
+      return json(del[1] === "scaling" ? { release: del[1], planError: "configmaps \"swiss-plan-scaling\" is forbidden" } : { release: del[1] });
+    }
+    const m = url.match(/\/api\/releases\/models\/(healthy|scaling|broken|bare)\/(status|objects|plan|slo)$/);
     if (!m) return real(input, init);
     const c = CASES[m[1]];
     if (m[2] === "status") return json({ ...c.status, release: m[1] });
     if (m[2] === "objects") return json({ objects: c.objects });
-    return json({ error: "no plan" }, 404);
+    const withSLO = m[1] === "healthy" || m[1] === "scaling";
+    if (m[2] === "slo") return json(sloConfig);
+    return withSLO ? json(plan(m[1])) : json({ error: "no plan" }, 404);
   };
 }
 

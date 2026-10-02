@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CircleCheck, CircleX, Loader2 } from "lucide-react";
+import { Check as CheckIcon, CircleCheck, CircleX, Copy, ExternalLink, Globe, KeyRound, Loader2 } from "lucide-react";
 import {
   api,
   deployApi,
@@ -26,59 +26,33 @@ import { ErrorState } from "@swiss/components/States";
 // The address is the part that is read every time, so it is the part that is
 // open. Both checks spend something to run -- the health check spends GPU time
 // -- so neither runs, or takes up room, until it is asked for.
+//
+// access off where the page shows the address elsewhere: the release page puts
+// it in the install status card, and this card keeps only the checks.
 export function Endpoint({
   namespace,
   release,
   status: s,
+  access = true,
 }: {
   namespace: string;
   release: string;
   status: Status;
+  access?: boolean;
 }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-          Endpoint
+          {access ? "Endpoint" : "Endpoint checks"}
           {s.route && <Badge variant="outline">{s.route}</Badge>}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {s.url ? (
-          <>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <a
-                href={s.url}
-                target="_blank"
-                rel="noreferrer"
-                className="min-w-0 font-mono text-sm break-all hover:underline"
-              >
-                {s.url}
-              </a>
-              <CopyButton value={s.url} />
-            </div>
-            <div>
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">
-                  Fill in the key; the rest is this release.
-                </span>
-                <CopyButton value={curlFor(s)} />
-              </div>
-              <Code lang="sh">{curlFor(s)}</Code>
-            </div>
-          </>
-        ) : s.route ? (
-          <p className="text-sm text-muted-foreground">
-            Published on <code>{s.route}</code>. The site profile names no{" "}
-            <code>route.gateway</code>, so the outside URL is not known here.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No route published for this release, so there is no address to call.
-          </p>
-        )}
+        {access && <AccessPoint status={s} />}
 
         <Check
+          open={!access}
           title="Serving check"
           hint="Asks the openresty entrypoint for this route, not the pod. A ready pod behind a route that was never published serves nobody."
         >
@@ -86,6 +60,7 @@ export function Endpoint({
         </Check>
 
         <Check
+          open={!access}
           title="Health check"
           hint="Sends a real request through the entrypoint and shows what came back. A model list comes back from an engine that cannot yet generate a token."
         >
@@ -96,19 +71,92 @@ export function Endpoint({
   );
 }
 
-// Closed until asked for, and not mounted open: a check that has not been run
-// shows nothing worth the room it would take.
+// AccessPoint is the address and a request that works against it, with the key
+// left to fill in. Names the auth header but never holds the key.
+export function AccessPoint({ status: s }: { status: Status }) {
+  if (!s.url) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {s.route ? (
+          <>
+            Published on <code>{s.route}</code>. The site profile names no{" "}
+            <code>route.gateway</code>, so the outside URL is not known here.
+          </>
+        ) : (
+          "No route published for this release, so there is no address to call."
+        )}
+      </p>
+    );
+  }
+  const curl = curlFor(s);
+  return (
+    <div className="space-y-3">
+      <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted/30 py-1.5 pr-1.5 pl-3">
+        <Globe className="size-4 shrink-0 text-muted-foreground" />
+        <a
+          href={s.url}
+          target="_blank"
+          rel="noreferrer"
+          className="min-w-0 flex-1 truncate font-mono text-sm hover:underline"
+          title={s.url}
+        >
+          {s.url}
+        </a>
+        <IconCopy value={s.url} label="copy the URL" />
+        <a
+          href={s.url}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="open the URL"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <ExternalLink className="size-4" />
+        </a>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        {s.model && (
+          <Badge variant="outline" className="gap-1">
+            <span className="text-muted-foreground">model</span>
+            <span className="font-mono">{s.model}</span>
+          </Badge>
+        )}
+        <Badge variant="outline" className="gap-1">
+          <KeyRound className="size-3 text-muted-foreground" />
+          <span className="font-mono">
+            {s.authHeader || "Authorization"}: {s.authPrefix ?? "Bearer "}
+            {KEY}
+          </span>
+        </Badge>
+      </div>
+
+      <div>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">Example request — fill in the key</span>
+          <IconCopy value={curl} label="copy the request" />
+        </div>
+        <Code lang="sh">{curl}</Code>
+      </div>
+    </div>
+  );
+}
+
+// Opening one runs nothing: each check waits for its own button. Closed in the
+// deploy pipeline, where the address is the point; open on the release page,
+// where the checks are all this card holds.
 function Check({
   title,
   hint,
+  open = false,
   children,
 }: {
   title: string;
   hint: string;
+  open?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <details className="rounded-md border">
+    <details className="rounded-md border" open={open}>
       <summary className="cursor-pointer list-inside px-3 py-2 text-sm font-medium">
         {title}
         <span className="ml-2 font-normal text-muted-foreground">{hint}</span>
@@ -387,6 +435,29 @@ function CopyButton({ value }: { value: string }) {
       className="shrink-0 text-xs text-muted-foreground underline hover:text-foreground"
     >
       {done ? "copied" : "copy"}
+    </button>
+  );
+}
+
+function IconCopy({ value, label }: { value: string; label: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={done ? "copied" : label}
+      onClick={() => {
+        void navigator.clipboard?.writeText(value).then(
+          () => {
+            setDone(true);
+            setTimeout(() => setDone(false), 1500);
+          },
+          () => {},
+        );
+      }}
+      className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+    >
+      {done ? <CheckIcon className="size-4 text-success" /> : <Copy className="size-4" />}
     </button>
   );
 }

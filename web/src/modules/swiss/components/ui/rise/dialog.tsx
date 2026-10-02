@@ -1,3 +1,4 @@
+import { cn } from "@swiss/lib/utils";
 import {
   Dialog as RiseDialog,
   DialogContent,
@@ -19,12 +20,15 @@ export function Dialog({
   title,
   subtitle,
   footer,
+  size = "lg",
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: React.ReactNode;
   subtitle?: React.ReactNode;
+  // sm for a confirmation; lg (the default) holds a diff.
+  size?: "sm" | "lg";
   // Pinned below the scrolling body: the action lives here, so it stays on
   // screen no matter how long the diff is. A button that scrolls away is a
   // button nobody trusts they have found.
@@ -38,7 +42,12 @@ export function Dialog({
         if (!next) onClose();
       }}
     >
-      <DialogContent className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent
+        className={cn(
+          "flex max-h-[calc(100vh-2rem)] w-full flex-col gap-0 overflow-hidden p-0",
+          size === "sm" ? "max-w-md" : "max-w-5xl",
+        )}
+      >
         <DialogHeader className="space-y-0 border-b p-4 text-left">
           <DialogTitle className="pr-6">{title}</DialogTitle>
           {/* asChild: a subtitle carries badges and spans, which cannot nest in

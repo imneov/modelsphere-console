@@ -1,7 +1,18 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "@swiss/lib/host";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, CircleCheck, CircleDashed, CircleX, Loader2, TriangleAlert } from "lucide-react";
+import {
+  ChevronLeft,
+  CircleArrowUp,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  History,
+  Loader2,
+  Target,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import {
   api,
   deployApi,
@@ -17,9 +28,11 @@ import {
 import { Badge } from "@swiss/components/ui/badge";
 import { Button } from "@swiss/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@swiss/components/ui/card";
+import { Dialog } from "@swiss/components/ui/dialog";
 import { Field, Input } from "@swiss/components/ui/input";
 import { Provenance } from "@swiss/components/Provenance";
 import { ReleaseObjects, pick, useReleaseObjects } from "@swiss/components/ReleaseObjects";
+import { AccessPoint } from "@swiss/components/Endpoint";
 import { ReleaseStatus } from "@swiss/components/ReleaseStatus";
 import { SLOCard } from "@swiss/components/SLOCard";
 import { ErrorState, Loading } from "@swiss/components/States";
@@ -42,11 +55,19 @@ export function DeploymentDetail() {
     retry: false,
   });
   const objects = useReleaseObjects(namespace, release);
+  const sloRef = useRef<HTMLDivElement>(null);
+  const [sloFlash, setSloFlash] = useState(false);
 
   if (status.isPending) return <Loading what={release} />;
   if (status.error) return <ErrorState what={release} error={status.error} />;
 
   const s = status.data;
+  const showSLO = s.planStatus?.phase === "applied" && sloEnabled(plan.data);
+  const jumpToSLO = () => {
+    sloRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setSloFlash(true);
+    setTimeout(() => setSloFlash(false), 1500);
+  };
 
   return (
     <div className="space-y-5">
@@ -73,7 +94,12 @@ export function DeploymentDetail() {
             )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {showSLO && (
+            <Button size="sm" variant="outline" onClick={jumpToSLO}>
+              <Target className="size-4" /> Configure SLO
+            </Button>
+          )}
           {/* Revisions are rows in the log now: an applied revision and the
               run that produced it are one event, and rolling back starts from
               the row that records it. */}
@@ -81,15 +107,16 @@ export function DeploymentDetail() {
             to={`/runs?namespace=${encodeURIComponent(namespace)}&release=${encodeURIComponent(release)}`}
           >
             <Button size="sm" variant="outline">
-              History &amp; rollback
+              <History className="size-4" /> History &amp; rollback
             </Button>
           </Link>
           {plan.data && (
             <Link
               to={`/upgrade/${encodeURIComponent(namespace)}/${encodeURIComponent(release)}`}
             >
-              <Button size="sm" variant="outline">
-                Upgrade
+              {/* The one action that changes the release, so the one filled button. */}
+              <Button size="sm">
+                <CircleArrowUp className="size-4" /> Upgrade
               </Button>
             </Link>
           )}
@@ -100,11 +127,19 @@ export function DeploymentDetail() {
 
       <ReleaseObjects namespace={namespace} release={release} />
 
-      {s.planStatus?.phase === "applied" && sloEnabled(plan.data) && (
-        <SLOCard namespace={namespace} release={release} canEdit={!!cluster.data?.allowDeploy} />
+      {showSLO && (
+        <div
+          ref={sloRef}
+          className={cn(
+            "scroll-mt-16 rounded-xl transition-shadow duration-500",
+            sloFlash && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+          )}
+        >
+          <SLOCard namespace={namespace} release={release} canEdit={!!cluster.data?.allowDeploy} />
+        </div>
       )}
 
-      <ReleaseStatus namespace={namespace} release={release} />
+      <ReleaseStatus namespace={namespace} release={release} stats={false} access={false} />
 
       {plan.data && (
         <Card>
@@ -195,7 +230,6 @@ function InstallStatus({ status, objects }: { status: Status; objects?: ObjectRe
           <Meta label="Started" at={p?.startedAt} />
           <Meta label="Updated" at={p?.updatedAt} />
           <Meta label="Recorded revision" value={p?.revision ? String(p.revision) : undefined} />
-          <Meta label="Route" value={status.route} href={status.url} />
         </dl>
 
         {!p && status.exists && (
@@ -203,6 +237,18 @@ function InstallStatus({ status, objects }: { status: Status; objects?: ObjectRe
             No status recorded beside this release — swiss did not deploy it.
           </p>
         )}
+
+        <div className="space-y-3 border-t pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold">Access</h3>
+            {status.route && (
+              <Badge variant="outline" className="font-mono">
+                /{status.route}/
+              </Badge>
+            )}
+          </div>
+          <AccessPoint status={status} />
+        </div>
       </CardContent>
     </Card>
   );
@@ -293,7 +339,7 @@ function Callout({ tone, children }: { tone: "warn" | "bad"; children: React.Rea
 
 // An unset field is left out rather than rendered as a dash: the list is read at
 // a glance, and empty rows bury the ones that were actually set.
-function Meta({ label, value, at, href }: { label: string; value?: string; at?: string; href?: string }) {
+function Meta({ label, value, at }: { label: string; value?: string; at?: string }) {
   if (!value?.trim() && !at) return null;
   return (
     <div className="flex min-w-0 items-baseline justify-between gap-3 border-b border-dashed py-1">
@@ -304,10 +350,6 @@ function Meta({ label, value, at, href }: { label: string; value?: string; at?: 
             {timeAgo(at)}
             <span className="ml-1.5 text-xs text-muted-foreground">{new Date(at).toLocaleString()}</span>
           </span>
-        ) : href ? (
-          <a href={href} target="_blank" rel="noreferrer" className="font-mono text-xs underline-offset-2 hover:underline">
-            {value}
-          </a>
         ) : (
           <span className="font-mono text-xs">{value}</span>
         )}
@@ -316,9 +358,10 @@ function Meta({ label, value, at, href }: { label: string; value?: string; at?: 
   );
 }
 
-// Uninstall is typed to confirm rather than guarded by a dialog. It removes a
+// Uninstall is typed to confirm, in a popup rather than inline: it removes a
 // release that takes 20-40 minutes to load back, so the release name is the one
-// thing the operator must have read before this goes ahead.
+// thing the operator must have read before this goes ahead, and the button that
+// does it is not on the page to be hit by accident.
 function Uninstall({
   namespace,
   release,
@@ -328,6 +371,7 @@ function Uninstall({
   release: string;
   exists: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -340,41 +384,108 @@ function Uninstall({
     },
   });
 
+  const confirmed = typed === release;
+  const close = () => {
+    if (run.isPending) return;
+    setOpen(false);
+    setTyped("");
+    run.reset();
+  };
+
   return (
     <Card className="border-destructive/30">
       <CardHeader>
         <CardTitle className="text-base">Uninstall</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Runs <code>helm uninstall</code> and removes the plan recorded beside the release.
-          The audit log keeps the record. Reloading the weights afterwards takes 20–40
-          minutes.
+          {exists
+            ? "Removes this release from the cluster. Reloading the weights afterwards takes 20–40 minutes."
+            : "There is no live release to remove."}
         </p>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {!exists ? (
-          <p className="text-sm text-muted-foreground">There is no live release to remove.</p>
-        ) : (
+      <CardContent>
+        <Button variant="destructive" className="w-full" disabled={!exists} onClick={() => setOpen(true)}>
+          <Trash2 className="size-4" /> Uninstall…
+        </Button>
+      </CardContent>
+
+      <Dialog
+        open={open}
+        onClose={close}
+        size="sm"
+        title={`Uninstall ${release}?`}
+        subtitle={
           <>
-            <Field label="Type the release name to confirm" hint={release}>
-              <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={release} />
-            </Field>
+            in namespace <Badge variant="outline">{namespace}</Badge>
+          </>
+        }
+        footer={
+          <div className="flex flex-col gap-2">
             <Button
               variant="destructive"
+              className="w-full"
               onClick={() => run.mutate()}
-              disabled={typed !== release || run.isPending}
+              disabled={!confirmed || run.isPending || !!run.data}
             >
-              {run.isPending ? "Uninstalling…" : `Uninstall ${release}`}
+              {run.isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> Uninstalling…
+                </>
+              ) : (
+                <>
+                  <Trash2 className="size-4" /> Uninstall
+                </>
+              )}
             </Button>
-          </>
-        )}
+            <Button variant="outline" className="w-full" onClick={close} disabled={run.isPending}>
+              Cancel
+            </Button>
+          </div>
+        }
+      >
+        <ul className="space-y-1.5 text-sm">
+          <li className="flex gap-2">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <span>
+              Runs <code>helm uninstall</code>: the model stops serving and its pods are deleted.
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <span>Removes the plan recorded beside the release. The audit log keeps the record.</span>
+          </li>
+          <li className="flex gap-2">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <span>Installing it again reloads the weights, which takes 20–40 minutes.</span>
+          </li>
+        </ul>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (confirmed && !run.isPending && !run.data) run.mutate();
+          }}
+        >
+          <Field label="Type the release name to confirm" hint={release}>
+            <Input
+              autoFocus
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={release}
+              autoComplete="off"
+              spellCheck={false}
+              aria-invalid={typed !== "" && !release.startsWith(typed)}
+              className="font-mono"
+            />
+          </Field>
+        </form>
 
         {run.error && <ErrorState what="the uninstall" error={run.error} />}
         {run.data?.planError && (
-          <p className="text-sm text-warning">
+          <Callout tone="warn">
             The release is gone, but its plan ConfigMap was not removed: {run.data.planError}
-          </p>
+          </Callout>
         )}
-      </CardContent>
+      </Dialog>
     </Card>
   );
 }

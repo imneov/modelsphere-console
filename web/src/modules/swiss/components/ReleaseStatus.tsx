@@ -6,7 +6,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Endpoint } from "@swiss/components/Endpoint";
 import { ErrorState, Loading } from "@swiss/components/States";
 
-export function ReleaseStatus({ namespace, release }: { namespace: string; release: string }) {
+// stats and access off where the page already shows them -- the detail page's
+// install status card carries revision, helm status, ready pods and the address.
+export function ReleaseStatus({
+  namespace,
+  release,
+  stats = true,
+  access = true,
+}: {
+  namespace: string;
+  release: string;
+  stats?: boolean;
+  access?: boolean;
+}) {
   const status = useQuery({
     queryKey: ["status", namespace, release],
     queryFn: () => api.status(namespace, release),
@@ -20,13 +32,15 @@ export function ReleaseStatus({ namespace, release }: { namespace: string; relea
 
   return (
     <div className="space-y-4">
-      <Endpoint namespace={namespace} release={release} status={s} />
+      <Endpoint namespace={namespace} release={release} status={s} access={access} />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Revision" value={s.exists ? String(s.revision) : "not installed"} />
-        <Stat label="Helm" value={s.helmStatus ?? "—"} />
-        <Stat label="Pods ready" value={`${s.ready} / ${s.total}`} tone={s.total > 0 && s.ready < s.total ? "wait" : undefined} />
-      </div>
+      {stats && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat label="Revision" value={s.exists ? String(s.revision) : "not installed"} />
+          <Stat label="Helm" value={s.helmStatus ?? "—"} />
+          <Stat label="Pods ready" value={`${s.ready} / ${s.total}`} tone={s.total > 0 && s.ready < s.total ? "wait" : undefined} />
+        </div>
+      )}
 
       {s.total > 0 && s.ready < s.total && (
         <p className="text-sm text-muted-foreground">

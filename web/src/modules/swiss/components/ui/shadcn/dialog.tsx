@@ -17,12 +17,15 @@ export function Dialog({
   title,
   subtitle,
   footer,
+  size = "lg",
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: React.ReactNode;
   subtitle?: React.ReactNode;
+  // sm for a confirmation; lg (the default) holds a diff.
+  size?: "sm" | "lg";
   // Pinned below the scrolling body: the action lives here, so it stays on
   // screen no matter how long the diff is. A diff is thousands of lines, and a
   // button that scrolls away is a button nobody trusts they have found.
@@ -74,7 +77,8 @@ export function Dialog({
         aria-label={typeof title === "string" ? title : undefined}
         tabIndex={-1}
         className={cn(
-          "flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col rounded-lg border bg-background shadow-lg outline-none",
+          "flex max-h-[calc(100vh-2rem)] w-full flex-col rounded-lg border bg-background shadow-lg outline-none",
+          size === "sm" ? "max-w-md" : "max-w-5xl",
         )}
       >
         <div className="flex items-start gap-3 border-b p-4">
