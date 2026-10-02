@@ -81,7 +81,7 @@ npm run dev                                 # http://localhost:5173, proxies /ap
 | Script | What it does |
 |---|---|
 | `npm run dev` | console shell with hot reload, against your local server |
-| `npm run dev:swiss` | the standalone Swiss UI variant, against `$SWISSD` |
+| `npm run dev:swiss` | the standalone Swiss UI variant, against `$SWISSD` (default `http://127.0.0.1:8080`) |
 | `npm run build` / `build:swiss` | `web/dist` / `web/dist-swiss` |
 | `npm run typecheck` | both variants; run before claiming done |
 | `npm test` | vitest |

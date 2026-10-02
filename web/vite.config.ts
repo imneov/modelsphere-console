@@ -32,9 +32,8 @@ const src = path.resolve(import.meta.dirname, "src");
 const swissDir = path.join(src, "modules/swiss");
 
 const egressProxy = process.env.http_proxy ?? process.env.HTTP_PROXY;
-// const remote = 'http://127.0.0.1:8080';
-const remote = process.env.SWISSD ?? 'http://172.28.44.16:32326';
-// const remote = 'http://172.26.6.11:31488';
+// The swissd that `npm run dev:swiss` talks to: SWISSD=http://<host>:<port> npm run dev:swiss
+const remote = process.env.SWISSD ?? "http://127.0.0.1:8080";
 
 export default defineConfig(({ mode }) => {
   const swiss = mode === "swiss";
