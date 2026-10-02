@@ -21,6 +21,7 @@ export const playgroundModule: ConsoleModule = {
   id: "playground",
   title: "Playground",
   basePath: "/playground",
+  frame: "flush",
   pages: [
     { path: "", element: page(<Chat />), permission: "playground.use", menu: { label: "对话", icon: MessageSquare } },
     { path: "compare", element: page(<Compare />), permission: "playground.use", menu: { label: "多模型对比", icon: Columns2 } },

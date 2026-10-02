@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@riseaicloud/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@modelsphere/ui";
 import { useAuth } from "@/shell/auth";
 import { useT } from "@/shell/i18n";
 import { LocaleSwitch } from "@/shell/LocaleSwitch";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Textarea, ToggleGroup, ToggleGroupItem } from "@riseaicloud/ui";
+import { Button, Textarea, ToggleGroup, ToggleGroupItem } from "@modelsphere/ui";
 import { Plus, Send, Square } from "lucide-react";
 import { useT } from "@/modules/playground/i18n";
 import type { Role } from "@/modules/playground/useChat";
@@ -51,7 +51,8 @@ export function Composer({ disabled, streaming, pendingUser, onSend, onAdd, onSt
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <ToggleGroup type="single" size="sm" variant="outline" value={role} onValueChange={(v) => v && setRole(v as Role)}>
+          {/* Single-select: pressing the active role again yields [], which is ignored, so one role is always set. */}
+          <ToggleGroup size="sm" variant="outline" spacing={0} value={[role]} onValueChange={(v) => v[0] && setRole(v[0] as Role)}>
             <ToggleGroupItem value="user">{t("composer.user")}</ToggleGroupItem>
             <ToggleGroupItem value="assistant">{t("composer.assistant")}</ToggleGroupItem>
           </ToggleGroup>
@@ -59,17 +60,17 @@ export function Composer({ disabled, streaming, pendingUser, onSend, onAdd, onSt
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={add} disabled={disabled || streaming || !input.trim()} title={t("composer.addTitle")}>
-            <Plus className="mr-1 h-4 w-4" />
+            <Plus data-icon="inline-start" />
             {t("composer.add")}
           </Button>
           {streaming ? (
             <Button variant="outline" onClick={onStop}>
-              <Square className="mr-1 h-4 w-4" />
+              <Square data-icon="inline-start" />
               {t("composer.stop")}
             </Button>
           ) : (
             <Button onClick={send} disabled={!canSend}>
-              <Send className="mr-1 h-4 w-4" />
+              <Send data-icon="inline-start" />
               {t("composer.send")}
             </Button>
           )}

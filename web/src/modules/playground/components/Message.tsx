@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Textarea } from "@riseaicloud/ui";
+import { Button, Textarea } from "@modelsphere/ui";
 import { Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { CopyButton } from "@/shell";
 import { Markdown } from "@/modules/playground/components/Markdown";
@@ -55,14 +55,14 @@ export function Message({ turn, locked, onEdit, onRemove, onRegenerate }: Props)
   const actions = (
     <div className="flex items-center gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
       {turn.content ? <CopyButton text={turn.content} /> : null}
-      <Button variant="ghost" size="sm" className="h-7 px-2" disabled={locked} onClick={() => setDraft(turn.content)} title={t("message.edit")}>
+      <Button variant="ghost" size="icon-sm" disabled={locked} onClick={() => setDraft(turn.content)} title={t("message.edit")}>
         <Pencil className="h-3.5 w-3.5" />
       </Button>
-      <Button variant="ghost" size="sm" className="h-7 px-2" disabled={locked} onClick={() => onRemove(turn.id)} title={t("message.delete")}>
+      <Button variant="ghost" size="icon-sm" disabled={locked} onClick={() => onRemove(turn.id)} title={t("message.delete")}>
         <Trash2 className="h-3.5 w-3.5" />
       </Button>
       {onRegenerate ? (
-        <Button variant="ghost" size="sm" className="h-7 px-2" disabled={locked} onClick={onRegenerate} title={t("message.regenerate")}>
+        <Button variant="ghost" size="icon-sm" disabled={locked} onClick={onRegenerate} title={t("message.regenerate")}>
           <RefreshCw className="h-3.5 w-3.5" />
         </Button>
       ) : null}

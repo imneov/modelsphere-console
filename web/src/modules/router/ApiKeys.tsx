@@ -1,12 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Alert,
+  AlertDescription,
   Badge,
   Button,
   Checkbox,
-  type ColumnDef,
-  DataTable,
+  ConfirmDialog,
+  DataSelect,
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -14,15 +17,13 @@ import {
   DialogTitle,
   Input,
   Label,
-  PageHeader,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  PageBanner,
+  ResourceTable,
   Textarea,
-} from "@riseaicloud/ui";
-import { KeyRound, Plus, TriangleAlert } from "lucide-react";
+  type ResourceColumn,
+  type ResourceRowAction,
+} from "@modelsphere/ui";
+import { KeyRound, TriangleAlert } from "lucide-react";
 import { CopyButton, formatDateTime, tNodes } from "@/shell";
 import { api, type ApiKey } from "@/modules/router/api";
 import { useT } from "@/modules/router/i18n";
@@ -39,19 +40,27 @@ const MAX_MODEL_BADGES = 3;
 export function ApiKeys() {
   const t = useT();
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["router", "apikeys"], queryFn: api.listKeys });
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["router", "apikeys"], queryFn: api.listKeys });
   const [createOpen, setCreateOpen] = useState(false);
-  const [deleteErr, setDeleteErr] = useState("");
-  const err = deleteErr || (error as Error | null)?.message;
+  const [search, setSearch] = useState("");
+  const [deleting, setDeleting] = useState<ApiKey | null>(null);
 
-  const columns: ColumnDef<ApiKey>[] = [
+  const del = useMutation({
+    mutationFn: (id: string) => api.deleteKey(id),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["router", "apikeys"] }),
+  });
+
+  const query = search.trim().toLowerCase();
+  const rows = (data?.items ?? []).filter((k) => !query || k.name.toLowerCase().includes(query));
+
+  const columns: ResourceColumn<ApiKey>[] = [
     {
       key: "name",
       title: t("apiKeys.table.name"),
-      searchable: true,
+      hideable: false,
       render: (k) => (
         <div className="min-w-0">
-          <div className="font-medium">{k.name}</div>
+          <div className="truncate font-medium">{k.name}</div>
           {k.description && <div className="truncate text-xs text-muted-foreground" title={k.description}>{k.description}</div>}
         </div>
       ),
@@ -77,58 +86,68 @@ export function ApiKeys() {
     {
       key: "expiresAt",
       title: t("apiKeys.table.expiresAt"),
-      width: 190,
+      width: 240,
       render: (k) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 whitespace-nowrap">
           <span>{k.expiresAt ? formatDateTime(k.expiresAt) : t("apiKeys.neverExpires")}</span>
-          {k.expired && <Badge className="bg-red-100 text-red-800">{t("apiKeys.expired")}</Badge>}
+          {k.expired && <Badge variant="destructive">{t("apiKeys.expired")}</Badge>}
         </div>
       ),
     },
-    { key: "createdBy", title: t("apiKeys.table.createdBy"), width: 90 },
+    { key: "createdBy", title: t("apiKeys.table.createdBy"), width: 100 },
     { key: "createdAt", title: t("apiKeys.table.createdAt"), width: 160, render: (k) => formatDateTime(k.createdAt) },
   ];
 
+  const rowActions: ResourceRowAction<ApiKey>[] = [{ key: "delete", label: t("common:actions.delete"), danger: true, onClick: setDeleting }];
+  const createButton = <Button onClick={() => setCreateOpen(true)}>{t("apiKeys.create")}</Button>;
+
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title={t("apiKeys.title")}
-        icon={<KeyRound className="h-5 w-5" />}
-        extra={
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1 h-4 w-4" />
-            {t("apiKeys.create")}
-          </Button>
-        }
-      />
-      {err && <p className="text-sm text-destructive">{err}</p>}
-      <DataTable<ApiKey>
-        data={data?.items ?? []}
-        loading={isLoading}
-        rowKey="id"
-        columns={columns}
-        totalItems={data?.items.length ?? 0}
-        showRefresh
-        onRefresh={() => qc.invalidateQueries({ queryKey: ["router", "apikeys"] })}
-        emptyText={t("apiKeys.empty")}
-        minWidth={900}
-        deleteConfig={{
-          rowNameKey: "name",
-          buttonText: t("common:actions.delete"),
-          confirmTitle: t("apiKeys.delete.title"),
-          confirmText: (k) => t("apiKeys.delete.confirm", { name: k.name }),
-          onDelete: async (k) => {
-            setDeleteErr("");
-            try {
-              await api.deleteKey(k.id);
-            } catch (e) {
-              setDeleteErr((e as Error).message);
-            }
-            qc.invalidateQueries({ queryKey: ["router", "apikeys"] });
-          },
+    <div className="flex h-full flex-col">
+      <PageBanner title={t("apiKeys.title")} icon={<KeyRound className="size-5" />} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+        <ResourceTable<ApiKey>
+          height="fill"
+          toolbarLayout="inline"
+          data={rows}
+          loading={isLoading}
+          error={error}
+          onRetry={() => void refetch()}
+          rowKey="id"
+          columns={columns}
+          showRefresh
+          onRefresh={() => qc.invalidateQueries({ queryKey: ["router", "apikeys"] })}
+          rowActions={rowActions}
+          toolbarLeft={createButton}
+          filters={
+            <div className="w-52 shrink-0">
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("apiKeys.search")} className="w-full" />
+            </div>
+          }
+          activeFilters={query ? [{ key: "search", label: t("apiKeys.table.name"), display: search.trim() }] : []}
+          onRemoveFilter={() => setSearch("")}
+          emptyTitle={t("apiKeys.empty")}
+          emptyAction={createButton}
+        />
+      </div>
+      <CreateApiKeyDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(o) => {
+          if (o) return;
+          setDeleting(null);
+          del.reset();
+        }}
+        title={t("apiKeys.delete.title")}
+        description={deleting ? t("apiKeys.delete.confirm", { name: deleting.name }) : undefined}
+        action={t("common:actions.delete")}
+        tone="destructive"
+        items={deleting ? [deleting.name] : []}
+        error={del.error?.message}
+        loading={del.isPending}
+        onConfirm={async () => {
+          if (deleting) await del.mutateAsync(deleting.id);
         }}
       />
-      <CreateApiKeyDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }
@@ -146,9 +165,9 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      {/* An outside click must not discard a key that is never shown again. */}
-      <DialogContent className="max-w-xl [&>*]:min-w-0" onInteractOutside={(e) => created && e.preventDefault()}>
+    // An outside click must not discard a key that is never shown again.
+    <Dialog open={open} onOpenChange={(o) => !o && close()} disablePointerDismissal={created !== null}>
+      <DialogContent className="sm:max-w-xl [&>*]:min-w-0">
         {created ? <CreatedKey apiKey={created} onDone={close} /> : <CreateForm onCreated={setCreated} />}
       </DialogContent>
     </Dialog>
@@ -174,7 +193,7 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
         models: scope === "some" ? [...picked] : undefined,
       }),
     onSuccess: onCreated,
-    onError: (e) => setErr((e as Error).message),
+    onError: (e) => setErr(e.message),
   });
 
   const toggle = (id: string, checked: boolean) =>
@@ -198,12 +217,12 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
   const canPick = modelList.length > 0;
 
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} className="grid gap-4">
       <DialogHeader>
         <DialogTitle>{t("apiKeys.form.title")}</DialogTitle>
         <DialogDescription>{t("apiKeys.form.description")}</DialogDescription>
       </DialogHeader>
-      <div className="space-y-4 py-4">
+      <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="apikey-name">{t("apiKeys.form.name")}</Label>
           <Input id="apikey-name" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -214,32 +233,24 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="apikey-expiry">{t("apiKeys.form.expiry")}</Label>
-          <Select value={String(expiresInDays)} onValueChange={(v) => setExpiresInDays(Number(v))}>
-            <SelectTrigger id="apikey-expiry">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {EXPIRY_OPTIONS.map((o) => (
-                <SelectItem key={o.days} value={String(o.days)}>
-                  {t(o.labelKey)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <DataSelect
+            id="apikey-expiry"
+            value={String(expiresInDays)}
+            onValueChange={(v) => setExpiresInDays(Number(v))}
+            options={EXPIRY_OPTIONS.map((o) => ({ value: String(o.days), label: t(o.labelKey) }))}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="apikey-scope">{t("apiKeys.form.scope")}</Label>
-          <Select value={scope} onValueChange={(v) => setScope(v as "all" | "some")}>
-            <SelectTrigger id="apikey-scope">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("apiKeys.form.scopeAll")}</SelectItem>
-              <SelectItem value="some" disabled={!canPick}>
-                {t("apiKeys.form.scopeSome")}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <DataSelect
+            id="apikey-scope"
+            value={scope}
+            onValueChange={(v) => setScope(v === "some" ? "some" : "all")}
+            options={[
+              { value: "all", label: t("apiKeys.form.scopeAll") },
+              { value: "some", label: t("apiKeys.form.scopeSome"), disabled: !canPick },
+            ]}
+          />
           {models.isLoading && <p className="text-xs text-muted-foreground">{t("apiKeys.form.loadingModels")}</p>}
           {!models.isLoading && !canPick && (
             <p className="text-xs text-muted-foreground">{t(models.isError ? "apiKeys.form.modelsFailed" : "apiKeys.form.noModels")}</p>
@@ -248,7 +259,7 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-1">
               {modelList.map((m) => (
                 <label key={m.id} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent">
-                  <Checkbox checked={picked.has(m.id)} onCheckedChange={(c) => toggle(m.id, c === true)} />
+                  <Checkbox checked={picked.has(m.id)} onCheckedChange={(checked) => toggle(m.id, checked)} />
                   <span className="font-mono text-sm">{m.id}</span>
                 </label>
               ))}
@@ -258,6 +269,7 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
         {err && <p className="text-sm text-destructive">{err}</p>}
       </div>
       <DialogFooter>
+        <DialogClose render={<Button type="button" variant="outline" />}>{t("common:actions.cancel")}</DialogClose>
         <Button type="submit" disabled={create.isPending}>
           {t(create.isPending ? "apiKeys.form.submitting" : "apiKeys.form.submit")}
         </Button>
@@ -276,11 +288,11 @@ function CreatedKey({ apiKey, onDone }: { apiKey: Created; onDone: () => void })
         <DialogTitle>{t("apiKeys.created.title")}</DialogTitle>
         <DialogDescription>{apiKey.name}</DialogDescription>
       </DialogHeader>
-      <div className="space-y-4 py-4">
-        <div className="flex items-start gap-2 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900">
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{t("apiKeys.created.warning")}</span>
-        </div>
+      <div className="space-y-4">
+        <Alert variant="warning">
+          <TriangleAlert />
+          <AlertDescription>{t("apiKeys.created.warning")}</AlertDescription>
+        </Alert>
         <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2">
           <code className="flex-1 break-all font-mono text-sm select-all">{apiKey.value}</code>
           <CopyButton text={apiKey.value} label={t("common:actions.copy")} />

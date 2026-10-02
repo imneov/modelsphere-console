@@ -1,16 +1,15 @@
-import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from "@riseaicloud/ui";
+import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from "@modelsphere/ui";
 import { RotateCcw } from "lucide-react";
 import type { ReasoningEffort } from "@/modules/playground/api";
 import { useT } from "@/modules/playground/i18n";
 import { DEFAULT_FORM, REASONING_EFFORTS, type ParamsForm } from "@/modules/playground/params";
 
-// Radix Select cannot hold "" as an item value.
-const UNSET = "unset";
-
 export function ParamsPanel({ form, onChange, idPrefix }: { form: ParamsForm; onChange: (form: ParamsForm) => void; idPrefix: string }) {
   const t = useT();
   const set = <K extends keyof ParamsForm>(key: K, value: ParamsForm[K]) => onChange({ ...form, [key]: value });
   const id = (name: string) => `${idPrefix}-${name}`;
+  // The null item is "leave it to the engine"; items gives the trigger its label.
+  const efforts = [{ value: null, label: t("params.effortUnset") }, ...REASONING_EFFORTS.filter(Boolean).map((e) => ({ value: e, label: e }))];
 
   return (
     <div className="space-y-4">
@@ -36,15 +35,14 @@ export function ParamsPanel({ form, onChange, idPrefix }: { form: ParamsForm; on
             <Field id={id("seed")} label="Seed" value={form.seed} onChange={(v) => set("seed", v)} placeholder={t("params.seedPlaceholder")} numeric />
             <div className="space-y-2">
               <Label htmlFor={id("effort")}>Reasoning effort</Label>
-              <Select value={form.reasoningEffort || UNSET} onValueChange={(v) => set("reasoningEffort", (v === UNSET ? "" : v) as ReasoningEffort)}>
-                <SelectTrigger id={id("effort")}>
+              <Select<ReasoningEffort> items={efforts} value={form.reasoningEffort || null} onValueChange={(v) => set("reasoningEffort", v ?? "")}>
+                <SelectTrigger id={id("effort")} className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={UNSET}>{t("params.effortUnset")}</SelectItem>
-                  {REASONING_EFFORTS.filter(Boolean).map((e) => (
-                    <SelectItem key={e} value={e}>
-                      {e}
+                  {efforts.map((e) => (
+                    <SelectItem key={e.label} value={e.value}>
+                      {e.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -60,8 +58,8 @@ export function ParamsPanel({ form, onChange, idPrefix }: { form: ParamsForm; on
 
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">{t("params.blankHint")}</p>
-        <Button variant="ghost" size="sm" onClick={() => onChange({ ...DEFAULT_FORM, system: form.system })} title={t("params.reset")}>
-          <RotateCcw className="h-3.5 w-3.5" />
+        <Button variant="ghost" size="icon-sm" onClick={() => onChange({ ...DEFAULT_FORM, system: form.system })} title={t("params.reset")}>
+          <RotateCcw />
         </Button>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@riseaicloud/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@modelsphere/ui";
 import { KeyRound } from "lucide-react";
 import { PasswordStrength, SamePasswordHint, passwordMeetsRequirements } from "@/shell/PasswordStrength";
 import { api } from "@/shell/api";

@@ -2,7 +2,7 @@
   "apiKeys": {
     "title": "API 密钥",
     "create": "新建 API 密钥",
-    "empty": "暂无 API 密钥，点击「新建 API 密钥」创建",
+    "empty": "暂无 API 密钥",
     "table": {
       "name": "名称",
       "key": "密钥",
@@ -47,6 +47,7 @@
       "usage": "Base URL {baseURL}，请求头 {header}",
       "keyPlaceholder": "密钥",
       "done": "我已保存"
-    }
+    },
+    "search": "搜索名称"
   }
 }

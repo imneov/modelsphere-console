@@ -145,4 +145,4 @@ Before contributing, read [`CONTRIBUTING.md`](CONTRIBUTING.md): issues, branches
 
 ## License
 
-[Apache License 2.0](LICENSE). Third-party components, including the vendored `@riseaicloud/ui` (Apache-2.0) and `@riseaicloud/tokens` (MIT) under `web/vendor/`, are listed in [NOTICE](NOTICE).
+[Apache License 2.0](LICENSE). Third-party components, including the vendored `@riseaicloud/ui` (Apache-2.0) and `@riseaicloud/tokens` (MIT) under `web/vendor/`, are listed in [NOTICE](NOTICE). The UI kit `@modelsphere/ui` (`web/packages/ui`) is part of this repository.

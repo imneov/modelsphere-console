@@ -1,6 +1,6 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { CircleHelp, X } from "lucide-react";
-import { Button } from "@riseaicloud/ui";
+import { Button } from "@modelsphere/ui";
 import { DEFAULT_LAYOUT, LAYOUTS, setLayout, useLayout, type Layout } from "@/shell/preferences";
 import { useT } from "@/shell/i18n";
 import { LocaleSwitch } from "@/shell/LocaleSwitch";

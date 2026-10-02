@@ -19,7 +19,9 @@
       "pending": "待激活"
     },
     "delete": {
-      "title": "删除用户"
+      "title": "删除用户",
+      "confirm": "删除用户「{name}」后，该用户将无法登录，此操作无法撤销。",
+      "self": "不能删除当前登录的账号"
     },
     "form": {
       "title": "新建用户",
@@ -30,7 +32,8 @@
       "password": "密码",
       "submit": "创建",
       "submitting": "创建中…"
-    }
+    },
+    "search": "搜索用户名"
   },
   "loginHistory": {
     "title": "登录历史",
@@ -44,7 +47,8 @@
     "status": {
       "success": "成功",
       "failure": "失败"
-    }
+    },
+    "search": "搜索用户"
   },
   "roles": {
     "title": "角色",
@@ -71,7 +75,8 @@
       "none": "无权限"
     },
     "delete": {
-      "title": "删除角色"
+      "title": "删除角色",
+      "confirm": "删除角色「{name}」后，持有该角色的用户将失去相应权限，此操作无法撤销。"
     },
     "form": {
       "title": "新建角色",
@@ -85,6 +90,7 @@
       "action": "成员",
       "title": "{role} · 成员",
       "description": "勾选拥有该角色的用户。"
-    }
+    },
+    "search": "搜索角色名"
   }
 }

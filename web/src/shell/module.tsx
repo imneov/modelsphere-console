@@ -16,6 +16,9 @@ export interface ConsoleModule {
   // Every page mounts below this path, e.g. "/swiss". No trailing slash.
   basePath: string;
   pages: ModulePage[];
+  // "flush": pages draw Rise Global's skeleton themselves -- a PageBanner edge to
+  // edge, then their own p-4 body. Default "padded": the shell insets the page.
+  frame?: "padded" | "flush";
   // Optional card(s) shown on the console home page.
   overview?: ComponentType;
 }
@@ -54,7 +57,7 @@ export function useModulePath(): (path: string) => string {
 
 const RESERVED = new Set(["/login", "/change-password", "/api", "/oauth"]);
 // A module's id is its i18n namespace; these belong to the shell.
-const RESERVED_IDS = new Set(["common", "shell"]);
+const RESERVED_IDS = new Set(["common", "shell", "ui"]);
 
 // validateModules fails fast on declarations that would otherwise collide
 // silently at runtime (two modules on one path, a page mounted twice).

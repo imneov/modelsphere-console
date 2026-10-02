@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@riseaicloud/ui";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@modelsphere/ui";
 import { api } from "@/modules/playground/api";
 import { useT } from "@/modules/playground/i18n";
 
@@ -11,8 +11,9 @@ export function ModelSelect({ id, value, onChange, className }: { id?: string; v
   const t = useT();
   const models = useModels();
   return (
-    <Select value={value} onValueChange={onChange} disabled={!models.data?.length}>
-      <SelectTrigger id={id} className={className}>
+    // null, not "", is what makes Base UI show the placeholder.
+    <Select<string> value={value || null} onValueChange={(v) => v && onChange(v)} disabled={!models.data?.length}>
+      <SelectTrigger id={id} className={`w-full ${className ?? ""}`}>
         <SelectValue placeholder={models.isLoading ? t("common:status.loading") : models.data?.length ? t("modelSelect.placeholder") : t("modelSelect.none")} />
       </SelectTrigger>
       <SelectContent>

@@ -3,9 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   Checkbox,
-  type ColumnDef,
-  DataTable,
+  ConfirmDialog,
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -13,9 +13,18 @@ import {
   DialogTitle,
   Input,
   Label,
-  PageHeader,
-} from "@riseaicloud/ui";
-import { Plus, ShieldCheck } from "lucide-react";
+  PageBanner,
+  ResourceTable,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  type ResourceColumn,
+  type ResourceRowAction,
+} from "@modelsphere/ui";
+import { ShieldCheck } from "lucide-react";
 import { api, type PolicyRule, type Role } from "@/modules/iam/api";
 import { useAuth, type TFn } from "@/shell";
 import { useT } from "@/modules/iam/i18n";
@@ -45,58 +54,76 @@ export function Roles() {
   const t = useT();
   const { me } = useAuth();
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["roles"], queryFn: api.listRoles });
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["roles"], queryFn: api.listRoles });
   const [createOpen, setCreateOpen] = useState(false);
   const [membersRole, setMembersRole] = useState<Role | null>(null);
+  const [search, setSearch] = useState("");
+  const [deleting, setDeleting] = useState<Role | null>(null);
 
-  const columns: ColumnDef<Role>[] = [
-    { key: "name", title: t("roles.table.name"), searchable: true, width: 220, render: (r) => <span className="font-medium">{r.name}</span> },
-    { key: "rules", title: t("roles.table.permissions"), render: (r) => <span className="text-sm text-muted-foreground">{summarize(t, r.rules)}</span> },
+  const del = useMutation({
+    mutationFn: (name: string) => api.deleteRole(name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["roles"] }),
+  });
+
+  const query = search.trim().toLowerCase();
+  const rows = (data?.items ?? []).filter((r) => !query || r.name.toLowerCase().includes(query));
+
+  const columns: ResourceColumn<Role>[] = [
+    { key: "name", title: t("roles.table.name"), width: 220, hideable: false, render: (r) => <span className="font-medium">{r.name}</span> },
+    { key: "rules", title: t("roles.table.permissions"), render: (r) => <span className="text-muted-foreground">{summarize(t, r.rules)}</span> },
+  ];
+
+  const rowActions: ResourceRowAction<Role>[] = [
+    { key: "members", label: t("roles.members.action"), onClick: setMembersRole },
+    { key: "delete", label: t("common:actions.delete"), danger: true, onClick: setDeleting },
   ];
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title={t("roles.title")}
-        icon={<ShieldCheck className="h-5 w-5" />}
-        extra={
-          me?.isAdmin ? (
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-1 h-4 w-4" />
-              {t("roles.create")}
-            </Button>
-          ) : null
-        }
-      />
-      <DataTable<Role>
-        data={data?.items ?? []}
-        loading={isLoading}
-        rowKey="name"
-        columns={columns}
-        totalItems={data?.items.length ?? 0}
-        showRefresh
-        onRefresh={() => qc.invalidateQueries({ queryKey: ["roles"] })}
-        rowActions={
-          me?.isAdmin
-            ? [{ label: t("roles.members.action"), onClick: (r) => setMembersRole(r) }]
-            : undefined
-        }
-        deleteConfig={
-          me?.isAdmin
-            ? {
-                rowNameKey: "name",
-                confirmTitle: t("roles.delete.title"),
-                buttonText: t("common:actions.delete"),
-                onDelete: async (r) => {
-                  await api.deleteRole(r.name);
-                  qc.invalidateQueries({ queryKey: ["roles"] });
-                },
-              }
-            : undefined
-        }
-      />
+    <div className="flex h-full flex-col">
+      <PageBanner title={t("roles.title")} icon={<ShieldCheck className="size-5" />} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+        <ResourceTable<Role>
+          height="fill"
+          toolbarLayout="inline"
+          data={rows}
+          loading={isLoading}
+          error={error}
+          onRetry={() => void refetch()}
+          rowKey="name"
+          columns={columns}
+          showRefresh
+          onRefresh={() => qc.invalidateQueries({ queryKey: ["roles"] })}
+          rowActions={me?.isAdmin ? rowActions : undefined}
+          toolbarLeft={me?.isAdmin ? <Button onClick={() => setCreateOpen(true)}>{t("roles.create")}</Button> : undefined}
+          filters={
+            <div className="w-52 shrink-0">
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("roles.search")} className="w-full" />
+            </div>
+          }
+          activeFilters={query ? [{ key: "search", label: t("roles.table.name"), display: search.trim() }] : []}
+          onRemoveFilter={() => setSearch("")}
+        />
+      </div>
       <CreateRoleDialog open={createOpen} onOpenChange={setCreateOpen} />
       <MembersDialog role={membersRole} onClose={() => setMembersRole(null)} />
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(o) => {
+          if (o) return;
+          setDeleting(null);
+          del.reset();
+        }}
+        title={t("roles.delete.title")}
+        description={deleting ? t("roles.delete.confirm", { name: deleting.name }) : undefined}
+        action={t("common:actions.delete")}
+        tone="destructive"
+        items={deleting ? [deleting.name] : []}
+        error={del.error?.message}
+        loading={del.isPending}
+        onConfirm={async () => {
+          if (deleting) await del.mutateAsync(deleting.name);
+        }}
+      />
     </div>
   );
 }
@@ -132,7 +159,7 @@ function CreateRoleDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       setName("");
       setMatrix({});
     },
-    onError: (e) => setErr((e as Error).message),
+    onError: (e) => setErr(e.message),
   });
 
   const submit = (e: FormEvent) => {
@@ -143,49 +170,52 @@ function CreateRoleDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form onSubmit={submit}>
+      <DialogContent className="sm:max-w-lg">
+        <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{t("roles.form.title")}</DialogTitle>
             <DialogDescription>{t("roles.form.description")}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="role-name">{t("roles.form.name")}</Label>
               <Input id="role-name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-muted-foreground">
-                    <th className="p-2 text-left font-normal">{t("roles.form.resource")}</th>
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("roles.form.resource")}</TableHead>
                     {VERBS.map((v) => (
-                      <th key={v} className="p-2 font-normal">
+                      <TableHead key={v} className="text-center">
                         {t(`roles.verbs.${v}`)}
-                      </th>
+                      </TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {RESOURCES.map((res) => (
-                    <tr key={res} className="border-t">
-                      <td className="p-2">{t(`roles.resources.${res}`)}</td>
+                    <TableRow key={res}>
+                      <TableCell>{t(`roles.resources.${res}`)}</TableCell>
                       {VERBS.map((v) => (
-                        <td key={v} className="p-2 text-center">
+                        <TableCell key={v} className="text-center">
                           <Checkbox
+                            className="mx-auto"
                             checked={matrix[res]?.has(v) ?? false}
                             onCheckedChange={() => toggle(res, v)}
+                            aria-label={`${t(`roles.resources.${res}`)} · ${t(`roles.verbs.${v}`)}`}
                           />
-                        </td>
+                        </TableCell>
                       ))}
-                    </tr>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
             {err && <p className="text-sm text-destructive">{err}</p>}
           </div>
           <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>{t("common:actions.cancel")}</DialogClose>
             <Button type="submit" disabled={create.isPending}>
               {t(create.isPending ? "roles.form.submitting" : "roles.form.submit")}
             </Button>
@@ -230,7 +260,7 @@ function MembersDialog({ role, onClose }: { role: Role | null; onClose: () => vo
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("roles.members.title", { role: role?.name ?? "" })}</DialogTitle>
           <DialogDescription>{t("roles.members.description")}</DialogDescription>
@@ -240,7 +270,7 @@ function MembersDialog({ role, onClose }: { role: Role | null; onClose: () => vo
             <label key={u.name} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent">
               <Checkbox
                 checked={boundUsers.has(u.name)}
-                onCheckedChange={(c) => toggle.mutate({ user: u.name, checked: c === true })}
+                onCheckedChange={(checked) => toggle.mutate({ user: u.name, checked })}
               />
               <span className="text-sm">{u.displayName || u.name}</span>
               <span className="text-xs text-muted-foreground">{u.name}</span>

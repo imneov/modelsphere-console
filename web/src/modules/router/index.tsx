@@ -16,6 +16,7 @@ export const routerModule: ConsoleModule = {
   id: "router",
   title: "路由",
   basePath: "/router",
+  frame: "flush",
   pages: [
     {
       path: "api-keys",

@@ -1,6 +1,7 @@
 import { Fragment, createElement, useSyncExternalStore, type ReactNode } from "react";
 import i18next, { type i18n as I18n } from "i18next";
 import ICU from "i18next-icu";
+import { configureUiI18n, uiLocales } from "@modelsphere/ui/i18n-host";
 import commonZh from "@/shell/locales/common.zh-CN.json";
 import commonEn from "@/shell/locales/common.en-US.json";
 import shellZh from "@/shell/locales/shell.zh-CN.json";
@@ -49,12 +50,12 @@ export const i18n: I18n = i18next.createInstance();
 void i18n.use(ICU).init({
   lng: browser ? readLocale(localStorage, navigator.languages) : DEFAULT_LOCALE,
   fallbackLng: DEFAULT_LOCALE,
-  ns: ["common", "shell"],
+  ns: ["common", "shell", "ui"],
   defaultNS: "common",
   fallbackNS: "common",
   resources: {
-    "zh-CN": { common: commonZh, shell: shellZh },
-    "en-US": { common: commonEn, shell: shellEn },
+    "zh-CN": { common: commonZh, shell: shellZh, ui: uiLocales["zh-CN"] },
+    "en-US": { common: commonEn, shell: shellEn, ui: uiLocales["en-US"] },
   },
   returnEmptyString: false,
   interpolation: { escapeValue: false },
@@ -90,6 +91,25 @@ function subscribe(cb: () => void): () => void {
     if (browser) window.removeEventListener("storage", onStorage);
   };
 }
+
+// @modelsphere/ui's own strings (table pagination, confirm buttons, …) render
+// through this instance, in the locale the component asks for.
+const uiTByLocale = new Map<string, TFn>();
+configureUiI18n({
+  t: (lng, key, vars) => {
+    let fn = uiTByLocale.get(lng);
+    if (!fn) {
+      fn = i18n.getFixedT(lng, "ui") as unknown as TFn;
+      uiTByLocale.set(lng, fn);
+    }
+    return fn(key, vars);
+  },
+  subscribe: (cb) => {
+    i18n.on("languageChanged", cb);
+    return () => i18n.off("languageChanged", cb);
+  },
+  getLocale,
+});
 
 export function useLocale(): { locale: Locale; setLocale: (locale: Locale) => void } {
   const locale = useSyncExternalStore<Locale>(subscribe, getLocale, () => DEFAULT_LOCALE);

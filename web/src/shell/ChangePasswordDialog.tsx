@@ -9,7 +9,7 @@ import {
   DialogTitle,
   Input,
   Label,
-} from "@riseaicloud/ui";
+} from "@modelsphere/ui";
 import { api } from "@/shell/api";
 import { PasswordStrength, SamePasswordHint, passwordMeetsRequirements } from "@/shell/PasswordStrength";
 import { useT } from "@/shell/i18n";

@@ -9,7 +9,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@riseaicloud/ui";
+  DropdownMenuGroup,
+} from "@modelsphere/ui";
 import { LogOut, Boxes, KeyRound, ChevronLeft, ChevronRight, PanelLeft, Palette, Languages, Check } from "lucide-react";
 import { useAuth } from "@/shell/auth";
 import { usePermissions } from "@/shell/permissions";
@@ -38,7 +39,7 @@ export function Layout({ modules, children }: { modules: ConsoleModule[]; childr
   const [prefsOpen, setPrefsOpen] = useState(false);
   const groups = navGroups(modules, has);
   const toggle = () => setCollapsed((c) => !c);
-  const page = <main className="relative min-h-0 min-w-0 flex-1 overflow-auto bg-surface-page p-6">{children}</main>;
+  const page = <main className="relative min-h-0 min-w-0 flex-1 overflow-auto bg-surface-page">{children}</main>;
 
   const shell =
     layout === "minimal" ? (
@@ -154,19 +155,19 @@ function TopBar({
           <Palette className="h-4 w-4" />
         </button>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className={`flex items-center gap-2 rounded-md px-2 py-1 transition-colors ${t.hover}`}>
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className={`text-[13px] font-semibold ${t.avatar}`}>{initial}</AvatarFallback>
-              </Avatar>
-              <span className="text-[13px] font-medium">{me?.name}</span>
-            </button>
+          <DropdownMenuTrigger className={`flex items-center gap-2 rounded-md px-2 py-1 transition-colors ${t.hover}`}>
+            <Avatar className="h-7 w-7">
+              <AvatarFallback className={`text-[13px] font-semibold ${t.avatar}`}>{initial}</AvatarFallback>
+            </Avatar>
+            <span className="text-[13px] font-medium">{me?.name}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>
-              {me?.name}
-              {me?.isAdmin ? ` · ${tr("layout.admin")}` : ""}
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>
+                {me?.name}
+                {me?.isAdmin ? ` · ${tr("layout.admin")}` : ""}
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             {/* With auth disabled there is no session to end and no stored
                 password to change; both entries would fail if offered. */}
             {!me?.authDisabled && (
@@ -198,15 +199,12 @@ function LocaleMenu({ iconClass }: { iconClass: string }) {
   const { locale, setLocale } = useLocale();
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label={t("layout.language")}
-          title={t("layout.language")}
-          className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${iconClass}`}
-        >
-          <Languages className="h-4 w-4" />
-        </button>
+      <DropdownMenuTrigger
+        aria-label={t("layout.language")}
+        title={t("layout.language")}
+        className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${iconClass}`}
+      >
+        <Languages className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {LOCALES.map((l) => (

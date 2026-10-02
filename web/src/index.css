@@ -1,25 +1,20 @@
 @import "tailwindcss";
+@import "@modelsphere/ui/base.css";
 @import "@fontsource-variable/inter";
 @config "../tailwind.config.ts";
 
-/* Status colours the Rise tokens do not define; the swiss module uses them.
-   Values are swiss's own (swiss/web/src/index.css). */
+/* The swiss module's status colours: swiss's own (swiss/web/src/index.css),
+   darker than the preset's so they read as text. */
 @theme {
   --color-warning: oklch(0.62 0.13 75);
   --color-success: oklch(0.627 0.194 149.214);
 }
 
-/* Colour variables (:root and .dark) are injected by the @riseaicloud/tokens
-   Tailwind preset. The blocks below override only what Rise Global sets
-   differently; primary, border, muted and accent already match. Token values are
-   HSL triplets because the preset reads them as hsl(var(--x)). Shell values were
-   measured on a live Global console. Source: rise-global design/tokens.
-   <html data-layout> is written by src/shell/preferences.ts. */
+/* Colour variables (:root and .dark, OKLCH) come from the @modelsphere/ui preset,
+   which carries Rise Global's values. Below: shell chrome only, measured on a
+   live Global console. <html data-layout> is written by src/shell/preferences.ts. */
 @layer base {
   :root:root {
-    --foreground: 0 0% 22%; /* oklch(0.341 0 0) */
-    --muted-foreground: 0 0% 48.6%; /* oklch(0.586 0 0) */
-
     /* Shell chrome, used by src/shell/Layout.tsx only. */
     --shell-foreground: oklch(0.205 0 0);
     --shell-sidebar: oklch(0.985 0 0);
@@ -36,18 +31,12 @@
   /* Minimal (palette "minimal-gradient"): content sits on the white board, so
      page and toolbar surfaces are the board's white rather than a grey layer. */
   :root:root[data-layout="minimal"] {
-    --surface-page: 0 0% 100%;
-    --surface-toolbar: 0 0% 100%;
+    --surface-page: oklch(1 0 0);
+    --surface-toolbar: oklch(1 0 0);
     --shell-canvas: oklch(0.93 0.01 202);
     --shell-canvas-image: linear-gradient(180deg, oklch(0.932 0.006 197) 0%, oklch(0.906 0.014 202.4) 20%,
       oklch(0.909 0.014 202.4) 32%, oklch(0.929 0.012 209.8) 46%, oklch(0.952 0.006 211) 60%,
       oklch(0.966 0.005 183) 72%, oklch(0.969 0.001 197.1) 82%, oklch(0.964 0.001 106.4) 100%);
-  }
-
-  /* Tailwind 4 dropped the pointer cursor on buttons; the Rise console keeps it. */
-  button:not(:disabled),
-  [role="button"]:not(:disabled) {
-    cursor: pointer;
   }
 }
 

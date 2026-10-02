@@ -70,7 +70,7 @@ installs that exist.
 ## Architecture
 
 ```
-browser ─▶ web (Vite / React 19 / Tailwind 4 / @riseaicloud/ui)
+browser ─▶ web (Vite / React 19 / Tailwind 4 / @modelsphere/ui)
              shell: login, layout, sidebar, route guards
              modules: iam, swiss, playground, router, … (src/modules/*)
                      │  same-origin /oauth, /api/iam, /api/deploy, /api/llm…
@@ -143,7 +143,7 @@ this console: zh-CN and en-US, switchable at runtime.
 | Engine | one i18next instance with ICU messages (`{name}`, `{n, plural, …}`), `web/src/shell/i18n.ts`, exported through `@/shell` |
 | Choice | `localStorage["rise-locale"]` -- Global's key, so it carries over on upgrade; else the browser's language; else zh-CN. Mirrored to `<html lang>`, followed across tabs |
 | Switch | top-bar language menu, the preferences panel, the login page; one state behind all three |
-| Namespaces | `common` (shared words), `shell`, and one per module = its `id` |
+| Namespaces | `common` (shared words), `shell`, `ui` (`@modelsphere/ui`'s component strings, see "UI library"), and one per module = its `id` |
 | A module's strings | `modules/<id>/locales/{zh-CN,en-US}.json`, registered by `modules/<id>/i18n.ts`, which also exports the module's `useT()` |
 | Component text | key-based: `t("users.title")`; another namespace with a prefix, `t("common:actions.cancel")`; a node inside a message with `tNodes` |
 | Non-React code | `getT(ns)(key)` at call time, never at import time: the locale changes under it |
@@ -173,6 +173,22 @@ label for every installed module's group and menu entry.
 
 Adding a language: append it to `LOCALES`, add `*.<locale>.json` beside each
 zh-CN file (the parity test lists what is missing).
+
+### UI library (`@modelsphere/ui`)
+
+`web/packages/ui`: the open UI kit, a fork of the parts of Rise Global's design
+system (`rise-global/design@684df9fc`) the console uses. Open-sourcing approved;
+Rise Global keeps its own, closed library -- two libraries, no syncing.
+
+| Concern | Decision |
+|---|---|
+| Contents | shadcn (base-nova) on Base UI; `ResourceTable`, `PageBanner`, `ConfirmDialog`, `DataSelect`, `Spinner`, …; tokens as a Tailwind preset; `base.css` |
+| Delivery | source, not built: `"@modelsphere/ui": "file:./packages/ui"`, compiled by Vite and checked by the console's `tsc`; Tailwind scans `packages/ui/src` |
+| Where | inside console while it has one consumer. It imports nothing from the console, so moving it to its own repository (`git subtree split`) is mechanical; do that when swiss or another ModelSphere UI adopts it |
+| Component strings | the kit's own `ui` namespace (`src/locales/ui.*.ts`); the shell registers it and plugs its i18next instance in through `configureUiI18n` (`shell/i18n.ts`). Without that the kit renders Chinese |
+| Look | Rise Global's current tokens, including its neutral (near-black) default primary |
+| Brand | the Spinner's logo variants draw a neutral mark, not the Rise logo |
+| Usage rules | the kit's `README.md`; Global's `PATTERNS.md` is where they came from |
 
 ### The swiss module's two UI kits
 
@@ -473,21 +489,20 @@ requests carry the same headers Global's apiserver sets.
 
 ## Known debt
 
-- **`@riseaicloud/ui` is vendored, not published.** Its owners license it to
-  this repo under Apache-2.0 (see `NOTICE`), but it is a build output copied
-  into `web/vendor/`, not a package contributors can fetch or patch upstream.
-  Upstream `riseaicloud/edge-desgin` should carry the same LICENSE and publish
-  the package.
+- **`@riseaicloud/ui` is vendored, not published,** and only the swiss module's
+  rise kit still uses it (`modules/swiss/components/ui/rise/`, 10 adapter files,
+  console build only); everything else is on `@modelsphere/ui`. Its owners
+  license it to this repo under Apache-2.0 (see `NOTICE`). Moving those adapters
+  to `@modelsphere/ui` lets `web/vendor/` go, and with it the next item.
 - **The vendored `package.json` files are edited by hand.** A re-vendor must
-  keep both edits until upstream publishes the package:
+  keep both edits:
 
   | Edit | Why |
   |---|---|
   | `@riseaicloud/ui` peer range widened to React 19 | upstream still declares React 18 |
   | `devDependencies` removed from `ui` and `tokens` | npm installs a `file:` package's devDependencies; they pulled ~400 packages (Storybook, tsup, old esbuild, uuid) with known vulnerabilities into console, for a library that is already built |
-- **`@riseaicloud/ui`'s DataTable has built-in Chinese** (search placeholder, pagination, delete confirmation buttons) with no prop to replace it, so English pages keep those few words in Chinese until the kit takes a locale.
-- **The Rise tokens are still a Tailwind 3 preset**, loaded through `@config`.
-  A Tailwind 4 CSS build of the tokens would drop `tailwind.config.ts`.
+- **The token preset is Tailwind 3-style**, loaded through `@config`. A Tailwind 4
+  CSS build of the tokens would drop `tailwind.config.ts`.
 
 ## Phases
 
@@ -495,7 +510,7 @@ requests carry the same headers Global's apiserver sets.
 |-------|-------|
 | P0 | Scaffold: Go BFF skeleton, config, dynamic client, Docker, helm chart. **(done)** |
 | P1 | Login loop: iam CRD types, dynamic CRUD, `/oauth/token`, auth middleware, helm-seeded admin, frontend login + guard. |
-| P2 | User management: user CRUD API + UI, i18n (zh-CN/en-US). **(i18n done: shell, iam, playground, router; swiss pages pending swiss)** |
+| P2 | User management: user CRUD API + UI, i18n (zh-CN/en-US). **(i18n done: shell, iam, playground, router; swiss pages pending swiss.)** Open UI kit `@modelsphere/ui` replacing `@riseaicloud/ui` outside the swiss module. **(done)** |
 | P3 | Full roles: authorizer + role/binding CRUD + role/permission UI. |
 | P4 | Federation: module shell, stack aligned with swiss, backend proxy with identity headers and per-backend RBAC. **(done)** |
 | P5 | swiss module: copy into `modules/swiss`, mounted through `lib/host.ts` (see "Bringing swiss in"). **(done)** Then: swiss prepares its frontend (table above) and exports `openapi.json`; CODEOWNERS. |

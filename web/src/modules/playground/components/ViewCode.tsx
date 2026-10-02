@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Tabs, TabsContent, TabsList, TabsTrigger } from "@riseaicloud/ui";
+import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Tabs, TabsContent, TabsList, TabsTrigger } from "@modelsphere/ui";
 import { Code } from "lucide-react";
 import { tNodes } from "@/shell";
 import { API_KEY_ENV, fenced, LANGUAGES, snippet, type Language } from "@/modules/playground/code";
@@ -20,8 +20,7 @@ export function ViewCode({ payload, disabled, compact }: { payload: () => Record
     <>
       <Button
         variant={compact ? "ghost" : "outline"}
-        size={compact ? "sm" : "default"}
-        className={compact ? "h-7 px-2" : undefined}
+        size={compact ? "icon-sm" : "default"}
         disabled={disabled}
         title={t("viewCode.title")}
         onClick={() => {
@@ -29,11 +28,11 @@ export function ViewCode({ payload, disabled, compact }: { payload: () => Record
           setOpen(true);
         }}
       >
-        <Code className={compact ? "h-3.5 w-3.5" : "mr-1 h-4 w-4"} />
+        <Code data-icon={compact ? undefined : "inline-start"} />
         {compact ? null : t("viewCode.title")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto [&>*]:min-w-0">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl [&>*]:min-w-0">
           <DialogHeader>
             <DialogTitle>{t("viewCode.title")}</DialogTitle>
             <DialogDescription>{tNodes(t, "viewCode.description", { env: <code>{API_KEY_ENV}</code> })}</DialogDescription>

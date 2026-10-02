@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Button } from "@riseaicloud/ui";
+import { Button } from "@modelsphere/ui";
 import { Check, Copy } from "lucide-react";
 import { useT } from "@/shell/i18n";
 

@@ -23,6 +23,7 @@ export const iamModule: ConsoleModule = {
   id: "iam",
   title: "访问控制",
   basePath: "/iam",
+  frame: "flush",
   overview: Overview,
   pages: [
     { path: "users", element: <Users />, permission: "users.view", menu: { label: "用户", icon: UsersIcon } },

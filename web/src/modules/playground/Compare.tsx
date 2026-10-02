@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
-import {
-  Button,
-  Card,
-  PageHeader,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@riseaicloud/ui";
+import { Button, Card, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, PageBanner } from "@modelsphere/ui";
 import { Columns2, Eraser, Plus, SlidersHorizontal, X } from "lucide-react";
 import { buildPayload } from "@/modules/playground/api";
 import { Composer } from "@/modules/playground/components/Composer";
@@ -80,81 +71,88 @@ export function Compare() {
   const pendingUser = active.length > 0 && active.every((s) => states[s.id]?.lastRole === "user");
 
   return (
-    <div className="space-y-4">
-      <PageHeader
+    <div>
+      <PageBanner
         title={t("compare.title")}
-        icon={<Columns2 className="h-5 w-5" />}
-        extra={
+        icon={<Columns2 className="size-5" />}
+        actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setParamsOpen(true)}>
-              <SlidersHorizontal className="mr-1 h-4 w-4" />
+              <SlidersHorizontal data-icon="inline-start" />
               {t("compare.params")}
             </Button>
             <Button
               variant="outline"
               disabled={slots.length >= MAX_PANELS}
-              onClick={() => setSlots((prev) => [...prev, { id: newId(), model: models.data?.find((m) => !prev.some((s) => s.model === m.id))?.id ?? models.data?.[0]?.id ?? "" }])}
+              onClick={() =>
+                setSlots((prev) => [
+                  ...prev,
+                  { id: newId(), model: models.data?.find((m) => !prev.some((s) => s.model === m.id))?.id ?? models.data?.[0]?.id ?? "" },
+                ])
+              }
             >
-              <Plus className="mr-1 h-4 w-4" />
+              <Plus data-icon="inline-start" />
               {t("compare.addModel")}
             </Button>
             <Button variant="outline" onClick={() => each((h) => h.clear())} disabled={streaming}>
-              <Eraser className="mr-1 h-4 w-4" />
+              <Eraser data-icon="inline-start" />
               {t("compare.clearAll")}
             </Button>
           </div>
         }
       />
 
-      {models.error ? <p className="text-sm text-destructive">{modelsHint(t, models.error)}</p> : null}
+      <div className="space-y-4 p-4">
+        {models.error ? <p className="text-sm text-destructive">{modelsHint(t, models.error)}</p> : null}
 
-      <div className={`grid gap-4 ${GRID[slots.length] ?? "lg:grid-cols-2"}`}>
-        {slots.map((slot, i) => (
-          <ComparePanel
-            key={slot.id}
-            slot={slot}
-            index={i}
-            form={form}
-            height={slots.length === 4 ? "h-[calc((100vh-26rem)/2)] min-h-[220px]" : "h-[calc(100vh-24rem)] min-h-[360px]"}
-            onModel={(model) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, model } : s)))}
-            onRemove={
-              slots.length > MIN_PANELS
-                ? () => {
-                    handles.current.get(slot.id)?.stop();
-                    setSlots((prev) => prev.filter((s) => s.id !== slot.id));
-                  }
-                : undefined
-            }
-            onState={onState}
-            ref={(h: PanelHandle | null) => {
-              if (h) handles.current.set(slot.id, h);
-              else handles.current.delete(slot.id);
-            }}
+        <div className={`grid gap-4 ${GRID[slots.length] ?? "lg:grid-cols-2"}`}>
+          {slots.map((slot, i) => (
+            <ComparePanel
+              key={slot.id}
+              slot={slot}
+              index={i}
+              form={form}
+              height={slots.length === 4 ? "h-[calc((100vh-26rem)/2)] min-h-[220px]" : "h-[calc(100vh-24rem)] min-h-[360px]"}
+              onModel={(model) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, model } : s)))}
+              onRemove={
+                slots.length > MIN_PANELS
+                  ? () => {
+                      handles.current.get(slot.id)?.stop();
+                      setSlots((prev) => prev.filter((s) => s.id !== slot.id));
+                    }
+                  : undefined
+              }
+              onState={onState}
+              ref={(h: PanelHandle | null) => {
+                if (h) handles.current.set(slot.id, h);
+                else handles.current.delete(slot.id);
+              }}
+            />
+          ))}
+        </div>
+
+        <Card className="gap-0 py-0">
+          <Composer
+            disabled={!active.length}
+            streaming={streaming}
+            pendingUser={pendingUser}
+            onSend={(text, role) => each((h) => h.send(text, role))}
+            onAdd={(role, text) => each((h) => h.add(role, text))}
+            onStop={() => each((h) => h.stop())}
+            status={streaming ? t("chat.generating") : t("compare.fanOut", { n: active.length })}
           />
-        ))}
+        </Card>
+
+        <Dialog open={paramsOpen} onOpenChange={setParamsOpen}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t("compare.params")}</DialogTitle>
+              <DialogDescription>{t("compare.paramsHint")}</DialogDescription>
+            </DialogHeader>
+            <ParamsPanel form={form} onChange={setForm} idPrefix="cmp" />
+          </DialogContent>
+        </Dialog>
       </div>
-
-      <Card>
-        <Composer
-          disabled={!active.length}
-          streaming={streaming}
-          pendingUser={pendingUser}
-          onSend={(text, role) => each((h) => h.send(text, role))}
-          onAdd={(role, text) => each((h) => h.add(role, text))}
-          onStop={() => each((h) => h.stop())}
-          status={streaming ? t("chat.generating") : t("compare.fanOut", { n: active.length })}
-        />
-      </Card>
-
-      <Dialog open={paramsOpen} onOpenChange={setParamsOpen}>
-        <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t("compare.params")}</DialogTitle>
-            <DialogDescription>{t("compare.paramsHint")}</DialogDescription>
-          </DialogHeader>
-          <ParamsPanel form={form} onChange={setForm} idPrefix="cmp" />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -192,7 +190,7 @@ function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, r
   useEffect(() => onState(slot.id, { streaming: chat.streaming, lastRole }), [onState, slot.id, chat.streaming, lastRole]);
 
   return (
-    <Card className={`flex flex-col ${height}`}>
+    <Card className={`flex flex-col gap-0 py-0 ${height}`}>
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <span className="w-5 shrink-0 text-center text-xs font-medium text-muted-foreground">{index + 1}</span>
         <ModelSelect
@@ -206,11 +204,11 @@ function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, r
           }}
         />
         <ViewCode compact payload={() => buildPayload(historyOf(chat.turns), params)} disabled={!slot.model} />
-        <Button variant="ghost" size="sm" className="h-7 px-2" title={t("compare.clear")} onClick={chat.clear} disabled={chat.streaming || !chat.turns.length}>
+        <Button variant="ghost" size="icon-sm" title={t("compare.clear")} onClick={chat.clear} disabled={chat.streaming || !chat.turns.length}>
           <Eraser className="h-3.5 w-3.5" />
         </Button>
         {onRemove ? (
-          <Button variant="ghost" size="sm" className="h-7 px-2" title={t("compare.remove")} onClick={onRemove}>
+          <Button variant="ghost" size="icon-sm" title={t("compare.remove")} onClick={onRemove}>
             <X className="h-3.5 w-3.5" />
           </Button>
         ) : null}

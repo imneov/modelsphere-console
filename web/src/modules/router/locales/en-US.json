@@ -8,7 +8,7 @@
   "apiKeys": {
     "title": "API Keys",
     "create": "New API key",
-    "empty": "No API keys yet. Click “New API key” to create one.",
+    "empty": "No API keys yet",
     "table": {
       "name": "Name",
       "key": "Key",
@@ -53,6 +53,7 @@
       "usage": "Base URL {baseURL}, request header {header}",
       "keyPlaceholder": "key",
       "done": "I have saved it"
-    }
+    },
+    "search": "Search name"
   }
 }

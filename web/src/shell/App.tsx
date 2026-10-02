@@ -48,7 +48,9 @@ export function App({ modules }: { modules: ConsoleModule[] }) {
                       path={joinPath(m.basePath, p.path)}
                       element={
                         <ModuleProvider module={m}>
-                          {p.permission ? <PermissionGuard permission={p.permission}>{p.element}</PermissionGuard> : p.element}
+                          <div className={m.frame === "flush" ? "h-full" : "p-6"}>
+                            {p.permission ? <PermissionGuard permission={p.permission}>{p.element}</PermissionGuard> : p.element}
+                          </div>
                         </ModuleProvider>
                       }
                     />

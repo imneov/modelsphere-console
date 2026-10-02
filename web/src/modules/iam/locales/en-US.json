@@ -27,7 +27,9 @@
       "pending": "Pending"
     },
     "delete": {
-      "title": "Delete user"
+      "title": "Delete user",
+      "confirm": "Once user “{name}” is deleted, they can no longer sign in. This cannot be undone.",
+      "self": "You cannot delete the account you are signed in with"
     },
     "form": {
       "title": "New user",
@@ -38,7 +40,8 @@
       "password": "Password",
       "submit": "Create",
       "submitting": "Creating…"
-    }
+    },
+    "search": "Search username"
   },
   "loginHistory": {
     "title": "Login History",
@@ -52,7 +55,8 @@
     "status": {
       "success": "Succeeded",
       "failure": "Failed"
-    }
+    },
+    "search": "Search user"
   },
   "roles": {
     "title": "Roles",
@@ -79,7 +83,8 @@
       "none": "No permissions"
     },
     "delete": {
-      "title": "Delete role"
+      "title": "Delete role",
+      "confirm": "Once role “{name}” is deleted, users holding it lose its permissions. This cannot be undone."
     },
     "form": {
       "title": "New role",
@@ -93,6 +98,7 @@
       "action": "Members",
       "title": "{role} · Members",
       "description": "Select the users who hold this role."
-    }
+    },
+    "search": "Search role name"
   }
 }
