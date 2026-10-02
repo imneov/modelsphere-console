@@ -436,9 +436,13 @@ requests carry the same headers Global's apiserver sets.
   into `web/vendor/`, not a package contributors can fetch or patch upstream.
   Upstream `riseaicloud/edge-desgin` should carry the same LICENSE and publish
   the package.
-- **The vendored `@riseaicloud/ui` peer range was widened to React 19 by hand**
-  (`web/vendor/@riseaicloud/ui/package.json`). Upstream should publish the same
-  range; until then a re-vendor must keep the edit.
+- **The vendored `package.json` files are edited by hand.** A re-vendor must
+  keep both edits until upstream publishes the package:
+
+  | Edit | Why |
+  |---|---|
+  | `@riseaicloud/ui` peer range widened to React 19 | upstream still declares React 18 |
+  | `devDependencies` removed from `ui` and `tokens` | npm installs a `file:` package's devDependencies; they pulled ~400 packages (Storybook, tsup, old esbuild, uuid) with known vulnerabilities into console, for a library that is already built |
 - **The Rise tokens are still a Tailwind 3 preset**, loaded through `@config`.
   A Tailwind 4 CSS build of the tokens would drop `tailwind.config.ts`.
 

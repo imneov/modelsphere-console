@@ -23,6 +23,11 @@ chart's `appVersion`; the image and chart are released together under it.
 ### Fixed
 - An empty Playground chat names the selected model (#13).
 
+### Security
+- `golang.org/x/crypto` 0.47.0 → 0.57.0 and `golang.org/x/net` 0.49.0 → 0.59.0, for the advisories Dependabot reported against them. Console uses only `bcrypt` from `x/crypto`; most of the advisories are in `ssh`.
+- `dompurify` 3.4.15 → 3.4.16 (pulled by Monaco Editor), through an npm override.
+- The vendored `@riseaicloud/*` packages no longer bring in their build tooling (Storybook, tsup), which carried vulnerable `esbuild` and `uuid`. `npm audit` now reports nothing.
+
 ## [0.1.1] - 2026-10-01
 
 First tagged release.
