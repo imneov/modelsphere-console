@@ -145,4 +145,4 @@ Before contributing, read [`CONTRIBUTING.md`](CONTRIBUTING.md): issues, branches
 
 ## License
 
-[Apache License 2.0](LICENSE). Third-party components, including the vendored `@riseaicloud/ui` (Apache-2.0) and `@riseaicloud/tokens` (MIT) under `web/vendor/`, are listed in [NOTICE](NOTICE). The UI kit `@modelsphere/ui` (`web/packages/ui`) is part of this repository.
+[Apache License 2.0](LICENSE), with one exception: `web/vendor/@riseaicloud/ui` is a proprietary build that the license does not cover. Only the swiss module still uses it, and it goes once that module moves to `@modelsphere/ui` — see [Known debt](docs/console-design.md#known-debt). The UI kit `@modelsphere/ui` (`web/packages/ui`) is part of this repository and under the same Apache-2.0 license. Third-party components, including `@riseaicloud/tokens` (MIT), are listed in [NOTICE](NOTICE).

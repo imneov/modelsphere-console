@@ -10,7 +10,7 @@ chart's `appVersion`; the image and chart are released together under it.
 ### Added
 - Chinese and English, switchable at runtime from the top bar, the preferences panel or the login page; the choice is stored as Rise Global stores it.
 - `@modelsphere/ui` (`web/packages/ui`): an open UI kit forked from Rise Global's design system, with its own zh-CN/en-US component strings.
-- Apache-2.0 `LICENSE` and a `NOTICE` listing third-party components, including the vendored `@riseaicloud/ui` and `@riseaicloud/tokens`.
+- Apache-2.0 `LICENSE` and a `NOTICE` listing third-party components. The vendored `@riseaicloud/ui`, used only by the swiss module, is proprietary and not covered by the license.
 - CI on every pull request: `go vet`/`go test`, web typecheck and tests, and a gate for the license text and committed credentials.
 - Dependabot for Go modules, npm, GitHub Actions and the Dockerfile.
 - English install guide for the chart; the Chinese one is kept as `helm/console/README.zh-CN.md`.
