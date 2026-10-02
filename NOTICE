@@ -1,0 +1,44 @@
+ModelSphere Console
+Copyright (c) 2026 the ModelSphere Console authors
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+This product includes software developed by third parties. Their licenses apply
+to their own code, not to this project's.
+
+Vendored in this repository (web/vendor/)
+  @riseaicloud/ui ................... Apache-2.0, Copyright the Rise authors
+  @riseaicloud/tokens ............... MIT, Copyright the Rise authors
+  Source: https://github.com/riseaicloud/edge-desgin
+  Its own dependencies, installed by npm and bundled into the image:
+  Radix UI, Monaco Editor (@monaco-editor/react), Recharts, date-fns,
+  js-yaml, react-day-picker, lucide-react .... MIT / ISC
+
+Frontend (JavaScript, bundled into the image)
+  React, React DOM .................. MIT
+  React Router ...................... MIT
+  TanStack Query .................... MIT
+  Radix UI .......................... MIT
+  react-markdown, remark-gfm,
+  rehype-highlight .................. MIT
+  highlight.js ...................... BSD-3-Clause
+  lucide-react ...................... ISC
+  clsx, tailwind-merge .............. MIT
+  class-variance-authority .......... Apache-2.0
+  Inter (@fontsource-variable/inter)  SIL Open Font License 1.1
+
+Backend (Go, compiled into the image)
+  Kubernetes client-go, api,
+  apimachinery ...................... Apache-2.0
+  Prometheus client_golang .......... Apache-2.0
+  golang-jwt/jwt .................... MIT
+  golang.org/x/crypto ............... BSD-3-Clause
+  gopkg.in/yaml.v3 .................. MIT / Apache-2.0
+
+Container base image
+  gcr.io/distroless/static-debian12 — see the image's own licenses.
+
+The services this console federates to (swiss, the inference gateway, the
+optional llama.cpp demo model) are separate projects under their own licenses.
+The Helm chart pulls the swiss chart as a dependency; nothing here
+redistributes their code.

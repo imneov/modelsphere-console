@@ -59,7 +59,7 @@ Open <http://127.0.0.1:8080> and sign in as `admin` / `P@88w0rd`.
 
 **Step 3: call a model**
 
-In the UI, go to **路由 → API 密钥** and create a key, then:
+In the UI, go to **路由 → API 密钥** (Router → API keys) and create a key, then:
 
 ```bash
 export MODELSPHERE_API_KEY=<the key you created>
@@ -141,7 +141,8 @@ Before contributing, read [`CONTRIBUTING.md`](CONTRIBUTING.md): issues, branches
 | [`helm/console/values.yaml`](helm/console/values.yaml) | every chart setting, with comments |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/development/`](docs/development/README.md) | how to contribute: local development, workflow, conventions, issues, pull requests, review, design proposals |
 | [`SECURITY.md`](SECURITY.md) | reporting a vulnerability privately |
+| [`CHANGELOG.md`](CHANGELOG.md) | what changed in each release |
 
 ## License
 
-No license has been chosen yet. The repository cannot be released as open source until the UI's dependency on the closed-source `@riseaicloud/ui` package is replaced — see [Known debt](docs/console-design.md#known-debt).
+[Apache License 2.0](LICENSE). Third-party components, including the vendored `@riseaicloud/ui` (Apache-2.0) and `@riseaicloud/tokens` (MIT) under `web/vendor/`, are listed in [NOTICE](NOTICE).

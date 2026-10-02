@@ -389,7 +389,7 @@ CI (`.github/workflows/publish.yml`, the same scheme as swiss) publishes the ima
 |---|---|---|
 | llama.cpp comes from ghcr.io | slow or blocked in some networks | a mirror value, or a copy under the same public org |
 | models deployed through swiss reach console only via the stack's gateway | the built-in gateway's route is rendered by the chart; autoconfig writes per-model routes into the stack's own `llm-route/openresty-conf` | point `playground.gateway` at the stack's gateway (see "Models across routes"); a built-in gateway fed by autoconfig is a later step |
-| swiss is not part of the install | its image (`harbor.4pd.io`) is private, its catalog URL is a placeholder, its engines need GPUs and hostPath weights, and routing needs autoconfig with the ModelRoute and LLMSLORequirement CRDs | see "Bringing swiss in" |
+| swiss is off by default | the chart pulls the published swiss chart, but its engines need GPUs and hostPath weights, and routing needs autoconfig with the ModelRoute and LLMSLORequirement CRDs | `swiss.enabled=true`; see "Bringing swiss in" |
 | swiss and console read the gateway key differently | swiss sends the Secret value verbatim (`apiKey`), console parses `key:owner` (`keys`) | one format, in swiss |
 
 ## Bringing swiss in
@@ -431,10 +431,11 @@ requests carry the same headers Global's apiserver sets.
 
 ## Known debt
 
-- **`@riseaicloud/ui` is a private, closed-source package.** It is used now to
-  hit the deadline; the repo **cannot be made truly open-source** until this
-  dependency is replaced with open components or itself open-sourced. Tracked as
-  a release blocker, not a permanent state.
+- **`@riseaicloud/ui` is vendored, not published.** Its owners license it to
+  this repo under Apache-2.0 (see `NOTICE`), but it is a build output copied
+  into `web/vendor/`, not a package contributors can fetch or patch upstream.
+  Upstream `riseaicloud/edge-desgin` should carry the same LICENSE and publish
+  the package.
 - **The vendored `@riseaicloud/ui` peer range was widened to React 19 by hand**
   (`web/vendor/@riseaicloud/ui/package.json`). Upstream should publish the same
   range; until then a re-vendor must keep the edit.
