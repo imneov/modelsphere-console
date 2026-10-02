@@ -45,6 +45,7 @@
   },
   "overrides": {
     "@riseaicloud/tokens": "file:./vendor/@riseaicloud/tokens",
-    "@riseaicloud/ui": "file:./vendor/@riseaicloud/ui"
+    "@riseaicloud/ui": "file:./vendor/@riseaicloud/ui",
+    "dompurify": "3.4.16"
   }
 }
