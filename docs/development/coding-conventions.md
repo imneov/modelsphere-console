@@ -50,7 +50,7 @@ r.log.Warn("gateway unresolved", "backend", r.backend.Name, "err", err)
 |---|---|
 | Checks | `npm run typecheck` (both build variants) and `npm test` before claiming done |
 | Format | `prettier` defaults |
-| Stack | React 19, TypeScript, Tailwind 4, `@riseaicloud/ui` components and tokens; TanStack Query for server state |
+| Stack | React 19, TypeScript, Tailwind 4, `@modelsphere/ui` (`web/packages/ui`) components and tokens; TanStack Query for server state |
 | Imports | `@/…` for `web/src`; `@swiss/…` inside the swiss module |
 | Modules | a feature is a module under `web/src/modules/<name>` exporting a `ConsoleModule`, registered by one line in `modules/index.ts`. It does not reach into another module |
 | Shell | `web/src/shell` is shared: layout, auth, permissions, preferences. Changes there affect every module — keep them deliberate |

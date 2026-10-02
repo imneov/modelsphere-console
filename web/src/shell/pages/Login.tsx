@@ -1,11 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@riseaicloud/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@modelsphere/ui";
 import { useAuth } from "@/shell/auth";
+import { useT } from "@/shell/i18n";
+import { LocaleSwitch } from "@/shell/LocaleSwitch";
 
 export function Login() {
   const { me, login } = useAuth();
   const navigate = useNavigate();
+  const t = useT("shell");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -23,23 +26,24 @@ export function Login() {
       await login(username, password);
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "登录失败");
+      setError(err instanceof Error ? err.message : t("login.failed"));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-surface-page p-4">
+    <div className="relative flex min-h-full items-center justify-center bg-surface-page p-4">
+      <LocaleSwitch className="absolute top-4 right-4 w-32" />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>ModelSphere</CardTitle>
-          <CardDescription>登录到推理平台控制台</CardDescription>
+          <CardDescription>{t("login.subtitle")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">用户名</Label>
+              <Label htmlFor="username">{t("login.username")}</Label>
               <Input
                 id="username"
                 autoComplete="username"
@@ -49,7 +53,7 @@ export function Login() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">密码</Label>
+              <Label htmlFor="password">{t("login.password")}</Label>
               <Input
                 id="password"
                 type="password"
@@ -60,7 +64,7 @@ export function Login() {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? "登录中…" : "登录"}
+              {t(busy ? "login.submitting" : "login.submit")}
             </Button>
           </form>
         </CardContent>

@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
-import {
-  Button,
-  Card,
-  PageHeader,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@riseaicloud/ui";
+import { Button, Card, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, PageBanner } from "@modelsphere/ui";
 import { Columns2, Eraser, Plus, SlidersHorizontal, X } from "lucide-react";
 import { buildPayload } from "@/modules/playground/api";
 import { Composer } from "@/modules/playground/components/Composer";
@@ -16,6 +7,7 @@ import { ModelSelect, useModels } from "@/modules/playground/components/ModelSel
 import { ParamsPanel } from "@/modules/playground/components/ParamsPanel";
 import { Transcript } from "@/modules/playground/components/Transcript";
 import { ViewCode } from "@/modules/playground/components/ViewCode";
+import { useT } from "@/modules/playground/i18n";
 import { DEFAULT_FORM, toChatParams, type ParamsForm } from "@/modules/playground/params";
 import { historyOf, modelsHint, newId, useChat, type Role } from "@/modules/playground/useChat";
 
@@ -46,6 +38,7 @@ const GRID: Record<number, string> = {
 };
 
 export function Compare() {
+  const t = useT();
   const models = useModels();
   const [slots, setSlots] = useState<Slot[]>(() => Array.from({ length: MIN_PANELS }, () => ({ id: newId(), model: "" })));
   const [form, setForm] = useState<ParamsForm>(DEFAULT_FORM);
@@ -78,81 +71,88 @@ export function Compare() {
   const pendingUser = active.length > 0 && active.every((s) => states[s.id]?.lastRole === "user");
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="多模型对比"
-        icon={<Columns2 className="h-5 w-5" />}
-        extra={
+    <div>
+      <PageBanner
+        title={t("compare.title")}
+        icon={<Columns2 className="size-5" />}
+        actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setParamsOpen(true)}>
-              <SlidersHorizontal className="mr-1 h-4 w-4" />
-              参数
+              <SlidersHorizontal data-icon="inline-start" />
+              {t("compare.params")}
             </Button>
             <Button
               variant="outline"
               disabled={slots.length >= MAX_PANELS}
-              onClick={() => setSlots((prev) => [...prev, { id: newId(), model: models.data?.find((m) => !prev.some((s) => s.model === m.id))?.id ?? models.data?.[0]?.id ?? "" }])}
+              onClick={() =>
+                setSlots((prev) => [
+                  ...prev,
+                  { id: newId(), model: models.data?.find((m) => !prev.some((s) => s.model === m.id))?.id ?? models.data?.[0]?.id ?? "" },
+                ])
+              }
             >
-              <Plus className="mr-1 h-4 w-4" />
-              添加模型
+              <Plus data-icon="inline-start" />
+              {t("compare.addModel")}
             </Button>
             <Button variant="outline" onClick={() => each((h) => h.clear())} disabled={streaming}>
-              <Eraser className="mr-1 h-4 w-4" />
-              全部清空
+              <Eraser data-icon="inline-start" />
+              {t("compare.clearAll")}
             </Button>
           </div>
         }
       />
 
-      {models.error ? <p className="text-sm text-destructive">{modelsHint(models.error)}</p> : null}
+      <div className="space-y-4 p-4">
+        {models.error ? <p className="text-sm text-destructive">{modelsHint(t, models.error)}</p> : null}
 
-      <div className={`grid gap-4 ${GRID[slots.length] ?? "lg:grid-cols-2"}`}>
-        {slots.map((slot, i) => (
-          <ComparePanel
-            key={slot.id}
-            slot={slot}
-            index={i}
-            form={form}
-            height={slots.length === 4 ? "h-[calc((100vh-26rem)/2)] min-h-[220px]" : "h-[calc(100vh-24rem)] min-h-[360px]"}
-            onModel={(model) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, model } : s)))}
-            onRemove={
-              slots.length > MIN_PANELS
-                ? () => {
-                    handles.current.get(slot.id)?.stop();
-                    setSlots((prev) => prev.filter((s) => s.id !== slot.id));
-                  }
-                : undefined
-            }
-            onState={onState}
-            ref={(h: PanelHandle | null) => {
-              if (h) handles.current.set(slot.id, h);
-              else handles.current.delete(slot.id);
-            }}
+        <div className={`grid gap-4 ${GRID[slots.length] ?? "lg:grid-cols-2"}`}>
+          {slots.map((slot, i) => (
+            <ComparePanel
+              key={slot.id}
+              slot={slot}
+              index={i}
+              form={form}
+              height={slots.length === 4 ? "h-[calc((100vh-26rem)/2)] min-h-[220px]" : "h-[calc(100vh-24rem)] min-h-[360px]"}
+              onModel={(model) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, model } : s)))}
+              onRemove={
+                slots.length > MIN_PANELS
+                  ? () => {
+                      handles.current.get(slot.id)?.stop();
+                      setSlots((prev) => prev.filter((s) => s.id !== slot.id));
+                    }
+                  : undefined
+              }
+              onState={onState}
+              ref={(h: PanelHandle | null) => {
+                if (h) handles.current.set(slot.id, h);
+                else handles.current.delete(slot.id);
+              }}
+            />
+          ))}
+        </div>
+
+        <Card className="gap-0 py-0">
+          <Composer
+            disabled={!active.length}
+            streaming={streaming}
+            pendingUser={pendingUser}
+            onSend={(text, role) => each((h) => h.send(text, role))}
+            onAdd={(role, text) => each((h) => h.add(role, text))}
+            onStop={() => each((h) => h.stop())}
+            status={streaming ? t("chat.generating") : t("compare.fanOut", { n: active.length })}
           />
-        ))}
+        </Card>
+
+        <Dialog open={paramsOpen} onOpenChange={setParamsOpen}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t("compare.params")}</DialogTitle>
+              <DialogDescription>{t("compare.paramsHint")}</DialogDescription>
+            </DialogHeader>
+            <ParamsPanel form={form} onChange={setForm} idPrefix="cmp" />
+          </DialogContent>
+        </Dialog>
       </div>
-
-      <Card>
-        <Composer
-          disabled={!active.length}
-          streaming={streaming}
-          pendingUser={pendingUser}
-          onSend={(text, role) => each((h) => h.send(text, role))}
-          onAdd={(role, text) => each((h) => h.add(role, text))}
-          onStop={() => each((h) => h.stop())}
-          status={streaming ? "生成中…" : `同一条消息会同时发给 ${active.length} 个模型`}
-        />
-      </Card>
-
-      <Dialog open={paramsOpen} onOpenChange={setParamsOpen}>
-        <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>参数</DialogTitle>
-            <DialogDescription>对所有模型生效，保证比较的是模型而不是参数。</DialogDescription>
-          </DialogHeader>
-          <ParamsPanel form={form} onChange={setForm} idPrefix="cmp" />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -169,6 +169,7 @@ interface PanelProps {
 }
 
 function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, ref }: PanelProps) {
+  const t = useT();
   const params = useMemo(() => toChatParams(slot.model, form), [slot.model, form]);
   const chat = useChat(params);
 
@@ -189,7 +190,7 @@ function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, r
   useEffect(() => onState(slot.id, { streaming: chat.streaming, lastRole }), [onState, slot.id, chat.streaming, lastRole]);
 
   return (
-    <Card className={`flex flex-col ${height}`}>
+    <Card className={`flex flex-col gap-0 py-0 ${height}`}>
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <span className="w-5 shrink-0 text-center text-xs font-medium text-muted-foreground">{index + 1}</span>
         <ModelSelect
@@ -203,11 +204,11 @@ function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, r
           }}
         />
         <ViewCode compact payload={() => buildPayload(historyOf(chat.turns), params)} disabled={!slot.model} />
-        <Button variant="ghost" size="sm" className="h-7 px-2" title="清空" onClick={chat.clear} disabled={chat.streaming || !chat.turns.length}>
+        <Button variant="ghost" size="icon-sm" title={t("compare.clear")} onClick={chat.clear} disabled={chat.streaming || !chat.turns.length}>
           <Eraser className="h-3.5 w-3.5" />
         </Button>
         {onRemove ? (
-          <Button variant="ghost" size="sm" className="h-7 px-2" title="移除" onClick={onRemove}>
+          <Button variant="ghost" size="icon-sm" title={t("compare.remove")} onClick={onRemove}>
             <X className="h-3.5 w-3.5" />
           </Button>
         ) : null}
@@ -215,7 +216,7 @@ function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, r
       <Transcript
         chat={chat}
         className="min-h-0 flex-1"
-        empty={<p className="py-10 text-center text-sm text-muted-foreground">{slot.model ? "在下方输入，所有模型同时回答。" : "选择一个模型。"}</p>}
+        empty={<p className="py-10 text-center text-sm text-muted-foreground">{slot.model ? t("compare.emptyReady") : t("compare.emptyPick")}</p>}
       />
     </Card>
   );

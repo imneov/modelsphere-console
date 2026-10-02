@@ -6,6 +6,12 @@ Licensed under the Apache License, Version 2.0. See LICENSE.
 This product includes software developed by third parties. Their licenses apply
 to their own code, not to this project's.
 
+Derived work in this repository (web/packages/ui, @modelsphere/ui)
+  Forked from Rise Global's design system (rise-global/design@684df9fc),
+  Copyright the Rise authors, contributed to this project under Apache-2.0.
+  Its dependencies, bundled into the image:
+  Base UI (@base-ui/react) .......... MIT
+
 Vendored in this repository (web/vendor/)
   @riseaicloud/ui ................... Apache-2.0, Copyright the Rise authors
   @riseaicloud/tokens ............... MIT, Copyright the Rise authors
@@ -18,6 +24,8 @@ Frontend (JavaScript, bundled into the image)
   React, React DOM .................. MIT
   React Router ...................... MIT
   TanStack Query .................... MIT
+  i18next, i18next-icu .............. MIT
+  intl-messageformat ................ BSD-3-Clause
   Radix UI .......................... MIT
   react-markdown, remark-gfm,
   rehype-highlight .................. MIT

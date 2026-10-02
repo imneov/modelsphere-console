@@ -1,0 +1,86 @@
+{
+  "chat": {
+    "title": "对话",
+    "newChat": "新建对话",
+    "params": "参数",
+    "model": "模型",
+    "modelsSource": "网关当前的模型列表（GET /v1/models）。",
+    "sessionHint": "同一个对话使用固定的 X-Session-Id：网关把整段对话固定在同一个推理实例上，前缀缓存因此保持命中。",
+    "transcript": "对话",
+    "emptyTitle": "选择一个模型开始对话。",
+    "emptyHint": "请求经 console 转到推理网关，网关密钥保存在服务端，不下发到浏览器。",
+    "generating": "生成中…",
+    "messages": "{n, plural, other {# 条消息}}",
+    "emptyWithModel": "在下方输入消息，开始与 {model} 对话。"
+  },
+  "compare": {
+    "title": "多模型对比",
+    "params": "参数",
+    "addModel": "添加模型",
+    "clearAll": "全部清空",
+    "fanOut": "{n, plural, other {同一条消息会同时发给 # 个模型}}",
+    "paramsHint": "对所有模型生效，保证比较的是模型而不是参数。",
+    "clear": "清空",
+    "remove": "移除",
+    "emptyReady": "在下方输入，所有模型同时回答。",
+    "emptyPick": "选择一个模型。"
+  },
+  "composer": {
+    "placeholderUser": "Enter 发送，Shift+Enter 换行",
+    "placeholderAssistant": "以助手身份写一条消息：「添加」只追加，「发送」追加后请模型续写",
+    "user": "用户",
+    "assistant": "助手",
+    "add": "添加",
+    "addTitle": "追加到对话，不请求模型",
+    "stop": "停止",
+    "send": "发送"
+  },
+  "message": {
+    "assistant": "助手",
+    "edit": "编辑",
+    "delete": "删除",
+    "regenerate": "重新生成",
+    "thinking": "思考中…",
+    "reasoning": "思考过程",
+    "stopped": "已停止"
+  },
+  "modelSelect": {
+    "placeholder": "选择模型",
+    "none": "无可用模型"
+  },
+  "params": {
+    "system": "系统提示词",
+    "systemPlaceholder": "可选。发送时作为 messages 里的 system。",
+    "maxTokens": "最大输出 tokens",
+    "more": "更多参数",
+    "seedPlaceholder": "随机",
+    "effortUnset": "不设置",
+    "stopPlaceholder": "每行一个停止序列",
+    "blankHint": "留空的参数不发送，由引擎用自己的默认值。",
+    "reset": "恢复默认参数（保留系统提示词）"
+  },
+  "viewCode": {
+    "title": "查看代码",
+    "description": "用当前的模型、参数和对话调用 OpenAI 兼容接口。先把环境变量 {env} 设为管理员发放的 API Key。"
+  },
+  "stats": {
+    "ttft": "首字 {ms} ms",
+    "duration": "用时 {s} s",
+    "input": "输入 {n} tok",
+    "output": "输出 {n} tok",
+    "tps": "{n} tok/s",
+    "cacheHit": "缓存命中 {pct}%"
+  },
+  "errors": {
+    "noBackend": "这个 console 没有配置 llm 后端：chart 里设置 playground.gateway 的 profile 或 configMap",
+    "badCredentials": "网关拒绝了凭据：检查 site profile 里 route.auth.secretRef 指向的 Secret",
+    "forbidden": "没有 llm 后端的权限：角色需要在 backends/llm 上授予 get 和 create",
+    "unreachable": "网关不可达或没解析出来：检查 backends.llm.gateway 指向的 profile / ConfigMap / Service",
+    "withDetail": "{why}（{message}）",
+    "models": "无法获取模型列表：{error}",
+    "modelsWiring": "无法获取模型列表——{why}",
+    "modelsStatus": "无法获取模型列表（{status}）：{message}",
+    "noStream": "响应没有可读的流",
+    "modelError": "模型返回错误"
+  }
+}

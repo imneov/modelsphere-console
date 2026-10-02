@@ -1,0 +1,37 @@
+{
+  "actions": {
+    "create": "Create",
+    "add": "Add",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "OK",
+    "close": "Close",
+    "done": "Done",
+    "refresh": "Refresh",
+    "copy": "Copy",
+    "copied": "Copied",
+    "search": "Search",
+    "reset": "Reset"
+  },
+  "status": {
+    "loading": "Loading…",
+    "submitting": "Submitting…",
+    "saving": "Saving…",
+    "failed": "Failed",
+    "unknown": "Unknown"
+  },
+  "table": {
+    "empty": "No data",
+    "actions": "Actions",
+    "total": "{n, plural, one {# item} other {# items}}"
+  },
+  "misc": {
+    "yes": "Yes",
+    "no": "No",
+    "all": "All",
+    "none": "None",
+    "never": "Never"
+  }
+}

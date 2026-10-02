@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError } from "@/shell";
+import { ApiError, getT, type TFn } from "@/shell";
 import { api, type ChatMessage, type ChatParams, type Delta } from "@/modules/playground/api";
+import "@/modules/playground/i18n";
 import { statsOf, type Stats } from "@/modules/playground/stats";
 import { splitThink } from "@/modules/playground/think";
 
@@ -87,7 +88,7 @@ export function useChat(params: ChatParams): Chat {
         setTurns((prev) => replaceLast(prev, (t) => ({ ...t, pending: false, stopped: result.aborted, stats: statsOf(result) })));
       } catch (err) {
         commit();
-        const message = err instanceof ApiError ? gatewayHint(err.status, err.message) : String(err);
+        const message = err instanceof ApiError ? gatewayHint(getT("playground"), err.status, err.message) : String(err);
         setTurns((prev) => replaceLast(prev, (t) => ({ ...t, pending: false, error: message })));
       } finally {
         abortRef.current = null;
@@ -181,28 +182,25 @@ export function newId(): string {
 
 // Every failure here is a wiring problem an operator has to fix, and the status
 // is what says which one.
-export function wiringProblem(status: number): string {
-  switch (status) {
-    case 404:
-      return "这个 console 没有配置 llm 后端：chart 里设置 playground.gateway 的 profile 或 configMap";
-    case 401:
-      return "网关拒绝了凭据：检查 site profile 里 route.auth.secretRef 指向的 Secret";
-    case 403:
-      return "没有 llm 后端的权限：角色需要在 backends/llm 上授予 get 和 create";
-    case 502:
-      return "网关不可达或没解析出来：检查 backends.llm.gateway 指向的 profile / ConfigMap / Service";
-    default:
-      return "";
-  }
+const WIRING: Record<number, string> = {
+  404: "errors.noBackend",
+  401: "errors.badCredentials",
+  403: "errors.forbidden",
+  502: "errors.unreachable",
+};
+
+export function wiringProblem(t: TFn, status: number): string {
+  const key = WIRING[status];
+  return key ? t(key) : "";
 }
 
-function gatewayHint(status: number, message: string): string {
-  const why = wiringProblem(status);
-  return why ? `${why}（${message}）` : message;
+function gatewayHint(t: TFn, status: number, message: string): string {
+  const why = wiringProblem(t, status);
+  return why ? t("errors.withDetail", { why, message }) : message;
 }
 
-export function modelsHint(error: unknown): string {
-  if (!(error instanceof ApiError)) return `无法获取模型列表：${String(error)}`;
-  const why = wiringProblem(error.status);
-  return why ? `无法获取模型列表——${why}` : `无法获取模型列表（${error.status}）：${error.message}`;
+export function modelsHint(t: TFn, error: unknown): string {
+  if (!(error instanceof ApiError)) return t("errors.models", { error: String(error) });
+  const why = wiringProblem(t, error.status);
+  return why ? t("errors.modelsWiring", { why }) : t("errors.modelsStatus", { status: error.status, message: error.message });
 }

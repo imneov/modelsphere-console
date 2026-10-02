@@ -1,18 +1,19 @@
-// Loaded by Tailwind 4 through `@config` in src/index.css: the Rise tokens ship a
-// Tailwind 3 preset, and v4 still reads JS configs for exactly this case.
+// Loaded by Tailwind 4 through `@config` in src/index.css: the token preset is a
+// Tailwind 3-style preset, and v4 still reads JS configs for exactly this case.
 import type { Config } from "tailwindcss";
-import edgePreset from "@riseaicloud/tokens/tailwind-preset";
+import preset from "@modelsphere/ui/tailwind-preset";
 import animate from "tailwindcss-animate";
 import typography from "@tailwindcss/typography";
 
 export default {
-  // The preset's d.ts is Tailwind 3's (`darkMode` typed readonly); runtime shape is fine.
-  presets: [edgePreset as unknown as Config],
+  presets: [preset as Config],
   content: [
     "./index.html",
     "./src/**/*.{ts,tsx}",
-    // @riseaicloud/ui ships no stylesheet — the consumer's Tailwind generates its
-    // classes, so its dist MUST be scanned or classes like bg-card get purged.
+    // Neither UI package ships a stylesheet: the consumer's Tailwind generates
+    // their classes, so their sources must be scanned or e.g. bg-card is purged.
+    "./packages/ui/src/**/*.{ts,tsx}",
+    // Only the swiss module's rise kit still uses it.
     "./vendor/@riseaicloud/ui/dist/**/*.{js,mjs}",
   ],
   plugins: [animate, typography],

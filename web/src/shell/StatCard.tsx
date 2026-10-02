@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Card, CardContent } from "@riseaicloud/ui";
+import { Card, CardContent } from "@modelsphere/ui";
 
 // One number on the home page. Modules render these from their `overview`.
 export function StatCard({ icon: Icon, label, value }: { icon: ComponentType<{ className?: string }>; label: string; value: number | string }) {

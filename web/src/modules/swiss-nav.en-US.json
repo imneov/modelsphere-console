@@ -1,0 +1,12 @@
+{
+  "group": {
+    "模型部署": "Model Deployment"
+  },
+  "menu": {
+    "index": "Deployments",
+    "catalog": "Model Catalog",
+    "nodes": "Nodes",
+    "runs": "Activity",
+    "siteProfile": "Site Profile"
+  }
+}

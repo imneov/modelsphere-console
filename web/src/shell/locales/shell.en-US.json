@@ -1,0 +1,81 @@
+{
+  "menu": {
+    "overview": "Overview"
+  },
+  "layout": {
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "preferences": "Preferences",
+    "language": "Language",
+    "admin": "Administrator",
+    "changePassword": "Change password",
+    "logout": "Sign out"
+  },
+  "home": {
+    "title": "Overview",
+    "session": "Current session",
+    "user": "User: ",
+    "email": "Email: ",
+    "groups": "Groups: ",
+    "role": "Role: ",
+    "admin": "Administrator",
+    "member": "Member"
+  },
+  "login": {
+    "subtitle": "Sign in to the inference platform console",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "failed": "Sign-in failed",
+    "badCredentials": "Incorrect username or password"
+  },
+  "password": {
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Confirm new password",
+    "tooWeak": "The new password does not meet the complexity requirements",
+    "mismatch": "The new passwords do not match",
+    "failed": "Failed to change the password",
+    "changeTitle": "Change password",
+    "changeDescription": "Enter your current password and choose a new one that meets the complexity requirements.",
+    "changeSubmit": "Change password",
+    "updated": "Password updated.",
+    "resetTitle": "Set a new password",
+    "resetDescription": "Set a password on first sign-in to continue using the console. Better not to keep the initial one.",
+    "resetSubmit": "Set new password",
+    "same": "The new password is the same as the current one. You can continue, but a password only you know is better."
+  },
+  "strength": {
+    "label": "Password strength",
+    "strong": "Strong",
+    "medium": "Medium",
+    "weak": "Weak",
+    "length": "At least 8 characters",
+    "uppercase": "An uppercase letter",
+    "lowercase": "A lowercase letter",
+    "number": "A digit",
+    "special": "A special character"
+  },
+  "preferences": {
+    "title": "Preferences",
+    "description": "Appearance and language preferences are stored in this browser and only affect this device.",
+    "layout": "Layout",
+    "language": "Language",
+    "restoreDefault": "Restore defaults",
+    "layouts": {
+      "mixedNav": {
+        "label": "Mixed nav",
+        "hint": "Full-width header with a one-column side menu"
+      },
+      "classic": {
+        "label": "Classic",
+        "hint": "Like mixed nav, but the sidebar is a floating card"
+      },
+      "minimal": {
+        "label": "Minimal",
+        "hint": "Full-height sidebar; header and content share one rounded board, layered by corners and gaps rather than borders"
+      }
+    }
+  }
+}

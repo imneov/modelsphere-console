@@ -1,0 +1,96 @@
+{
+  "overview": {
+    "users": "用户",
+    "roles": "角色"
+  },
+  "users": {
+    "title": "用户",
+    "create": "新建用户",
+    "table": {
+      "name": "用户名",
+      "displayName": "显示名",
+      "email": "邮箱",
+      "groups": "分组",
+      "state": "状态"
+    },
+    "state": {
+      "active": "活跃",
+      "disabled": "禁用",
+      "pending": "待激活"
+    },
+    "delete": {
+      "title": "删除用户",
+      "confirm": "删除用户「{name}」后，该用户将无法登录，此操作无法撤销。",
+      "self": "不能删除当前登录的账号"
+    },
+    "form": {
+      "title": "新建用户",
+      "description": "创建一个可登录的平台用户。",
+      "name": "用户名",
+      "displayName": "显示名",
+      "email": "邮箱",
+      "password": "密码",
+      "submit": "创建",
+      "submitting": "创建中…"
+    },
+    "search": "搜索用户名"
+  },
+  "loginHistory": {
+    "title": "登录历史",
+    "table": {
+      "time": "时间",
+      "user": "用户",
+      "status": "状态",
+      "ip": "IP",
+      "userAgent": "UserAgent"
+    },
+    "status": {
+      "success": "成功",
+      "failure": "失败"
+    },
+    "search": "搜索用户"
+  },
+  "roles": {
+    "title": "角色",
+    "create": "新建角色",
+    "table": {
+      "name": "名称",
+      "permissions": "权限"
+    },
+    "resources": {
+      "users": "用户",
+      "iamroles": "角色",
+      "iamrolebindings": "角色绑定"
+    },
+    "verbs": {
+      "get": "查看",
+      "list": "列表",
+      "create": "创建",
+      "update": "更新",
+      "delete": "删除"
+    },
+    "summary": {
+      "other": "其他",
+      "allVerbs": "全部",
+      "none": "无权限"
+    },
+    "delete": {
+      "title": "删除角色",
+      "confirm": "删除角色「{name}」后，持有该角色的用户将失去相应权限，此操作无法撤销。"
+    },
+    "form": {
+      "title": "新建角色",
+      "description": "勾选该角色允许的操作。",
+      "name": "角色名",
+      "resource": "资源",
+      "submit": "创建",
+      "submitting": "创建中…"
+    },
+    "members": {
+      "action": "成员",
+      "title": "{role} · 成员",
+      "description": "勾选拥有该角色的用户。"
+    },
+    "search": "搜索角色名"
+  }
+}

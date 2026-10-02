@@ -1,4 +1,5 @@
-import { apiFetch, ApiError, request } from "@/shell";
+import { apiFetch, ApiError, getT, request } from "@/shell";
+import "@/modules/playground/i18n";
 import { SSEParser } from "@/modules/playground/sse";
 
 // console proxies this prefix to llm-openresty's route (console.yaml backends:
@@ -99,7 +100,7 @@ export const api = {
       throw err;
     }
     if (!res.ok) throw new ApiError(res.status, await errorText(res));
-    if (!res.body) throw new ApiError(res.status, "响应没有可读的流");
+    if (!res.body) throw new ApiError(res.status, getT("playground")("errors.noStream"));
 
     const out: StreamResult = { text: "", reasoning: "", ms: 0, aborted: false };
     const parser = new SSEParser();
@@ -184,7 +185,7 @@ function isAbort(err: unknown): boolean {
 }
 
 function errorMessageOf(error: { message?: string } | string): string {
-  return typeof error === "string" ? error : error.message || "模型返回错误";
+  return typeof error === "string" ? error : error.message || getT("playground")("errors.modelError");
 }
 
 // errorText prefers the message an OpenAI-compatible endpoint puts in

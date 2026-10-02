@@ -1,0 +1,93 @@
+{
+  "group": {
+    "Playground": "Playground"
+  },
+  "menu": {
+    "index": "Chat",
+    "compare": "Compare models"
+  },
+  "chat": {
+    "title": "Chat",
+    "newChat": "New chat",
+    "params": "Parameters",
+    "model": "Model",
+    "modelsSource": "The gateway's current model list (GET /v1/models).",
+    "sessionHint": "A conversation keeps one X-Session-Id: the gateway pins the whole conversation to one inference instance, so the prefix cache stays warm.",
+    "transcript": "Conversation",
+    "emptyTitle": "Pick a model to start chatting.",
+    "emptyHint": "Requests go through the console to the inference gateway. The gateway key stays on the server and never reaches the browser.",
+    "generating": "Generating…",
+    "messages": "{n, plural, one {# message} other {# messages}}",
+    "emptyWithModel": "Type a message below to start chatting with {model}."
+  },
+  "compare": {
+    "title": "Compare models",
+    "params": "Parameters",
+    "addModel": "Add model",
+    "clearAll": "Clear all",
+    "fanOut": "{n, plural, one {Each message goes to # model} other {Each message goes to all # models at once}}",
+    "paramsHint": "Applies to every model, so the comparison is between models, not parameters.",
+    "clear": "Clear",
+    "remove": "Remove",
+    "emptyReady": "Type below; every model answers at once.",
+    "emptyPick": "Pick a model."
+  },
+  "composer": {
+    "placeholderUser": "Enter to send, Shift+Enter for a new line",
+    "placeholderAssistant": "Write a message as the assistant: \"Add\" only appends it, \"Send\" appends it and asks the model to continue",
+    "user": "User",
+    "assistant": "Assistant",
+    "add": "Add",
+    "addTitle": "Append to the conversation without asking the model",
+    "stop": "Stop",
+    "send": "Send"
+  },
+  "message": {
+    "assistant": "Assistant",
+    "edit": "Edit",
+    "delete": "Delete",
+    "regenerate": "Regenerate",
+    "thinking": "Thinking…",
+    "reasoning": "Reasoning",
+    "stopped": "Stopped"
+  },
+  "modelSelect": {
+    "placeholder": "Select a model",
+    "none": "No models available"
+  },
+  "params": {
+    "system": "System prompt",
+    "systemPlaceholder": "Optional. Sent as the system message in messages.",
+    "maxTokens": "Max output tokens",
+    "more": "More parameters",
+    "seedPlaceholder": "Random",
+    "effortUnset": "Not set",
+    "stopPlaceholder": "One stop sequence per line",
+    "blankHint": "Blank parameters are not sent; the engine uses its own defaults.",
+    "reset": "Reset parameters to defaults (keeps the system prompt)"
+  },
+  "viewCode": {
+    "title": "View code",
+    "description": "Calls the OpenAI-compatible API with the current model, parameters and conversation. First set the environment variable {env} to an API key issued by your administrator."
+  },
+  "stats": {
+    "ttft": "TTFT {ms} ms",
+    "duration": "Total {s} s",
+    "input": "In {n} tok",
+    "output": "Out {n} tok",
+    "tps": "{n} tok/s",
+    "cacheHit": "Cache hit {pct}%"
+  },
+  "errors": {
+    "noBackend": "This console has no llm backend configured: set the profile or configMap of playground.gateway in the chart",
+    "badCredentials": "The gateway rejected the credentials: check the Secret that route.auth.secretRef points to in the site profile",
+    "forbidden": "No permission on the llm backend: the role needs get and create on backends/llm",
+    "unreachable": "The gateway is unreachable or did not resolve: check the profile / ConfigMap / Service that backends.llm.gateway points to",
+    "withDetail": "{why} ({message})",
+    "models": "Could not load the model list: {error}",
+    "modelsWiring": "Could not load the model list: {why}",
+    "modelsStatus": "Could not load the model list ({status}): {message}",
+    "noStream": "The response has no readable stream",
+    "modelError": "The model returned an error"
+  }
+}

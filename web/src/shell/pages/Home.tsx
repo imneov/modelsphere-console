@@ -1,51 +1,54 @@
-import { Card, CardContent, CardHeader, CardTitle, PageHeader } from "@riseaicloud/ui";
+import { Card, CardContent, CardHeader, CardTitle, PageBanner } from "@modelsphere/ui";
 import { LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/shell/auth";
 import { ModuleProvider, type ConsoleModule } from "@/shell/module";
+import { useT } from "@/shell/i18n";
 
 export function Home({ modules }: { modules: ConsoleModule[] }) {
   const { me } = useAuth();
+  const t = useT("shell");
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="概览" icon={<LayoutDashboard className="h-5 w-5" />} />
+    <div>
+      <PageBanner title={t("home.title")} icon={<LayoutDashboard className="size-5" />} />
+      <div className="space-y-6 p-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {modules.map((m) => {
+            const Overview = m.overview;
+            return Overview ? (
+              <ModuleProvider key={m.id} module={m}>
+                <Overview />
+              </ModuleProvider>
+            ) : null;
+          })}
+        </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {modules.map((m) => {
-          const Overview = m.overview;
-          return Overview ? (
-            <ModuleProvider key={m.id} module={m}>
-              <Overview />
-            </ModuleProvider>
-          ) : null;
-        })}
-      </div>
-
-      <Card className="max-w-md">
-        <CardHeader>
-          <CardTitle className="text-base">当前会话</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1 text-sm">
-          <div>
-            <span className="text-muted-foreground">用户：</span>
-            {me?.name}
-          </div>
-          {me?.email && (
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="text-base">{t("home.session")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
             <div>
-              <span className="text-muted-foreground">邮箱：</span>
-              {me.email}
+              <span className="text-muted-foreground">{t("home.user")}</span>
+              {me?.name}
             </div>
-          )}
-          <div>
-            <span className="text-muted-foreground">分组：</span>
-            {me?.groups?.join(", ")}
-          </div>
-          <div>
-            <span className="text-muted-foreground">角色：</span>
-            {me?.isAdmin ? "管理员" : "普通用户"}
-          </div>
-        </CardContent>
-      </Card>
+            {me?.email && (
+              <div>
+                <span className="text-muted-foreground">{t("home.email")}</span>
+                {me.email}
+              </div>
+            )}
+            <div>
+              <span className="text-muted-foreground">{t("home.groups")}</span>
+              {me?.groups?.join(", ")}
+            </div>
+            <div>
+              <span className="text-muted-foreground">{t("home.role")}</span>
+              {t(me?.isAdmin ? "home.admin" : "home.member")}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

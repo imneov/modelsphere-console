@@ -1,0 +1,59 @@
+{
+  "group": {
+    "路由": "Router"
+  },
+  "menu": {
+    "apiKeys": "API Keys"
+  },
+  "apiKeys": {
+    "title": "API Keys",
+    "create": "New API key",
+    "empty": "No API keys yet",
+    "table": {
+      "name": "Name",
+      "key": "Key",
+      "models": "Models",
+      "expiresAt": "Expires",
+      "createdBy": "Created by",
+      "createdAt": "Created"
+    },
+    "allModels": "All models",
+    "neverExpires": "Never expires",
+    "expired": "Expired",
+    "delete": {
+      "title": "Delete API key",
+      "confirm": "Once “{name}” is deleted, programs using this key lose access immediately. This cannot be undone."
+    },
+    "form": {
+      "title": "New API key",
+      "description": "Used to call models through the OpenAI-compatible API.",
+      "name": "Name",
+      "descriptionLabel": "Description",
+      "optional": "Optional",
+      "expiry": "Expires in",
+      "expiryOptions": {
+        "days7": "7 days",
+        "month1": "1 month",
+        "months6": "6 months",
+        "never": "Never"
+      },
+      "scope": "Models",
+      "scopeAll": "All models",
+      "scopeSome": "Selected models",
+      "loadingModels": "Loading models…",
+      "modelsFailed": "Failed to load models; only a key with access to all models can be created.",
+      "noModels": "No models available; only a key with access to all models can be created.",
+      "pickModel": "Select at least one model",
+      "submit": "Create",
+      "submitting": "Creating…"
+    },
+    "created": {
+      "title": "API key created",
+      "warning": "Copy and store it now. It cannot be viewed again after you close this dialog.",
+      "usage": "Base URL {baseURL}, request header {header}",
+      "keyPlaceholder": "key",
+      "done": "I have saved it"
+    },
+    "search": "Search name"
+  }
+}

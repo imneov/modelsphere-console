@@ -1,4 +1,6 @@
+import { formatNumber, getT, type TFn } from "@/shell";
 import type { StreamResult } from "@/modules/playground/api";
+import "@/modules/playground/i18n";
 
 export interface Stats {
   ttftMs?: number;
@@ -30,15 +32,17 @@ export function cacheHitRate(stats: Stats): number | undefined {
   return stats.cachedTokens / stats.promptTokens;
 }
 
-export function statsParts(stats: Stats): string[] {
+const ONE_DECIMAL = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+
+export function statsParts(stats: Stats, t: TFn = getT("playground")): string[] {
   const parts: string[] = [];
-  if (stats.ttftMs !== undefined) parts.push(`首字 ${Math.round(stats.ttftMs)} ms`);
-  parts.push(`用时 ${(stats.ms / 1000).toFixed(1)} s`);
-  if (stats.promptTokens !== undefined) parts.push(`输入 ${stats.promptTokens} tok`);
-  if (stats.completionTokens !== undefined) parts.push(`输出 ${stats.completionTokens} tok`);
+  if (stats.ttftMs !== undefined) parts.push(t("stats.ttft", { ms: formatNumber(Math.round(stats.ttftMs)) }));
+  parts.push(t("stats.duration", { s: formatNumber(stats.ms / 1000, ONE_DECIMAL) }));
+  if (stats.promptTokens !== undefined) parts.push(t("stats.input", { n: formatNumber(stats.promptTokens) }));
+  if (stats.completionTokens !== undefined) parts.push(t("stats.output", { n: formatNumber(stats.completionTokens) }));
   const tps = tokensPerSecond(stats);
-  if (tps !== undefined) parts.push(`${tps.toFixed(1)} tok/s`);
+  if (tps !== undefined) parts.push(t("stats.tps", { n: formatNumber(tps, ONE_DECIMAL) }));
   const hit = cacheHitRate(stats);
-  if (hit !== undefined) parts.push(`缓存命中 ${Math.round(hit * 100)}%`);
+  if (hit !== undefined) parts.push(t("stats.cacheHit", { pct: Math.round(hit * 100) }));
   return parts;
 }
