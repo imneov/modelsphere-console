@@ -1,1 +1,1 @@
-export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@riseaicloud/ui";
+export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@modelsphere/ui";

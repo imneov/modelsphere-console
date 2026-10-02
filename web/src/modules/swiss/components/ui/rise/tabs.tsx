@@ -1,4 +1,4 @@
-import { Tabs as RiseTabs, TabsList, TabsTrigger } from "@riseaicloud/ui";
+import { Tabs as KitTabs, TabsList, TabsTrigger } from "@modelsphere/ui";
 
 export interface Tab {
   id: string;
@@ -19,7 +19,7 @@ export function Tabs({
   onSelect: (id: string) => void;
 }) {
   return (
-    <RiseTabs value={active} onValueChange={onSelect}>
+    <KitTabs value={active} onValueChange={(v) => onSelect(String(v))}>
       <TabsList className="flex-wrap">
         {tabs.map((t) => (
           <TabsTrigger key={t.id} value={t.id} disabled={t.disabled} title={t.hint}>
@@ -27,6 +27,6 @@ export function Tabs({
           </TabsTrigger>
         ))}
       </TabsList>
-    </RiseTabs>
+    </KitTabs>
   );
 }

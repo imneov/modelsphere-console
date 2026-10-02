@@ -10,26 +10,28 @@ chart's `appVersion`; the image and chart are released together under it.
 ### Added
 - Chinese and English, switchable at runtime from the top bar, the preferences panel or the login page; the choice is stored as Rise Global stores it.
 - `@modelsphere/ui` (`web/packages/ui`): an open UI kit forked from Rise Global's design system, with its own zh-CN/en-US component strings.
-- Apache-2.0 `LICENSE` and a `NOTICE` listing third-party components. The vendored `@riseaicloud/ui`, used only by the swiss module, is proprietary and not covered by the license.
+- Apache-2.0 `LICENSE` and a `NOTICE` listing third-party components.
 - CI on every pull request: `go vet`/`go test`, web typecheck and tests, and a gate for the license text and committed credentials.
 - Dependabot for Go modules, npm, GitHub Actions and the Dockerfile.
 - English install guide for the chart; the Chinese one is kept as `helm/console/README.zh-CN.md`.
 - Contributor guide, issue and PR templates, security policy (#12).
 
 ### Changed
-- Shell, access control, Playground and router pages use `@modelsphere/ui` in Rise Global's current look: page banner, resource tables with search and pagination, deletes confirmed by typing the name. Only the swiss module still uses `@riseaicloud/ui`.
+- Shell, access control, Playground and router pages use `@modelsphere/ui` in Rise Global's current look: page banner, resource tables with search and pagination, deletes confirmed by typing the name. The swiss module's components follow.
 - The first password change may keep the current password, with a warning (#11).
 - The swiss subchart dependency points at a published swiss chart, pinned to a stable version (#17, #18).
 - Deployment status and detail pages reworked (#16).
 - GitHub Actions in `publish.yml` pinned to commit SHAs.
+
+### Removed
+- The proprietary `@riseaicloud/ui` and `@riseaicloud/tokens` (`web/vendor/`). The image now ships no closed code.
 
 ### Fixed
 - An empty Playground chat names the selected model (#13).
 
 ### Security
 - `golang.org/x/crypto` 0.47.0 → 0.57.0 and `golang.org/x/net` 0.49.0 → 0.59.0, for the advisories Dependabot reported against them. Console uses only `bcrypt` from `x/crypto`; most of the advisories are in `ssh`.
-- `dompurify` 3.4.15 → 3.4.16 (pulled by Monaco Editor), through an npm override.
-- The vendored `@riseaicloud/*` packages no longer bring in their build tooling (Storybook, tsup), which carried vulnerable `esbuild` and `uuid`. `npm audit` now reports nothing.
+- Removing `@riseaicloud/*` also removes the packages it pulled in, among them vulnerable `dompurify`, `esbuild` and `uuid`. `npm audit` reports nothing.
 
 ## [0.1.1] - 2026-10-01
 

@@ -20,10 +20,9 @@ ARG NPM_REGISTRY
 
 WORKDIR /src/web
 # Manifests first: this layer is cached until a dependency actually changes,
-# which is most of the build time. @modelsphere/ui (file:./packages/ui) and
-# @riseaicloud/* (file:./vendor/...) are local, so they are part of the manifests.
+# which is most of the build time. @modelsphere/ui (file:./packages/ui) is local,
+# so it is part of the manifests.
 COPY web/package.json web/package-lock.json ./
-COPY web/vendor ./vendor
 COPY web/packages ./packages
 RUN npm ci --no-audit --no-fund --registry "$NPM_REGISTRY"
 

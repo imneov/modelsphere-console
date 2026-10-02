@@ -10,11 +10,9 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{ts,tsx}",
-    // Neither UI package ships a stylesheet: the consumer's Tailwind generates
-    // their classes, so their sources must be scanned or e.g. bg-card is purged.
+    // The UI package ships no stylesheet: the consumer's Tailwind generates
+    // its classes, so its sources must be scanned or e.g. bg-card is purged.
     "./packages/ui/src/**/*.{ts,tsx}",
-    // Only the swiss module's rise kit still uses it.
-    "./vendor/@riseaicloud/ui/dist/**/*.{js,mjs}",
   ],
   plugins: [animate, typography],
 } satisfies Config;
