@@ -2,7 +2,7 @@
   "name": "@riseaicloud/ui",
   "version": "1.2.0",
   "description": "Edge Platform UI Component Library",
-  "license": "Apache-2.0",
+  "license": "UNLICENSED",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

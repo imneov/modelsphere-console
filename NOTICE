@@ -13,10 +13,13 @@ Derived work in this repository (web/packages/ui, @modelsphere/ui)
   Base UI (@base-ui/react) .......... MIT
 
 Vendored in this repository (web/vendor/)
-  @riseaicloud/ui ................... Apache-2.0, Copyright the Rise authors
+  @riseaicloud/ui ................... proprietary, Copyright the Rise authors.
+      NOT covered by LICENSE: this repository grants no license for it.
+      Used only by the swiss module (web/src/modules/swiss/components/ui/rise/)
+      and to be removed once that module moves to @modelsphere/ui.
   @riseaicloud/tokens ............... MIT, Copyright the Rise authors
   Source: https://github.com/riseaicloud/edge-desgin
-  Its own dependencies, installed by npm and bundled into the image:
+  @riseaicloud/ui's own dependencies, installed by npm and bundled into the image:
   Radix UI, Monaco Editor (@monaco-editor/react), Recharts, date-fns,
   js-yaml, react-day-picker, lucide-react .... MIT / ISC
 

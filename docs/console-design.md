@@ -489,10 +489,11 @@ requests carry the same headers Global's apiserver sets.
 
 ## Known debt
 
-- **`@riseaicloud/ui` is vendored, not published,** and only the swiss module's
-  rise kit still uses it (`modules/swiss/components/ui/rise/`, 10 adapter files,
-  console build only); everything else is on `@modelsphere/ui`. Its owners
-  license it to this repo under Apache-2.0 (see `NOTICE`). Moving those adapters
+- **`@riseaicloud/ui` is proprietary, and the image still ships it.** Only the
+  swiss module's rise kit uses it (`modules/swiss/components/ui/rise/`, 10 adapter
+  files, console build only); everything else is on `@modelsphere/ui`. `LICENSE`
+  does not cover it and the repo grants no license for it (`NOTICE`), so the repo
+  is not fully open source until it goes. Release blocker: moving those adapters
   to `@modelsphere/ui` lets `web/vendor/` go, and with it the next item.
 - **The vendored `package.json` files are edited by hand.** A re-vendor must
   keep both edits:

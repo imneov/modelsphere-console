@@ -2,6 +2,7 @@
   "name": "@modelsphere/ui",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "ModelSphere UI: shadcn (Base UI) components, a resource table, design tokens and component strings in zh-CN / en-US",
   "type": "module",
   "main": "./src/index.ts",
