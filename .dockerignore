@@ -3,6 +3,7 @@
 # image depend on whatever happened to be on the builder's disk.
 web/node_modules
 web/vendor/*/*/node_modules
+web/packages/*/node_modules
 web/dist
 web/dist-swiss
 web/*.tsbuildinfo

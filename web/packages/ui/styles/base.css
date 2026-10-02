@@ -1,0 +1,134 @@
+/*
+  @modelsphere/ui base styles. Import once, after `@import "tailwindcss"`:
+
+    @import "tailwindcss";
+    @import "@modelsphere/ui/base.css";
+    @config "./tailwind.config.ts";   // presets: [require("@modelsphere/ui/tailwind-preset")]
+
+  The components ship no compiled CSS: the consumer's Tailwind generates their
+  classes, so its config must scan this package's src (see README).
+*/
+
+/*
+  shadcn 组件依赖的 9 个自定义变体 —— 逐字取自上游 `shadcn/tailwind.css`
+  （registry `base-nova/index.json` 的 css 块里写的就是 @import 它）。
+
+  少了它们，Tailwind 会退回内建 data-* 处理：`data-horizontal:h-1` 生成
+  `[data-horizontal]`，而 Base UI 1.7 吐的是 `data-orientation="horizontal"`
+  —— 选择器永不命中。2026-08-28 实测：Slider 轨道高度为 0（整条不可见），
+  另有 tabs / field / separator / scroll-area / toggle-group / button-group
+  共 7 个组件 53 处受影响。
+
+  这些组件是「shadcn 原生、与上游逐字一致」那一层，所以它们依赖的 CSS 契约
+  也照抄上游，不自创。上游改了这里跟着改。
+*/
+@custom-variant data-open {
+  &:where([data-state="open"]),
+  &:where([data-open]:not([data-open="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-closed {
+  &:where([data-state="closed"]),
+  &:where([data-closed]:not([data-closed="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-checked {
+  &:where([data-state="checked"]),
+  &:where([data-checked]:not([data-checked="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-unchecked {
+  &:where([data-state="unchecked"]),
+  &:where([data-unchecked]:not([data-unchecked="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-selected {
+  &:where([data-selected="true"]) {
+    @slot;
+  }
+}
+@custom-variant data-disabled {
+  &:where([data-disabled="true"]),
+  &:where([data-disabled]:not([data-disabled="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-active {
+  &:where([data-state="active"]),
+  &:where([data-active]:not([data-active="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-horizontal {
+  &:where([data-orientation="horizontal"]) {
+    @slot;
+  }
+}
+@custom-variant data-vertical {
+  &:where([data-orientation="vertical"]) {
+    @slot;
+  }
+}
+
+
+/*
+  Card 的「边框」是 ring-1 画的（shadcn 新版 Card 没有 border）。整块可点的卡片
+  （模型库、卡片 Demo：role="button" + tabIndex）点一下就聚焦，这条规则一把 ring 归零，
+*/
+:where(:focus-visible, :focus, [data-focused], [aria-invalid='true']):where(:not([data-slot='card'])) {
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-inset-ring-shadow: 0 0 #0000;
+}
+:where(:focus-visible, :focus, [data-focused]) {
+  outline: none;
+}
+
+/*
+  shadcn 生成件的占位是 `placeholder:text-muted-foreground`，与表头、副行、字段标签
+  同一个灰 —— 搜索框空着时和旁边的筛选标题一样重，分不出「这里还没填」。
+  PATTERNS §5.4 把占位符归在「弱化」档；console-ui 老版同样是占位（#939ea9）浅于
+  次级（#7c7c7c）。同样不逐个改生成件、不进 @layer，理由同上面聚焦环那段。
+*/
+:where(input, textarea)::placeholder {
+  color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+}
+
+/*
+  换主色只覆盖 `--primary` 一族，于是蓝色主题里只有实心主按钮、行操作、侧栏选中态是蓝的，
+  outline 按钮悬停仍是灰底黑字、Tabs 选中项仍是黑字 —— 看起来「只有几个点是蓝的」。
+  按 console-ui 老版的分寸：**静态不变**（outline 静态蓝字蓝边会和旁边的主按钮抢层级），
+  只让「此刻被交互的那一个」带主色：
+    · outline / secondary 按钮：悬停或展开中 → 主色文字 + 主色描边，不铺灰底
+    · Tabs 选中项 → 主色文字（白块不变；与 PageTabs 板形态的规则同一判据）
+  中性主题（无 `data-primary-tone`）一字不动。不进 @layer、:where() 归零，理由同上。
+*/
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   全站：可点击即手型，禁用即 not-allowed（LF 2026-09-01 定案，PATTERNS §7）。
+
+   放在 @layer 之外是**刻意的**：shadcn 原件给菜单项 / 下拉选项写了 `cursor-default`
+   （menubar / context-menu / select / combobox / dropdown-menu，模拟原生菜单），
+   它们在 utilities 层，base / components 层的规则压不过；逐个 fork 原件又会多出
+   五处对账补丁。无层规则在层叠里永远排在所有 @layer 之后，一条就能统一盖掉。
+   `:where()` 把特异度压成 0，页面里真需要例外时随手一个 class 就能覆盖。
+   ══════════════════════════════════════════════════════════════════════════════ */
+:where(
+  button, [role="button"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"],
+  [role="option"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"],
+  [role="link"], [role="combobox"], [role="treeitem"], a[href], label[for], summary,
+  [data-slot="select-trigger"], [data-slot="dropdown-menu-trigger"], [data-slot="hover-card-trigger"]
+):not(:disabled):not([aria-disabled="true"]):not([data-disabled]:not([data-disabled="false"])) {
+  cursor: pointer;
+}
+:where(
+  button, [role="button"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"],
+  [role="option"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"], [role="combobox"]
+):is(:disabled, [aria-disabled="true"], [data-disabled]:not([data-disabled="false"])) {
+  cursor: not-allowed;
+}
+
