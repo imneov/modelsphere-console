@@ -194,7 +194,7 @@ Rise Global keeps its own, closed library -- two libraries, no syncing.
 
 The swiss pages are a mirror of `swiss/web/src` (`hack/sync-swiss-ui.sh`, pinned
 in `UPSTREAM`), so they must stay editable only upstream. That rules out
-rewriting 56 `Badge` and 33 `Field` call sites onto `@riseaicloud/ui`: the next
+rewriting 56 `Badge` and 33 `Field` call sites onto the console's kit: the next
 sync would undo it.
 
 So the seam is the import path, not the call site. The pages import
@@ -204,18 +204,18 @@ export names and prop shapes.
 | Kit | Comes from | Picked by |
 |---|---|---|
 | `components/ui/shadcn/` | swiss, verbatim | `UI_KIT=shadcn` / `tsconfig.shadcn.json` |
-| `components/ui/rise/` | console, adapters over `@riseaicloud/ui` | the default |
+| `components/ui/rise/` | console, adapters over `@modelsphere/ui` | the default |
 
-Adapting rather than re-exporting is not uniform: `button`, `card`, `table` and
-`Input` are the same shadcn lineage and re-export directly, but `Dialog`
-(`{open,onClose,title,footer}` vs a Radix compound), `Tabs`, `Switch`
-(`onChange`/`label` vs `onCheckedChange`) and `HoverHint` need real translation,
-and Rise's `Badge` has no `muted`/`warning`/`success` -- used 31 times -- so it
-extends `outline` and stays a `<span>`, because Rise's renders a `<div>` and
-these sit inside a dialog subtitle's `<p>`.
+The directory keeps its name: it is the kit in Rise Global's look, now drawn by
+`@modelsphere/ui`. Adapting rather than re-exporting is not uniform:
 
-`code` and `toast` have no Rise equivalent; the rise kit re-exports the shadcn
-ones rather than pretending otherwise.
+| Adapter | Over the kit |
+|---|---|
+| `button`, `card`, `table`, `Input` | same shadcn lineage: re-exported |
+| `Dialog` | `{open,onClose,title,subtitle,footer,size}` over the Base UI compound, re-laid-out as fixed header, scrolling body, pinned footer; `sm:max-w-*` as well, or the kit's `sm:max-w-sm` wins |
+| `Tabs`, `Switch`, `HoverHint` | swiss's props (`onSelect`, `onChange`/`label`, `text`) onto Base UI's (`onValueChange`, `onCheckedChange` + `aria-label`, `render`) |
+| `Badge` | the kit's, which renders a `<span>` and has `success`/`warning`; only swiss's `muted` is local, on `secondary` |
+| `code`, `toast` | no kit equivalent: the shadcn ones, re-exported |
 
 The shell is Rise in both builds. The flag swaps the module, not console's
 chrome, and is there for the case where a Rise component reads wrong on a deploy
@@ -489,19 +489,6 @@ requests carry the same headers Global's apiserver sets.
 
 ## Known debt
 
-- **`@riseaicloud/ui` is proprietary, and the image still ships it.** Only the
-  swiss module's rise kit uses it (`modules/swiss/components/ui/rise/`, 10 adapter
-  files, console build only); everything else is on `@modelsphere/ui`. `LICENSE`
-  does not cover it and the repo grants no license for it (`NOTICE`), so the repo
-  is not fully open source until it goes. Release blocker: moving those adapters
-  to `@modelsphere/ui` lets `web/vendor/` go, and with it the next item.
-- **The vendored `package.json` files are edited by hand.** A re-vendor must
-  keep both edits:
-
-  | Edit | Why |
-  |---|---|
-  | `@riseaicloud/ui` peer range widened to React 19 | upstream still declares React 18 |
-  | `devDependencies` removed from `ui` and `tokens` | npm installs a `file:` package's devDependencies; they pulled ~400 packages (Storybook, tsup, old esbuild, uuid) with known vulnerabilities into console, for a library that is already built |
 - **The token preset is Tailwind 3-style**, loaded through `@config`. A Tailwind 4
   CSS build of the tokens would drop `tailwind.config.ts`.
 
@@ -511,7 +498,7 @@ requests carry the same headers Global's apiserver sets.
 |-------|-------|
 | P0 | Scaffold: Go BFF skeleton, config, dynamic client, Docker, helm chart. **(done)** |
 | P1 | Login loop: iam CRD types, dynamic CRUD, `/oauth/token`, auth middleware, helm-seeded admin, frontend login + guard. |
-| P2 | User management: user CRUD API + UI, i18n (zh-CN/en-US). **(i18n done: shell, iam, playground, router; swiss pages pending swiss.)** Open UI kit `@modelsphere/ui` replacing `@riseaicloud/ui` outside the swiss module. **(done)** |
+| P2 | User management: user CRUD API + UI, i18n (zh-CN/en-US). **(i18n done: shell, iam, playground, router; swiss pages pending swiss.)** Open UI kit `@modelsphere/ui` replacing `@riseaicloud/ui` everywhere, swiss module included; `web/vendor/` deleted. **(done)** |
 | P3 | Full roles: authorizer + role/binding CRUD + role/permission UI. |
 | P4 | Federation: module shell, stack aligned with swiss, backend proxy with identity headers and per-backend RBAC. **(done)** |
 | P5 | swiss module: copy into `modules/swiss`, mounted through `lib/host.ts` (see "Bringing swiss in"). **(done)** Then: swiss prepares its frontend (table above) and exports `openapi.json`; CODEOWNERS. |

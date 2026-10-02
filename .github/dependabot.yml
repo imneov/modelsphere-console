@@ -14,9 +14,6 @@ updates:
     directory: /web
     schedule:
       interval: weekly
-    # @riseaicloud/* are vendored under web/vendor and not on a registry.
-    ignore:
-      - dependency-name: "@riseaicloud/*"
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]

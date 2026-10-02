@@ -30,7 +30,7 @@ cd console
 go build ./... && go test ./...
 
 cd web
-npm ci                        # @riseaicloud/* resolve to web/vendor, no private registry needed
+npm ci                        # public registry only; @modelsphere/ui is web/packages/ui
 npm run typecheck && npm test
 npm run build                 # writes web/dist, which the Go binary embeds
 ```
