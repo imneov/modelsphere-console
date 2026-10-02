@@ -1,5 +1,7 @@
 # Console Helm Chart
 
+[English](README.md)
+
 **把 ModelSphere Console 装进 Kubernetes 的安装包。** CI 把镜像和 Chart 以同一个版本发布到 GHCR，无需登录即可拉取：
 
 | 制品 | 地址 |
@@ -211,7 +213,7 @@ helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
 
 ## 发布
 
-[`publish` workflow](https://github.com/modelsphere/console/actions/workflows/publish.yml) 与 Swiss 的相同：
+两个 workflow：[`ci`](https://github.com/modelsphere/console/actions/workflows/ci.yml) 和 [`publish`](https://github.com/modelsphere/console/actions/workflows/publish.yml)（与 Swiss 的相同）：
 
 | 触发 | 版本 | 推送 |
 |---|---|---|
@@ -220,7 +222,8 @@ helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
 | pull request | `<appVersion>-git<sha7>` | 不推送，只测试、构建、打包 |
 
 ```text
-go test -> helm lint、渲染三种装法 -> 第三方镜像可匿名拉取 -> 构建镜像 -> 打包 Chart -> 推送 -> 匿名拉取验证
+ci:      go vet、go test、前端类型检查和测试、仓库 gate
+publish: 构建镜像 -> helm dependency build、lint --strict、打包 -> 推送镜像和 Chart
 ```
 
 发布正式版：
@@ -230,10 +233,4 @@ hack/bump.sh patch --tag     # 改 Chart.yaml 与 internal/version，提交并�
 git push origin main --follow-tags
 ```
 
-本地打包，与 CI 同一个脚本（拒绝 dirty worktree，保证版本中的 commit 与内容一致）：
-
-```bash
-hack/chart.sh --output ./dist
-```
-
-新建的 GHCR package 默认是私有的。第一次发布后，要在 package 设置里改为 Public，否则 workflow 最后一步的匿名拉取验证会失败。
+新建的 GHCR package 默认是私有的。第一次发布后，要在 package 设置里改为 Public，否则匿名拉取会失败。

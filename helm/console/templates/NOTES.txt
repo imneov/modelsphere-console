@@ -30,7 +30,7 @@ Demo model: {{ .Values.demo.model.name }}, served on CPU by llama.cpp. Its weigh
 {{- if include "console.router.enabled" . }}
 
 Programs call the same models at http://<console address>/v1 with an API key an
-administrator issues under 路由 → API 密钥.
+administrator issues under 路由 → API 密钥 (Router → API keys).
 {{- end }}
 
 {{- if .Values.auth.disabled }}
@@ -46,14 +46,14 @@ No administrator user was seeded. Configure an administrator before signing in.
 {{- else if and (eq .Values.admin.username "admin") (or (not .Values.admin.encryptedPassword) (eq .Values.admin.encryptedPassword $defaultPasswordHash)) }}
 Default login: admin / P@88w0rd
 {{- if .Values.admin.requirePasswordReset }}
-首次登录将要求设置密码（可沿用当前密码，建议更换）。
+The first login asks you to set a password (keeping the current one is allowed, but choose your own).
 {{- else }}
 Change the default password immediately after signing in.
 {{- end }}
 {{- else }}
 Administrator user {{ .Values.admin.username | quote }} was seeded. Sign in with the password matching admin.encryptedPassword.
 {{- if .Values.admin.requirePasswordReset }}
-首次登录将要求设置密码（可沿用当前密码，建议更换）。
+The first login asks you to set a password (keeping the current one is allowed, but choose your own).
 {{- end }}
 {{- end }}
 
