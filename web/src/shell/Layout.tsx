@@ -10,13 +10,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@riseaicloud/ui";
-import { LogOut, Boxes, KeyRound, ChevronLeft, ChevronRight, PanelLeft, Palette } from "lucide-react";
+import { LogOut, Boxes, KeyRound, ChevronLeft, ChevronRight, PanelLeft, Palette, Languages, Check } from "lucide-react";
 import { useAuth } from "@/shell/auth";
 import { usePermissions } from "@/shell/permissions";
 import { ChangePasswordDialog } from "@/shell/ChangePasswordDialog";
 import { PreferencesPanel } from "@/shell/PreferencesPanel";
 import { useLayout } from "@/shell/preferences";
 import { navGroups, type ConsoleModule, type NavGroup, type NavItem } from "@/shell/module";
+import { LOCALES, navLabel, useLocale, useT } from "@/shell/i18n";
 
 // The console shell in Rise Global's layouts, picked in the preferences panel.
 // Sizes, colours and classes follow rise-global console/src/components/layout
@@ -31,6 +32,7 @@ import { navGroups, type ConsoleModule, type NavGroup, type NavItem } from "@/sh
 // tree, so switching layout keeps both.
 export function Layout({ modules, children }: { modules: ConsoleModule[]; children: ReactNode }) {
   const { has } = usePermissions();
+  const t = useT("shell");
   const layout = useLayout();
   const [collapsed, setCollapsed] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
@@ -69,7 +71,7 @@ export function Layout({ modules, children }: { modules: ConsoleModule[]; childr
               <button
                 type="button"
                 onClick={toggle}
-                aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
+                aria-label={t(collapsed ? "layout.expandSidebar" : "layout.collapseSidebar")}
                 className="flex h-8 w-full items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -118,6 +120,7 @@ function TopBar({
   onPreferences: () => void;
 }) {
   const { me, logout } = useAuth();
+  const tr = useT("shell");
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const initial = me?.name?.[0]?.toUpperCase() ?? "?";
   const t = TONE[tone];
@@ -128,7 +131,7 @@ function TopBar({
         <button
           type="button"
           onClick={collapse.toggle}
-          aria-label={collapse.collapsed ? "展开侧边栏" : "折叠侧边栏"}
+          aria-label={tr(collapse.collapsed ? "layout.expandSidebar" : "layout.collapseSidebar")}
           className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${t.icon}`}
         >
           <PanelLeft className="h-4 w-4" />
@@ -140,11 +143,12 @@ function TopBar({
       </NavLink>
 
       <div className="ml-auto flex items-center gap-1">
+        <LocaleMenu iconClass={t.icon} />
         <button
           type="button"
           onClick={onPreferences}
-          aria-label="偏好设置"
-          title="偏好设置"
+          aria-label={tr("layout.preferences")}
+          title={tr("layout.preferences")}
           className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${t.icon}`}
         >
           <Palette className="h-4 w-4" />
@@ -161,7 +165,7 @@ function TopBar({
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>
               {me?.name}
-              {me?.isAdmin ? " · 管理员" : ""}
+              {me?.isAdmin ? ` · ${tr("layout.admin")}` : ""}
             </DropdownMenuLabel>
             {/* With auth disabled there is no session to end and no stored
                 password to change; both entries would fail if offered. */}
@@ -170,12 +174,12 @@ function TopBar({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
                   <KeyRound className="mr-2 h-4 w-4" />
-                  修改密码
+                  {tr("layout.changePassword")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout}>
                   <LogOut className="mr-2 h-4 w-4" />
-                  退出登录
+                  {tr("layout.logout")}
                 </DropdownMenuItem>
               </>
             )}
@@ -184,6 +188,35 @@ function TopBar({
       </div>
       <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
     </header>
+  );
+}
+
+// Global's top-bar language widget: same locale state as the preferences
+// panel's switch, drawn as an icon so it fits both header tones.
+function LocaleMenu({ iconClass }: { iconClass: string }) {
+  const t = useT("shell");
+  const { locale, setLocale } = useLocale();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={t("layout.language")}
+          title={t("layout.language")}
+          className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${iconClass}`}
+        >
+          <Languages className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {LOCALES.map((l) => (
+          <DropdownMenuItem key={l.value} onClick={() => setLocale(l.value)}>
+            <Check className={`mr-2 h-4 w-4 ${l.value === locale ? "" : "invisible"}`} />
+            {l.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -202,6 +235,7 @@ function isUnder(pathname: string, item: NavItem): boolean {
 // group that holds the current page.
 function Sidebar({ groups, collapsed, board = false }: { groups: NavGroup[]; collapsed: boolean; board?: boolean }) {
   const { pathname } = useLocation();
+  const t = useT("shell");
   const activeGroup = groups.find((g) => g.title && g.items.some((i) => isUnder(pathname, i)))?.title;
   const [open, setOpen] = useState<string | undefined>(activeGroup ?? groups.find((g) => g.title)?.title);
   const shown = open ?? activeGroup;
@@ -238,7 +272,7 @@ function Sidebar({ groups, collapsed, board = false }: { groups: NavGroup[]; col
                 g.title === activeGroup ? "text-primary" : "text-foreground/80"
               }`}
             >
-              <span>{g.title}</span>
+              <span>{navLabel(t, g.ns, "group", g.title, g.title)}</span>
               <ChevronRight
                 className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${shown === g.title ? "rotate-90" : ""}`}
               />
@@ -265,7 +299,9 @@ function Sidebar({ groups, collapsed, board = false }: { groups: NavGroup[]; col
 }
 
 function MenuLink({ item, iconOnly = false, board = false }: { item: NavItem; iconOnly?: boolean; board?: boolean }) {
-  const { to, label, icon: Icon, end } = item;
+  const t = useT("shell");
+  const { to, icon: Icon, end } = item;
+  const label = navLabel(t, item.ns, "menu", item.key, item.label);
   return (
     <NavLink
       to={to}

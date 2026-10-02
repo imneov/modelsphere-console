@@ -3,6 +3,8 @@
 // logged in and the server can read it on navigations) and is also sent as a
 // Bearer header.
 
+import { getT } from "@/shell/i18n";
+
 const TOKEN_COOKIE = "token";
 
 export function getToken(): string {
@@ -85,7 +87,7 @@ export async function login(username: string, password: string): Promise<void> {
     body: form.toString(),
   });
   if (!res.ok) {
-    throw new ApiError(res.status, "用户名或密码错误");
+    throw new ApiError(res.status, getT("shell")("login.badCredentials"));
   }
   const tok = (await res.json()) as { access_token: string };
   setToken(tok.access_token);

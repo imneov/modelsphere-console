@@ -2,13 +2,15 @@ import { Card, CardContent, CardHeader, CardTitle, PageHeader } from "@riseaiclo
 import { LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/shell/auth";
 import { ModuleProvider, type ConsoleModule } from "@/shell/module";
+import { useT } from "@/shell/i18n";
 
 export function Home({ modules }: { modules: ConsoleModule[] }) {
   const { me } = useAuth();
+  const t = useT("shell");
 
   return (
     <div className="space-y-6">
-      <PageHeader title="概览" icon={<LayoutDashboard className="h-5 w-5" />} />
+      <PageHeader title={t("home.title")} icon={<LayoutDashboard className="h-5 w-5" />} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {modules.map((m) => {
@@ -23,26 +25,26 @@ export function Home({ modules }: { modules: ConsoleModule[] }) {
 
       <Card className="max-w-md">
         <CardHeader>
-          <CardTitle className="text-base">当前会话</CardTitle>
+          <CardTitle className="text-base">{t("home.session")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           <div>
-            <span className="text-muted-foreground">用户：</span>
+            <span className="text-muted-foreground">{t("home.user")}</span>
             {me?.name}
           </div>
           {me?.email && (
             <div>
-              <span className="text-muted-foreground">邮箱：</span>
+              <span className="text-muted-foreground">{t("home.email")}</span>
               {me.email}
             </div>
           )}
           <div>
-            <span className="text-muted-foreground">分组：</span>
+            <span className="text-muted-foreground">{t("home.groups")}</span>
             {me?.groups?.join(", ")}
           </div>
           <div>
-            <span className="text-muted-foreground">角色：</span>
-            {me?.isAdmin ? "管理员" : "普通用户"}
+            <span className="text-muted-foreground">{t("home.role")}</span>
+            {t(me?.isAdmin ? "home.admin" : "home.member")}
           </div>
         </CardContent>
       </Card>

@@ -6,11 +6,12 @@ import { useSyncExternalStore } from "react";
 // user's choice carries over unchanged when the install is upgraded to Global.
 export type Layout = "mixed-nav" | "classic" | "minimal";
 
-// Labels and hints are Global's (PreferencesPanel LAYOUTS), in Global's order.
-export const LAYOUTS: { value: Layout; label: string; hint: string }[] = [
-  { value: "mixed-nav", label: "混合导航", hint: "顶部通栏，侧边一列菜单" },
-  { value: "classic", label: "经典", hint: "同混合导航，但侧边栏是浮动卡片" },
-  { value: "minimal", label: "极简", hint: "侧边一列通高到顶；顶栏与内容合成一块圆角板，层次靠圆角和间隙而非边框" },
+// In Global's order. key names the label and hint under shell's
+// preferences.layouts; their zh-CN text is Global's.
+export const LAYOUTS: { value: Layout; key: string }[] = [
+  { value: "mixed-nav", key: "mixedNav" },
+  { value: "classic", key: "classic" },
+  { value: "minimal", key: "minimal" },
 ];
 
 // Global's factory default (rise-global lib/preferences/defaults.ts).

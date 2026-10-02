@@ -29,8 +29,3 @@ export const api = {
   // What a key can be limited to: the models the router's backend serves.
   models: async () => (await request<{ data?: { id: string }[] }>("GET", "/api/llm/v1/models")).data ?? [],
 };
-
-export function formatTime(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN", { hour12: false });
-}

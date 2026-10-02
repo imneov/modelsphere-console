@@ -2,6 +2,8 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { CircleHelp, X } from "lucide-react";
 import { Button } from "@riseaicloud/ui";
 import { DEFAULT_LAYOUT, LAYOUTS, setLayout, useLayout, type Layout } from "@/shell/preferences";
+import { useT } from "@/shell/i18n";
+import { LocaleSwitch } from "@/shell/LocaleSwitch";
 
 // A slice of Rise Global's preferences panel (console/src/components/preferences):
 // the same right-hand drawer, header and layout cards, with only the layouts this
@@ -9,6 +11,7 @@ import { DEFAULT_LAYOUT, LAYOUTS, setLayout, useLayout, type Layout } from "@/sh
 // seeing the page change behind it.
 export function PreferencesPanel({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const layout = useLayout();
+  const t = useT("shell");
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} modal={false}>
@@ -18,14 +21,14 @@ export function PreferencesPanel({ open, onOpenChange }: { open: boolean; onOpen
         >
           <div className="flex items-start justify-between border-b px-4 py-4">
             <div className="space-y-1">
-              <DialogPrimitive.Title className="text-base font-semibold text-foreground">偏好设置</DialogPrimitive.Title>
+              <DialogPrimitive.Title className="text-base font-semibold text-foreground">{t("preferences.title")}</DialogPrimitive.Title>
               <DialogPrimitive.Description className="text-xs text-muted-foreground">
-                外观偏好保存在本机浏览器，仅影响当前设备。
+                {t("preferences.description")}
               </DialogPrimitive.Description>
             </div>
             <DialogPrimitive.Close
               className="rounded-sm text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden"
-              aria-label="关闭"
+              aria-label={t("common:actions.close")}
             >
               <X className="h-4 w-4" />
             </DialogPrimitive.Close>
@@ -33,10 +36,20 @@ export function PreferencesPanel({ open, onOpenChange }: { open: boolean; onOpen
 
           <div className="flex-1 overflow-auto px-4 py-1">
             <div className="flex flex-col py-4">
-              <h3 className="mb-3 leading-none font-semibold tracking-tight">布局</h3>
+              <h3 className="mb-3 leading-none font-semibold tracking-tight">{t("preferences.language")}</h3>
+              <LocaleSwitch />
+            </div>
+            <div className="flex flex-col py-4">
+              <h3 className="mb-3 leading-none font-semibold tracking-tight">{t("preferences.layout")}</h3>
               <div className="grid grid-cols-3 justify-items-center gap-x-2 gap-y-3">
-                {LAYOUTS.map(({ value, label, hint }) => (
-                  <OutlineBox key={value} active={layout === value} label={label} hint={hint} onClick={() => setLayout(value)}>
+                {LAYOUTS.map(({ value, key }) => (
+                  <OutlineBox
+                    key={value}
+                    active={layout === value}
+                    label={t(`preferences.layouts.${key}.label`)}
+                    hint={t(`preferences.layouts.${key}.hint`)}
+                    onClick={() => setLayout(value)}
+                  >
                     <LayoutThumb variant={value} />
                   </OutlineBox>
                 ))}
@@ -46,7 +59,7 @@ export function PreferencesPanel({ open, onOpenChange }: { open: boolean; onOpen
 
           <div className="flex justify-end border-t px-4 py-3">
             <Button variant="outline" size="sm" onClick={() => setLayout(DEFAULT_LAYOUT)} disabled={layout === DEFAULT_LAYOUT}>
-              恢复默认
+              {t("preferences.restoreDefault")}
             </Button>
           </div>
         </DialogPrimitive.Content>
@@ -79,7 +92,7 @@ function OutlineBox({
       </div>
       <div className="mt-2 flex items-center justify-center gap-1 text-xs text-muted-foreground">
         <span>{label}</span>
-        <span title={hint} aria-label={`${label}：${hint}`} className="flex items-center text-muted-foreground/60">
+        <span title={hint} aria-label={`${label}: ${hint}`} className="flex items-center text-muted-foreground/60">
           <CircleHelp className="h-3.5 w-3.5" />
         </span>
       </div>

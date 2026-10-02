@@ -23,19 +23,21 @@ import {
   Textarea,
 } from "@riseaicloud/ui";
 import { KeyRound, Plus, TriangleAlert } from "lucide-react";
-import { CopyButton } from "@/shell";
-import { api, formatTime, type ApiKey } from "@/modules/router/api";
+import { CopyButton, formatDateTime, tNodes } from "@/shell";
+import { api, type ApiKey } from "@/modules/router/api";
+import { useT } from "@/modules/router/i18n";
 
 const EXPIRY_OPTIONS = [
-  { days: 7, label: "7 天" },
-  { days: 30, label: "1 个月" },
-  { days: 180, label: "6 个月" },
-  { days: 0, label: "永不过期" },
+  { days: 7, labelKey: "apiKeys.form.expiryOptions.days7" },
+  { days: 30, labelKey: "apiKeys.form.expiryOptions.month1" },
+  { days: 180, labelKey: "apiKeys.form.expiryOptions.months6" },
+  { days: 0, labelKey: "apiKeys.form.expiryOptions.never" },
 ];
 
 const MAX_MODEL_BADGES = 3;
 
 export function ApiKeys() {
+  const t = useT();
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({ queryKey: ["router", "apikeys"], queryFn: api.listKeys });
   const [createOpen, setCreateOpen] = useState(false);
@@ -45,7 +47,7 @@ export function ApiKeys() {
   const columns: ColumnDef<ApiKey>[] = [
     {
       key: "name",
-      title: "名称",
+      title: t("apiKeys.table.name"),
       searchable: true,
       render: (k) => (
         <div className="min-w-0">
@@ -54,10 +56,10 @@ export function ApiKeys() {
         </div>
       ),
     },
-    { key: "maskedValue", title: "密钥", width: 120, render: (k) => <span className="font-mono text-sm">{k.maskedValue}</span> },
+    { key: "maskedValue", title: t("apiKeys.table.key"), width: 120, render: (k) => <span className="font-mono text-sm">{k.maskedValue}</span> },
     {
       key: "models",
-      title: "可用模型",
+      title: t("apiKeys.table.models"),
       render: (k) =>
         k.models?.length ? (
           <div className="flex flex-wrap gap-1" title={k.models.join("\n")}>
@@ -69,33 +71,33 @@ export function ApiKeys() {
             {k.models.length > MAX_MODEL_BADGES && <Badge variant="outline">+{k.models.length - MAX_MODEL_BADGES}</Badge>}
           </div>
         ) : (
-          <span className="text-muted-foreground">全部模型</span>
+          <span className="text-muted-foreground">{t("apiKeys.allModels")}</span>
         ),
     },
     {
       key: "expiresAt",
-      title: "过期时间",
+      title: t("apiKeys.table.expiresAt"),
       width: 190,
       render: (k) => (
         <div className="flex items-center gap-2">
-          <span>{k.expiresAt ? formatTime(k.expiresAt) : "永不过期"}</span>
-          {k.expired && <Badge className="bg-red-100 text-red-800">已过期</Badge>}
+          <span>{k.expiresAt ? formatDateTime(k.expiresAt) : t("apiKeys.neverExpires")}</span>
+          {k.expired && <Badge className="bg-red-100 text-red-800">{t("apiKeys.expired")}</Badge>}
         </div>
       ),
     },
-    { key: "createdBy", title: "创建者", width: 90 },
-    { key: "createdAt", title: "创建时间", width: 160, render: (k) => formatTime(k.createdAt) },
+    { key: "createdBy", title: t("apiKeys.table.createdBy"), width: 90 },
+    { key: "createdAt", title: t("apiKeys.table.createdAt"), width: 160, render: (k) => formatDateTime(k.createdAt) },
   ];
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title="API 密钥"
+        title={t("apiKeys.title")}
         icon={<KeyRound className="h-5 w-5" />}
         extra={
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-1 h-4 w-4" />
-            新建 API 密钥
+            {t("apiKeys.create")}
           </Button>
         }
       />
@@ -108,12 +110,13 @@ export function ApiKeys() {
         totalItems={data?.items.length ?? 0}
         showRefresh
         onRefresh={() => qc.invalidateQueries({ queryKey: ["router", "apikeys"] })}
-        emptyText="暂无 API 密钥，点击「新建 API 密钥」创建"
+        emptyText={t("apiKeys.empty")}
         minWidth={900}
         deleteConfig={{
           rowNameKey: "name",
-          confirmTitle: "删除 API 密钥",
-          confirmText: (k) => `删除「${k.name}」后，使用该密钥的程序将立即无法访问，且无法恢复。`,
+          buttonText: t("common:actions.delete"),
+          confirmTitle: t("apiKeys.delete.title"),
+          confirmText: (k) => t("apiKeys.delete.confirm", { name: k.name }),
           onDelete: async (k) => {
             setDeleteErr("");
             try {
@@ -153,6 +156,7 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 }
 
 function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
+  const t = useT();
   const models = useQuery({ queryKey: ["router", "models"], queryFn: api.models, retry: false });
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -184,7 +188,7 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
     e.preventDefault();
     setErr("");
     if (scope === "some" && picked.size === 0) {
-      setErr("请至少选择一个模型");
+      setErr(t("apiKeys.form.pickModel"));
       return;
     }
     create.mutate();
@@ -196,20 +200,20 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
   return (
     <form onSubmit={submit}>
       <DialogHeader>
-        <DialogTitle>新建 API 密钥</DialogTitle>
-        <DialogDescription>用于通过 OpenAI 兼容接口调用模型。</DialogDescription>
+        <DialogTitle>{t("apiKeys.form.title")}</DialogTitle>
+        <DialogDescription>{t("apiKeys.form.description")}</DialogDescription>
       </DialogHeader>
       <div className="space-y-4 py-4">
         <div className="space-y-2">
-          <Label htmlFor="apikey-name">名称</Label>
+          <Label htmlFor="apikey-name">{t("apiKeys.form.name")}</Label>
           <Input id="apikey-name" value={name} onChange={(e) => setName(e.target.value)} required />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="apikey-description">描述</Label>
-          <Textarea id="apikey-description" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="可选" />
+          <Label htmlFor="apikey-description">{t("apiKeys.form.descriptionLabel")}</Label>
+          <Textarea id="apikey-description" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("apiKeys.form.optional")} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="apikey-expiry">有效期</Label>
+          <Label htmlFor="apikey-expiry">{t("apiKeys.form.expiry")}</Label>
           <Select value={String(expiresInDays)} onValueChange={(v) => setExpiresInDays(Number(v))}>
             <SelectTrigger id="apikey-expiry">
               <SelectValue />
@@ -217,30 +221,28 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
             <SelectContent>
               {EXPIRY_OPTIONS.map((o) => (
                 <SelectItem key={o.days} value={String(o.days)}>
-                  {o.label}
+                  {t(o.labelKey)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="apikey-scope">可用模型</Label>
+          <Label htmlFor="apikey-scope">{t("apiKeys.form.scope")}</Label>
           <Select value={scope} onValueChange={(v) => setScope(v as "all" | "some")}>
             <SelectTrigger id="apikey-scope">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">全部模型</SelectItem>
+              <SelectItem value="all">{t("apiKeys.form.scopeAll")}</SelectItem>
               <SelectItem value="some" disabled={!canPick}>
-                指定模型
+                {t("apiKeys.form.scopeSome")}
               </SelectItem>
             </SelectContent>
           </Select>
-          {models.isLoading && <p className="text-xs text-muted-foreground">正在加载模型列表…</p>}
+          {models.isLoading && <p className="text-xs text-muted-foreground">{t("apiKeys.form.loadingModels")}</p>}
           {!models.isLoading && !canPick && (
-            <p className="text-xs text-muted-foreground">
-              {models.isError ? "模型列表加载失败" : "暂无可用模型"}，只能创建可访问全部模型的密钥。
-            </p>
+            <p className="text-xs text-muted-foreground">{t(models.isError ? "apiKeys.form.modelsFailed" : "apiKeys.form.noModels")}</p>
           )}
           {scope === "some" && canPick && (
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-1">
@@ -257,7 +259,7 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
       </div>
       <DialogFooter>
         <Button type="submit" disabled={create.isPending}>
-          {create.isPending ? "创建中…" : "创建"}
+          {t(create.isPending ? "apiKeys.form.submitting" : "apiKeys.form.submit")}
         </Button>
       </DialogFooter>
     </form>
@@ -265,27 +267,30 @@ function CreateForm({ onCreated }: { onCreated: (k: Created) => void }) {
 }
 
 function CreatedKey({ apiKey, onDone }: { apiKey: Created; onDone: () => void }) {
+  const t = useT();
   const baseURL = `${window.location.origin}/v1`;
   const example = `curl ${baseURL}/models \\\n  -H "Authorization: Bearer ${apiKey.value}"`;
   return (
     <>
       <DialogHeader>
-        <DialogTitle>API 密钥已创建</DialogTitle>
+        <DialogTitle>{t("apiKeys.created.title")}</DialogTitle>
         <DialogDescription>{apiKey.name}</DialogDescription>
       </DialogHeader>
       <div className="space-y-4 py-4">
         <div className="flex items-start gap-2 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-900">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>请立即复制并妥善保存，关闭后将无法再次查看。</span>
+          <span>{t("apiKeys.created.warning")}</span>
         </div>
         <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2">
           <code className="flex-1 break-all font-mono text-sm select-all">{apiKey.value}</code>
-          <CopyButton text={apiKey.value} label="复制" />
+          <CopyButton text={apiKey.value} label={t("common:actions.copy")} />
         </div>
         <div className="space-y-2 text-sm">
           <div className="text-muted-foreground">
-            Base URL <code className="font-mono text-foreground">{baseURL}</code>，请求头{" "}
-            <code className="font-mono text-foreground">Authorization: Bearer &lt;密钥&gt;</code>
+            {tNodes(t, "apiKeys.created.usage", {
+              baseURL: <code className="font-mono text-foreground">{baseURL}</code>,
+              header: <code className="font-mono text-foreground">Authorization: Bearer &lt;{t("apiKeys.created.keyPlaceholder")}&gt;</code>,
+            })}
           </div>
           <div className="relative">
             <pre className="overflow-x-auto rounded-md border bg-muted/40 p-3 pr-10 font-mono text-xs">{example}</pre>
@@ -295,7 +300,7 @@ function CreatedKey({ apiKey, onDone }: { apiKey: Created; onDone: () => void })
       </div>
       <DialogFooter>
         <Button type="button" onClick={onDone}>
-          我已保存
+          {t("apiKeys.created.done")}
         </Button>
       </DialogFooter>
     </>

@@ -17,38 +17,32 @@ import {
 } from "@riseaicloud/ui";
 import { Plus, ShieldCheck } from "lucide-react";
 import { api, type PolicyRule, type Role } from "@/modules/iam/api";
-import { useAuth } from "@/shell";
+import { useAuth, type TFn } from "@/shell";
+import { useT } from "@/modules/iam/i18n";
 
 const IAM_GROUP = "iam.theriseunion.io";
 
-const RESOURCES = [
-  { key: "users", label: "用户" },
-  { key: "iamroles", label: "角色" },
-  { key: "iamrolebindings", label: "角色绑定" },
-];
-const VERBS = [
-  { key: "get", label: "查看" },
-  { key: "list", label: "列表" },
-  { key: "create", label: "创建" },
-  { key: "update", label: "更新" },
-  { key: "delete", label: "删除" },
-];
+const RESOURCES = ["users", "iamroles", "iamrolebindings"];
+const VERBS = ["get", "list", "create", "update", "delete"];
 
-function summarize(rules: PolicyRule[] | undefined): string {
+function summarize(t: TFn, rules: PolicyRule[] | undefined): string {
   const parts: string[] = [];
   for (const r of rules ?? []) {
     const resources = r.resources ?? [];
     const verbs = r.verbs ?? [];
     const res = resources.length
-      ? resources.map((x) => RESOURCES.find((R) => R.key === x)?.label ?? x).join("/")
-      : "其他";
-    const vs = verbs.includes("*") ? "全部" : verbs.map((v) => VERBS.find((V) => V.key === v)?.label ?? v).join(",");
+      ? resources.map((x) => (RESOURCES.includes(x) ? t(`roles.resources.${x}`) : x)).join("/")
+      : t("roles.summary.other");
+    const vs = verbs.includes("*")
+      ? t("roles.summary.allVerbs")
+      : verbs.map((v) => (VERBS.includes(v) ? t(`roles.verbs.${v}`) : v)).join(", ");
     parts.push(`${res}: ${vs}`);
   }
-  return parts.join(" · ") || "无权限";
+  return parts.join(" · ") || t("roles.summary.none");
 }
 
 export function Roles() {
+  const t = useT();
   const { me } = useAuth();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["roles"], queryFn: api.listRoles });
@@ -56,20 +50,20 @@ export function Roles() {
   const [membersRole, setMembersRole] = useState<Role | null>(null);
 
   const columns: ColumnDef<Role>[] = [
-    { key: "name", title: "名称", searchable: true, width: 220, render: (r) => <span className="font-medium">{r.name}</span> },
-    { key: "rules", title: "权限", render: (r) => <span className="text-sm text-muted-foreground">{summarize(r.rules)}</span> },
+    { key: "name", title: t("roles.table.name"), searchable: true, width: 220, render: (r) => <span className="font-medium">{r.name}</span> },
+    { key: "rules", title: t("roles.table.permissions"), render: (r) => <span className="text-sm text-muted-foreground">{summarize(t, r.rules)}</span> },
   ];
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title="角色"
+        title={t("roles.title")}
         icon={<ShieldCheck className="h-5 w-5" />}
         extra={
           me?.isAdmin ? (
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="mr-1 h-4 w-4" />
-              新建角色
+              {t("roles.create")}
             </Button>
           ) : null
         }
@@ -84,14 +78,15 @@ export function Roles() {
         onRefresh={() => qc.invalidateQueries({ queryKey: ["roles"] })}
         rowActions={
           me?.isAdmin
-            ? [{ label: "成员", onClick: (r) => setMembersRole(r) }]
+            ? [{ label: t("roles.members.action"), onClick: (r) => setMembersRole(r) }]
             : undefined
         }
         deleteConfig={
           me?.isAdmin
             ? {
                 rowNameKey: "name",
-                confirmTitle: "删除角色",
+                confirmTitle: t("roles.delete.title"),
+                buttonText: t("common:actions.delete"),
                 onDelete: async (r) => {
                   await api.deleteRole(r.name);
                   qc.invalidateQueries({ queryKey: ["roles"] });
@@ -107,6 +102,7 @@ export function Roles() {
 }
 
 function CreateRoleDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const t = useT();
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [matrix, setMatrix] = useState<Record<string, Set<string>>>({});
@@ -124,7 +120,7 @@ function CreateRoleDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 
   const create = useMutation({
     mutationFn: () => {
-      const rules: PolicyRule[] = RESOURCES.flatMap(({ key }) => {
+      const rules: PolicyRule[] = RESOURCES.flatMap((key) => {
         const verbs = [...(matrix[key] ?? [])];
         return verbs.length ? [{ verbs, apiGroups: [IAM_GROUP], resources: [key] }] : [];
       });
@@ -150,35 +146,35 @@ function CreateRoleDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>新建角色</DialogTitle>
-            <DialogDescription>勾选该角色允许的操作。</DialogDescription>
+            <DialogTitle>{t("roles.form.title")}</DialogTitle>
+            <DialogDescription>{t("roles.form.description")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="role-name">角色名</Label>
+              <Label htmlFor="role-name">{t("roles.form.name")}</Label>
               <Input id="role-name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
             <div className="overflow-x-auto rounded-md border">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/40 text-muted-foreground">
-                    <th className="p-2 text-left font-normal">资源</th>
+                    <th className="p-2 text-left font-normal">{t("roles.form.resource")}</th>
                     {VERBS.map((v) => (
-                      <th key={v.key} className="p-2 font-normal">
-                        {v.label}
+                      <th key={v} className="p-2 font-normal">
+                        {t(`roles.verbs.${v}`)}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {RESOURCES.map((res) => (
-                    <tr key={res.key} className="border-t">
-                      <td className="p-2">{res.label}</td>
+                    <tr key={res} className="border-t">
+                      <td className="p-2">{t(`roles.resources.${res}`)}</td>
                       {VERBS.map((v) => (
-                        <td key={v.key} className="p-2 text-center">
+                        <td key={v} className="p-2 text-center">
                           <Checkbox
-                            checked={matrix[res.key]?.has(v.key) ?? false}
-                            onCheckedChange={() => toggle(res.key, v.key)}
+                            checked={matrix[res]?.has(v) ?? false}
+                            onCheckedChange={() => toggle(res, v)}
                           />
                         </td>
                       ))}
@@ -191,7 +187,7 @@ function CreateRoleDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           </div>
           <DialogFooter>
             <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "创建中…" : "创建"}
+              {t(create.isPending ? "roles.form.submitting" : "roles.form.submit")}
             </Button>
           </DialogFooter>
         </form>
@@ -203,6 +199,7 @@ function CreateRoleDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 // MembersDialog manages which users hold a role, as IAMRoleBindings named
 // `<role>--<user>`. Checking a user creates the binding; unchecking deletes it.
 function MembersDialog({ role, onClose }: { role: Role | null; onClose: () => void }) {
+  const t = useT();
   const qc = useQueryClient();
   const open = role !== null;
   const users = useQuery({ queryKey: ["users"], queryFn: api.listUsers, enabled: open });
@@ -235,8 +232,8 @@ function MembersDialog({ role, onClose }: { role: Role | null; onClose: () => vo
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{role?.name} · 成员</DialogTitle>
-          <DialogDescription>勾选拥有该角色的用户。</DialogDescription>
+          <DialogTitle>{t("roles.members.title", { role: role?.name ?? "" })}</DialogTitle>
+          <DialogDescription>{t("roles.members.description")}</DialogDescription>
         </DialogHeader>
         <div className="max-h-80 space-y-1 overflow-y-auto py-2">
           {users.data?.items.map((u) => (

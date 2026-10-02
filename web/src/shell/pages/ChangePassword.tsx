@@ -3,8 +3,10 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Inpu
 import { KeyRound } from "lucide-react";
 import { PasswordStrength, SamePasswordHint, passwordMeetsRequirements } from "@/shell/PasswordStrength";
 import { api } from "@/shell/api";
+import { useT } from "@/shell/i18n";
 
 export function ChangePassword() {
+  const t = useT("shell");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -15,11 +17,11 @@ export function ChangePassword() {
     event.preventDefault();
     setError("");
     if (!passwordMeetsRequirements(newPassword)) {
-      setError("新密码不符合复杂度要求");
+      setError(t("password.tooWeak"));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError("两次输入的新密码不一致");
+      setError(t("password.mismatch"));
       return;
     }
     setBusy(true);
@@ -27,7 +29,7 @@ export function ChangePassword() {
       await api.changePassword({ oldPassword, newPassword });
       window.location.replace("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "修改密码失败");
+      setError(err instanceof Error ? err.message : t("password.failed"));
       setBusy(false);
     }
   };
@@ -40,14 +42,14 @@ export function ChangePassword() {
             <KeyRound className="h-5 w-5" />
           </div>
           <div>
-            <CardTitle>设置新密码</CardTitle>
-            <CardDescription className="mt-1.5">首次登录请设置密码后继续使用控制台，建议不要沿用初始密码。</CardDescription>
+            <CardTitle>{t("password.resetTitle")}</CardTitle>
+            <CardDescription className="mt-1.5">{t("password.resetDescription")}</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="current-password">当前密码</Label>
+              <Label htmlFor="current-password">{t("password.current")}</Label>
               <Input
                 id="current-password"
                 type="password"
@@ -59,7 +61,7 @@ export function ChangePassword() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new-password">新密码</Label>
+              <Label htmlFor="new-password">{t("password.new")}</Label>
               <Input
                 id="new-password"
                 type="password"
@@ -72,7 +74,7 @@ export function ChangePassword() {
             <PasswordStrength password={newPassword} />
             <SamePasswordHint current={oldPassword} next={newPassword} />
             <div className="space-y-2">
-              <Label htmlFor="confirm-password">确认新密码</Label>
+              <Label htmlFor="confirm-password">{t("password.confirm")}</Label>
               <Input
                 id="confirm-password"
                 type="password"
@@ -88,7 +90,7 @@ export function ChangePassword() {
               className="w-full"
               disabled={busy || !oldPassword || !passwordMeetsRequirements(newPassword) || newPassword !== confirmPassword}
             >
-              {busy ? "提交中..." : "设置新密码"}
+              {busy ? t("common:status.submitting") : t("password.resetSubmit")}
             </Button>
           </form>
         </CardContent>

@@ -1,0 +1,98 @@
+{
+  "group": {
+    "访问控制": "Access Control"
+  },
+  "menu": {
+    "users": "Users",
+    "loginHistory": "Login History",
+    "roles": "Roles"
+  },
+  "overview": {
+    "users": "Users",
+    "roles": "Roles"
+  },
+  "users": {
+    "title": "Users",
+    "create": "New user",
+    "table": {
+      "name": "Username",
+      "displayName": "Display name",
+      "email": "Email",
+      "groups": "Groups",
+      "state": "Status"
+    },
+    "state": {
+      "active": "Active",
+      "disabled": "Disabled",
+      "pending": "Pending"
+    },
+    "delete": {
+      "title": "Delete user"
+    },
+    "form": {
+      "title": "New user",
+      "description": "Create a platform user who can sign in.",
+      "name": "Username",
+      "displayName": "Display name",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Create",
+      "submitting": "Creating…"
+    }
+  },
+  "loginHistory": {
+    "title": "Login History",
+    "table": {
+      "time": "Time",
+      "user": "User",
+      "status": "Status",
+      "ip": "IP",
+      "userAgent": "User agent"
+    },
+    "status": {
+      "success": "Succeeded",
+      "failure": "Failed"
+    }
+  },
+  "roles": {
+    "title": "Roles",
+    "create": "New role",
+    "table": {
+      "name": "Name",
+      "permissions": "Permissions"
+    },
+    "resources": {
+      "users": "Users",
+      "iamroles": "Roles",
+      "iamrolebindings": "Role bindings"
+    },
+    "verbs": {
+      "get": "View",
+      "list": "List",
+      "create": "Create",
+      "update": "Update",
+      "delete": "Delete"
+    },
+    "summary": {
+      "other": "Other",
+      "allVerbs": "All",
+      "none": "No permissions"
+    },
+    "delete": {
+      "title": "Delete role"
+    },
+    "form": {
+      "title": "New role",
+      "description": "Select the operations this role allows.",
+      "name": "Role name",
+      "resource": "Resource",
+      "submit": "Create",
+      "submitting": "Creating…"
+    },
+    "members": {
+      "action": "Members",
+      "title": "{role} · Members",
+      "description": "Select the users who hold this role."
+    }
+  }
+}

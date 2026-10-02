@@ -16,6 +16,7 @@ import { ModelSelect, useModels } from "@/modules/playground/components/ModelSel
 import { ParamsPanel } from "@/modules/playground/components/ParamsPanel";
 import { Transcript } from "@/modules/playground/components/Transcript";
 import { ViewCode } from "@/modules/playground/components/ViewCode";
+import { useT } from "@/modules/playground/i18n";
 import { DEFAULT_FORM, toChatParams, type ParamsForm } from "@/modules/playground/params";
 import { historyOf, modelsHint, newId, useChat, type Role } from "@/modules/playground/useChat";
 
@@ -46,6 +47,7 @@ const GRID: Record<number, string> = {
 };
 
 export function Compare() {
+  const t = useT();
   const models = useModels();
   const [slots, setSlots] = useState<Slot[]>(() => Array.from({ length: MIN_PANELS }, () => ({ id: newId(), model: "" })));
   const [form, setForm] = useState<ParamsForm>(DEFAULT_FORM);
@@ -80,13 +82,13 @@ export function Compare() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="多模型对比"
+        title={t("compare.title")}
         icon={<Columns2 className="h-5 w-5" />}
         extra={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setParamsOpen(true)}>
               <SlidersHorizontal className="mr-1 h-4 w-4" />
-              参数
+              {t("compare.params")}
             </Button>
             <Button
               variant="outline"
@@ -94,17 +96,17 @@ export function Compare() {
               onClick={() => setSlots((prev) => [...prev, { id: newId(), model: models.data?.find((m) => !prev.some((s) => s.model === m.id))?.id ?? models.data?.[0]?.id ?? "" }])}
             >
               <Plus className="mr-1 h-4 w-4" />
-              添加模型
+              {t("compare.addModel")}
             </Button>
             <Button variant="outline" onClick={() => each((h) => h.clear())} disabled={streaming}>
               <Eraser className="mr-1 h-4 w-4" />
-              全部清空
+              {t("compare.clearAll")}
             </Button>
           </div>
         }
       />
 
-      {models.error ? <p className="text-sm text-destructive">{modelsHint(models.error)}</p> : null}
+      {models.error ? <p className="text-sm text-destructive">{modelsHint(t, models.error)}</p> : null}
 
       <div className={`grid gap-4 ${GRID[slots.length] ?? "lg:grid-cols-2"}`}>
         {slots.map((slot, i) => (
@@ -140,15 +142,15 @@ export function Compare() {
           onSend={(text, role) => each((h) => h.send(text, role))}
           onAdd={(role, text) => each((h) => h.add(role, text))}
           onStop={() => each((h) => h.stop())}
-          status={streaming ? "生成中…" : `同一条消息会同时发给 ${active.length} 个模型`}
+          status={streaming ? t("chat.generating") : t("compare.fanOut", { n: active.length })}
         />
       </Card>
 
       <Dialog open={paramsOpen} onOpenChange={setParamsOpen}>
         <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>参数</DialogTitle>
-            <DialogDescription>对所有模型生效，保证比较的是模型而不是参数。</DialogDescription>
+            <DialogTitle>{t("compare.params")}</DialogTitle>
+            <DialogDescription>{t("compare.paramsHint")}</DialogDescription>
           </DialogHeader>
           <ParamsPanel form={form} onChange={setForm} idPrefix="cmp" />
         </DialogContent>
@@ -169,6 +171,7 @@ interface PanelProps {
 }
 
 function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, ref }: PanelProps) {
+  const t = useT();
   const params = useMemo(() => toChatParams(slot.model, form), [slot.model, form]);
   const chat = useChat(params);
 
@@ -203,11 +206,11 @@ function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, r
           }}
         />
         <ViewCode compact payload={() => buildPayload(historyOf(chat.turns), params)} disabled={!slot.model} />
-        <Button variant="ghost" size="sm" className="h-7 px-2" title="清空" onClick={chat.clear} disabled={chat.streaming || !chat.turns.length}>
+        <Button variant="ghost" size="sm" className="h-7 px-2" title={t("compare.clear")} onClick={chat.clear} disabled={chat.streaming || !chat.turns.length}>
           <Eraser className="h-3.5 w-3.5" />
         </Button>
         {onRemove ? (
-          <Button variant="ghost" size="sm" className="h-7 px-2" title="移除" onClick={onRemove}>
+          <Button variant="ghost" size="sm" className="h-7 px-2" title={t("compare.remove")} onClick={onRemove}>
             <X className="h-3.5 w-3.5" />
           </Button>
         ) : null}
@@ -215,7 +218,7 @@ function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, r
       <Transcript
         chat={chat}
         className="min-h-0 flex-1"
-        empty={<p className="py-10 text-center text-sm text-muted-foreground">{slot.model ? "在下方输入，所有模型同时回答。" : "选择一个模型。"}</p>}
+        empty={<p className="py-10 text-center text-sm text-muted-foreground">{slot.model ? t("compare.emptyReady") : t("compare.emptyPick")}</p>}
       />
     </Card>
   );
