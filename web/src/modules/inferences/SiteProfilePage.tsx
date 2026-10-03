@@ -162,7 +162,7 @@ function EditSheet({ data, onClose }: { data: ProfileResponse; onClose: () => vo
           <SheetTitle>{t("profile.editTitle")}</SheetTitle>
           <SheetDescription>{t("profile.editDescription")}</SheetDescription>
         </SheetHeader>
-        <SheetBody className="flex min-h-0 flex-1 flex-col overflow-auto bg-surface-page px-5 py-4">
+        <SheetBody className="min-h-0 flex-1 overflow-auto bg-surface-page px-5 py-4">
           <ProfileEditorBody editor={editor} collapsible />
         </SheetBody>
         <SheetFooter className="flex-row justify-end border-t">

@@ -11,7 +11,7 @@
   },
   "list": {
     "title": "Inference Services",
-    "description": "The models swiss deployed, each serving an OpenAI-compatible endpoint. Deploy, upgrade and roll back in the model deployment wizard.",
+    "description": "The models swiss deployed, each serving an OpenAI-compatible endpoint. Deploy from the model library; upgrade, roll back and uninstall on each service.",
     "deploy": "Deploy a model",
     "empty": "No inference services yet",
     "columns": {
@@ -149,7 +149,7 @@
   },
   "versions": {
     "title": "Revision history",
-    "hint": "Roll back in the model deployment wizard: review the diff, then confirm.",
+    "hint": "A rollback shows its diff first and runs once confirmed.",
     "columns": {
       "revision": "Revision",
       "model": "Model",

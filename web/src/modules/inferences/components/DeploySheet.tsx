@@ -264,7 +264,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
         </div>
       )}
 
-      <SheetBody ref={step === "form" ? nav.ref : undefined} className="relative flex min-h-0 flex-1 flex-col gap-4 overflow-auto bg-surface-page px-5 py-4">
+      <SheetBody ref={step === "form" ? nav.ref : undefined} className="relative min-h-0 flex-1 space-y-4 overflow-auto bg-surface-page px-5 py-4">
         {readOnly && (
           <Alert variant="warning">
             <TriangleAlert />

@@ -1,7 +1,7 @@
 {
   "list": {
     "title": "推理服务",
-    "description": "swiss 部署的模型推理服务，对外提供 OpenAI 兼容端点。部署、升级与回滚在模型部署向导中完成。",
+    "description": "swiss 部署的模型推理服务，对外提供 OpenAI 兼容端点。在模型库里选模型部署；升级、回滚和卸载在每个服务上操作。",
     "deploy": "部署模型",
     "empty": "还没有推理服务",
     "columns": {
@@ -139,7 +139,7 @@
   },
   "versions": {
     "title": "版本历史",
-    "hint": "回滚在模型部署向导中完成：先看差异，再确认。",
+    "hint": "回滚前会先预览差异，确认后执行。",
     "columns": {
       "revision": "版本",
       "model": "模型",

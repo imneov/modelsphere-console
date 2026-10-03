@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription, Button, Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, Spinner } from "@modelsphere/ui";
 import { TriangleAlert } from "lucide-react";
 import { api, deployApi } from "@swiss/lib/api";
+import { releaseCatalog } from "@swiss/components/CatalogChoice";
 import { useT } from "@/modules/inferences/i18n";
 import { pipelineState } from "@/modules/inferences/deploy-lib";
 import { Review } from "@/modules/inferences/components/DeploySheet";
@@ -27,6 +28,8 @@ function Body({ target, onClose }: { target: RollbackTarget; onClose: () => void
   const current = useQuery({ queryKey: ["releasePlan", namespace, release], queryFn: () => api.releasePlan(namespace, release), retry: false });
   const archived = useQuery({ queryKey: ["revision-plan", namespace, release, revision], queryFn: () => api.revisionPlan(namespace, release, revision), staleTime: Infinity });
   const live = useQuery({ queryKey: ["status", namespace, release], queryFn: () => api.status(namespace, release) });
+  const cluster = useQuery({ queryKey: ["cluster"], queryFn: api.cluster });
+  const currentCatalog = current.data ? releaseCatalog(cluster.data?.catalogs ?? [], current.data.source) : undefined;
   const diff = useMutation({ mutationFn: () => deployApi.diffRevision(namespace, release, revision) });
   useEffect(() => diff.mutate(), []); // eslint-disable-line react-hooks/exhaustive-deps
   const state = pipelineState({ rollback: true, diff: diff.data ?? null, exists: live.data?.exists, applied: false });
@@ -46,7 +49,7 @@ function Body({ target, onClose }: { target: RollbackTarget; onClose: () => void
           <SheetTitle>{t("deploy.rollbackSheet.title", { release, revision })}</SheetTitle>
           <SheetDescription>{t("deploy.rollbackSheet.description")}</SheetDescription>
         </SheetHeader>
-        <SheetBody className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto bg-surface-page px-5 py-4">
+        <SheetBody className="min-h-0 flex-1 space-y-4 overflow-auto bg-surface-page px-5 py-4">
           {error && (
             <Alert variant="destructive">
               <TriangleAlert />
@@ -63,6 +66,7 @@ function Body({ target, onClose }: { target: RollbackTarget; onClose: () => void
                 upgrade={false}
                 rollback
                 current={current.data}
+                currentCatalog={currentCatalog}
                 plan={archived.data}
                 diff={diff.data ?? null}
                 diffing={diff.isPending}

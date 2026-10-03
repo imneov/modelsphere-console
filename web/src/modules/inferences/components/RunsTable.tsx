@@ -70,7 +70,7 @@ export function RunsTable({
     },
     { key: "took", title: t("runsPage.took"), width: 80, render: (r) => <span className="tabular-nums">{took(r)}</span> },
     { key: "revision", title: t("runs.columns.revision"), width: 70, render: (r) => (r.revision !== undefined ? <span className="font-mono">r{r.revision}</span> : "-") },
-    { key: "planHash", title: t("runsPage.plan"), width: 110, defaultHidden: !showService, render: (r) => <span className="font-mono text-xs" title={r.planHash}>{r.planHash.slice(0, 10)}</span> },
+    { key: "planHash", title: t("runsPage.plan"), width: 110, defaultHidden: !showService, render: (r) => <span className="font-mono text-xs" title={r.planHash}>{r.planHash.replace(/^sha256:/, "").slice(0, 12)}</span> },
     { key: "actor", title: t("runs.columns.actor"), width: 120, render: (r) => r.actor || "-" },
     {
       key: "note",
