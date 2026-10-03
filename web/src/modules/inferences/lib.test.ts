@@ -48,6 +48,9 @@ describe("rowState", () => {
   it("keeps a status it has no word for", () => {
     expect(rowState({ status: "superseded" })).toEqual({ key: "other", tone: "muted", raw: "superseded" });
   });
+  it("calls helm's deployed applied, not serving", () => {
+    expect(rowState({ status: "deployed", phase: "applied" })).toEqual({ key: "applied", tone: "success" });
+  });
   it("calls a row without a status unknown", () => {
     expect(rowState({}).key).toBe("unknown");
   });
@@ -65,6 +68,12 @@ describe("releaseState", () => {
   });
   it("reports an apply that never finished, even with no release yet", () => {
     expect(releaseState(status({ exists: false, planStatus: { phase: "applying" } })).key).toBe("applying");
+  });
+  it("is stalled when a pod has not been ready for over an hour", () => {
+    const pod = (ageSeconds: number, ready = false) => ({ name: "p", phase: "Running", ready, restarts: 0, ageSeconds });
+    expect(releaseState(status({ ready: 0, total: 1, pods: [pod(3 * 86400)] }))).toEqual({ key: "stalled", tone: "error" });
+    expect(releaseState(status({ ready: 0, total: 1, pods: [pod(1200)] })).key).toBe("loading");
+    expect(releaseState(status({ ready: 1, total: 2, pods: [pod(7200, true), pod(600)] })).key).toBe("loading");
   });
   it("is noPods when the release exists but nothing is scheduled", () => {
     expect(releaseState(status({ ready: 0, total: 0 })).key).toBe("noPods");

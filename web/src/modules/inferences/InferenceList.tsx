@@ -64,7 +64,7 @@ export function InferenceList() {
           <Link to={p(detailPath(d.release, d.namespace))} className="block truncate font-medium text-primary hover:underline">
             {d.release}
           </Link>
-          <div className="truncate text-xs text-muted-foreground">{modelLine(d) || t("list.untracked")}</div>
+          <div className="truncate text-xs text-muted-foreground" title={modelLine(d) || undefined}>{modelLine(d) || t("list.untracked")}</div>
         </div>
       ),
     },

@@ -40,7 +40,7 @@
     "current": "This is already the current revision"
   },
   "state": {
-    "deployed": "Deployed",
+    "applied": "Applied",
     "serving": "Serving",
     "loading": "Loading",
     "applying": "Applying",
@@ -49,7 +49,8 @@
     "notInstalled": "Not installed",
     "noPods": "No pods",
     "unknown": "Unknown",
-    "other": "{raw}"
+    "other": "{raw}",
+    "stalled": "Not ready"
   },
   "uninstall": {
     "title": "Uninstall inference service",
@@ -94,7 +95,9 @@
     "noRuns": "No activity yet",
     "noStore": "This swissd has no database, so the activity log is empty",
     "applyingHint": "An apply was started and never recorded a result. It may still be running, or swissd may have been restarted mid-apply.",
-    "coldLoad": "A cold load takes 20–40 minutes. A pod that is scheduled and not ready has most likely been reading weights, not failing."
+    "coldLoad": "A cold load takes 20–40 minutes. A pod that is scheduled and not ready has most likely been reading weights, not failing.",
+    "stalled": "A pod has not been ready for over an hour, well past a normal load. Check the instances.",
+    "viewInstances": "View instances"
   },
   "steps": {
     "applied": {

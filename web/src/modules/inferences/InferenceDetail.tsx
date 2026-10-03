@@ -136,7 +136,7 @@ export function InferenceDetail() {
             </Button>
           </div>
         </div>
-        <dl className="mx-6 mt-4 grid grid-cols-2 gap-4 border-t py-4 md:grid-cols-4">
+        <dl className="mx-6 mt-4 grid grid-cols-2 gap-4 border-t py-4 md:grid-cols-[1fr_2fr_1fr_1fr]">
           <HeaderField label={t("detail.fields.namespace")} value={namespace} />
           <HeaderField label={t("detail.fields.model")} value={model} />
           <HeaderField label={t("detail.fields.chart")} value={plan.data ? `${plan.data.chart.name}-${plan.data.chart.version}` : undefined} />
@@ -155,7 +155,7 @@ export function InferenceDetail() {
         </TabsList>
 
         <TabsContent value="overview">
-          <Overview namespace={namespace} release={release} status={s} plan={plan.data} objects={objects.data?.objects} objectsUnreadable={objects.isError} onAllRuns={() => setTab("runs")} />
+          <Overview namespace={namespace} release={release} status={s} plan={plan.data} objects={objects.data?.objects} objectsUnreadable={objects.isError} onAllRuns={() => setTab("runs")} onViewInstances={() => setTab("instances")} />
         </TabsContent>
         <TabsContent value="instances">
           <Instances status={s} />

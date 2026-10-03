@@ -2,6 +2,7 @@ import { Badge, ResourceTable, type ResourceColumn } from "@modelsphere/ui";
 import type { Pod, ReleaseStatus } from "@swiss/lib/api";
 import { useT } from "@/modules/inferences/i18n";
 import { age } from "@/modules/inferences/lib";
+import { LoadHint } from "@/modules/inferences/components/LoadHint";
 
 // The release's pods, from the status read the page already polls.
 export function Instances({ status: s }: { status: ReleaseStatus }) {
@@ -32,7 +33,7 @@ export function Instances({ status: s }: { status: ReleaseStatus }) {
 
   return (
     <div className="space-y-3">
-      {s.total > 0 && s.ready < s.total && <p className="text-sm text-muted-foreground">{t("overview.coldLoad")}</p>}
+      <LoadHint status={s} />
       {s.warning && <p className="text-sm text-warning">{s.warning}</p>}
       <ResourceTable<Pod> showColumnToggle={false} data={s.pods} columns={columns} rowKey="name" emptyTitle={t("instances.empty")} />
     </div>

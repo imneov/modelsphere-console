@@ -34,7 +34,7 @@
     "current": "这已经是当前版本"
   },
   "state": {
-    "deployed": "已部署",
+    "applied": "已应用",
     "serving": "运行中",
     "loading": "加载中",
     "applying": "部署中",
@@ -43,7 +43,8 @@
     "notInstalled": "未安装",
     "noPods": "无实例",
     "unknown": "未知",
-    "other": "{raw}"
+    "other": "{raw}",
+    "stalled": "未就绪"
   },
   "uninstall": {
     "title": "卸载推理服务",
@@ -88,7 +89,9 @@
     "noRuns": "还没有操作记录",
     "noStore": "这个 swissd 没有数据库，操作记录为空",
     "applyingHint": "部署已开始但还没有记录结果：可能仍在执行，也可能 swissd 在部署中途重启过。",
-    "coldLoad": "冷启动加载需要 20–40 分钟。已调度但未就绪的 Pod 多半是在读取权重，而不是出错。"
+    "coldLoad": "冷启动加载需要 20–40 分钟。已调度但未就绪的 Pod 多半是在读取权重，而不是出错。",
+    "stalled": "实例超过 1 小时仍未就绪，已超出正常加载时间，请查看实例。",
+    "viewInstances": "查看实例"
   },
   "steps": {
     "applied": {

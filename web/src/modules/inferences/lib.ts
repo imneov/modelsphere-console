@@ -32,7 +32,8 @@ export function rowState(d: Pick<Deployment, "status" | "phase">): State {
   if (d.phase === "failed" || d.status === "failed") return { key: "failed", tone: "error" };
   if (d.phase === "applying" || d.status?.startsWith("pending")) return { key: "applying", tone: "info" };
   if (d.status === "uninstalling") return { key: "uninstalling", tone: "warning" };
-  if (d.status === "deployed") return { key: "deployed", tone: "success" };
+  // Helm applied it; whether the pods serve is only known on the detail page.
+  if (d.status === "deployed") return { key: "applied", tone: "success" };
   if (!d.status) return { key: "unknown", tone: "muted" };
   return { key: "other", tone: "muted", raw: d.status };
 }
@@ -46,8 +47,15 @@ export function releaseState(s: ReleaseStatus): State {
   if (p?.phase === "applying" || s.helmStatus?.startsWith("pending")) return { key: "applying", tone: "info" };
   if (!s.exists) return { key: "notInstalled", tone: "muted" };
   if (s.total === 0) return { key: "noPods", tone: "warning" };
-  if (s.ready < s.total) return { key: "loading", tone: "warning" };
+  if (s.ready < s.total) return stalled(s) ? { key: "stalled", tone: "error" } : { key: "loading", tone: "warning" };
   return { key: "serving", tone: "success" };
+}
+
+// A cold load takes 20-40 minutes; a pod still not ready after an hour is stuck.
+export const STALL_SECONDS = 3600;
+
+export function stalled(s: Pick<ReleaseStatus, "pods">): boolean {
+  return s.pods.some((p) => !p.ready && p.ageSeconds > STALL_SECONDS);
 }
 
 export const TABS = ["overview", "instances", "resources", "check", "slo", "versions", "runs", "plan"] as const;

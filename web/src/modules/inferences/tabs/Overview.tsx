@@ -20,6 +20,7 @@ import { installSteps, modelLine, releaseState, type Step, type StepState } from
 import { Field, Section } from "@/modules/inferences/components/Section";
 import { StatusDot } from "@/modules/inferences/components/StatusDot";
 import { InSwiss } from "@/modules/inferences/components/SwissScope";
+import { LoadHint } from "@/modules/inferences/components/LoadHint";
 
 const RECENT = 5;
 
@@ -34,6 +35,7 @@ export function Overview({
   objects,
   objectsUnreadable,
   onAllRuns,
+  onViewInstances,
 }: {
   namespace: string;
   release: string;
@@ -42,6 +44,7 @@ export function Overview({
   objects?: ObjectResult[];
   objectsUnreadable: boolean;
   onAllRuns: () => void;
+  onViewInstances: () => void;
 }) {
   const t = useT();
   const p = s.planStatus;
@@ -94,7 +97,7 @@ export function Overview({
             </ol>
             {p?.error && <Callout tone="bad">{p.error}</Callout>}
             {p?.phase === "applying" && <Callout tone="warn">{t("overview.applyingHint")}</Callout>}
-            {s.total > 0 && s.ready < s.total && <p className="text-sm text-muted-foreground">{t("overview.coldLoad")}</p>}
+            <LoadHint status={s} onViewInstances={onViewInstances} />
             {s.warning && <Callout tone="warn">{s.warning}</Callout>}
           </div>
         </Section>
