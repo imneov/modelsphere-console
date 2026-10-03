@@ -25,4 +25,3 @@ export function InSwiss({ children }: { children: ReactNode }) {
   return <ModuleProvider module={swissModule}>{children}</ModuleProvider>;
 }
 
-export const swissBase = swissModule.basePath;

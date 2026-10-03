@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Bot, Library } from "lucide-react";
+import { Activity, Bot, Library, Server } from "lucide-react";
 import type { ConsoleModule } from "@/shell";
 import { useT } from "@/modules/inferences/i18n";
 import { SwissScope } from "@/modules/inferences/components/SwissScope";
@@ -7,6 +7,8 @@ import { SwissScope } from "@/modules/inferences/components/SwissScope";
 const InferenceList = lazy(() => import("@/modules/inferences/InferenceList").then((m) => ({ default: m.InferenceList })));
 const CatalogPage = lazy(() => import("@/modules/inferences/CatalogPage").then((m) => ({ default: m.CatalogPage })));
 const ModelPage = lazy(() => import("@/modules/inferences/ModelPage").then((m) => ({ default: m.ModelPage })));
+const NodesPage = lazy(() => import("@/modules/inferences/NodesPage").then((m) => ({ default: m.NodesPage })));
+const RunsPage = lazy(() => import("@/modules/inferences/RunsPage").then((m) => ({ default: m.RunsPage })));
 const InferenceDetail = lazy(() => import("@/modules/inferences/InferenceDetail").then((m) => ({ default: m.InferenceDetail })));
 
 function Loading() {
@@ -37,5 +39,7 @@ export const inferencesModule: ConsoleModule = {
     { path: ":release/details", element: page(<InferenceDetail />), permission: "swiss.view" },
     { path: "catalog", element: page(<CatalogPage />), permission: "swiss.view", menu: { label: "模型库", icon: Library } },
     { path: "catalog/:name", element: page(<ModelPage />), permission: "swiss.view" },
+    { path: "nodes", element: page(<NodesPage />), permission: "swiss.view", menu: { label: "节点", icon: Server } },
+    { path: "runs", element: page(<RunsPage />), permission: "swiss.view", menu: { label: "操作记录", icon: Activity } },
   ],
 };

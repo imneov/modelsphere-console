@@ -94,18 +94,6 @@ export function detailPath(release: string, namespace: string, tab?: Tab): strin
   return `${encodeURIComponent(release)}/details?${q}`;
 }
 
-const enc = encodeURIComponent;
-
-// The write paths stay swiss's wizards for now; these are the absolute paths to
-// them under swiss's mount point.
-export const swissLinks = (base: string) => ({
-  catalog: `${base}/catalog`,
-  upgrade: (ns: string, release: string) => `${base}/upgrade/${enc(ns)}/${enc(release)}`,
-  rollback: (ns: string, release: string, revision: number) =>
-    `${base}/upgrade/${enc(ns)}/${enc(release)}?rollback=${revision}`,
-  runs: (ns: string, release: string) => `${base}/runs?namespace=${enc(ns)}&release=${enc(release)}`,
-});
-
 // "qwen3 v1.2 · h100x1": the model line under a release name.
 export function modelLine(m: { model?: string; version?: string; variant?: string }): string {
   if (!m.model) return "";

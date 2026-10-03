@@ -4,7 +4,9 @@
   },
   "menu": {
     "index": "Inference Services",
-    "catalog": "Model Library"
+    "catalog": "Model Library",
+    "nodes": "Nodes",
+    "runs": "Activity"
   },
   "list": {
     "title": "Inference Services",
@@ -32,8 +34,7 @@
     "check": "Health check",
     "rollback": "Roll back to this",
     "values": "View values",
-    "viewAll": "All",
-    "openInSwiss": "Open in model deployment"
+    "viewAll": "All"
   },
   "disabled": {
     "readOnly": "This swissd is read-only: turn on both server.allowDeploy and rbac.allowDeploy",
@@ -392,5 +393,79 @@
       "title": "Roll back {release} to revision {revision}",
       "description": "Re-applies that revision's plan exactly as it ran; to change settings, upgrade instead."
     }
+  },
+  "runsPage": {
+    "title": "Activity",
+    "description": "Every deploy, upgrade, rollback and uninstall swissd ran on an inference service. Expand a row for its full output.",
+    "action": "Action",
+    "service": "Service",
+    "took": "Took",
+    "plan": "Plan",
+    "clearService": "Show all services",
+    "actions": {
+      "install": "Install",
+      "apply": "Apply",
+      "rollback": "Roll back",
+      "uninstall": "Uninstall"
+    }
+  },
+  "nodes": {
+    "title": "Nodes",
+    "description": "The cluster's nodes and GPU inventory: which products have room, the largest deploy that fits, and which nodes are unavailable.",
+    "kpi": {
+      "free": "Free GPUs",
+      "largest": "Largest free on one node",
+      "gpuNodes": "GPU nodes",
+      "used": "GPUs in use",
+      "notMeasured": "not measured",
+      "ofAllocatable": "of {n} allocatable",
+      "schedulable": "{n} schedulable",
+      "noneSchedulable": "none schedulable",
+      "noRoom": "no schedulable room",
+      "onNodes": "on {n} nodes",
+      "unavailable": "{n} unavailable"
+    },
+    "usageError": "GPU usage could not be measured (the cluster-wide pod list was refused): {error}",
+    "focus": {
+      "all": "All",
+      "gpu": "GPU nodes",
+      "room": "Has room",
+      "full": "Full",
+      "unavailable": "Unavailable",
+      "cpu": "CPU nodes"
+    },
+    "search": "Search nodes, IPs, taints or pods",
+    "product": {
+      "nodes": "{n} nodes",
+      "largest": "largest {n}",
+      "unlabelled": "unlabelled"
+    },
+    "columns": {
+      "name": "Node",
+      "gpuType": "GPU type",
+      "gpus": "GPUs",
+      "free": "Free",
+      "used": "In use",
+      "state": "State"
+    },
+    "state": {
+      "ready": "Ready",
+      "cordoned": "Cordoned",
+      "notReady": "Not ready"
+    },
+    "detail": {
+      "pods": "Pods holding GPUs",
+      "node": "Node",
+      "noPods": "No pod holds a GPU here",
+      "kubelet": "Kubelet",
+      "internalIP": "Internal IP",
+      "externalIP": "External IP",
+      "resource": "GPU resource",
+      "taints": "Taints",
+      "conditions": "Conditions",
+      "namespace": "Namespace",
+      "pod": "Pod"
+    },
+    "empty": "No nodes match"
   }
 }

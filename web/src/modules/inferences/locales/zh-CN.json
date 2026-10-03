@@ -25,8 +25,7 @@
     "check": "服务检查",
     "rollback": "回滚到此版",
     "values": "查看 values",
-    "viewAll": "全部",
-    "openInSwiss": "在模型部署中查看"
+    "viewAll": "全部"
   },
   "disabled": {
     "readOnly": "这个 swissd 是只读的：需要同时打开 server.allowDeploy 和 rbac.allowDeploy",
@@ -385,5 +384,79 @@
       "title": "回滚 {release} 到版本 {revision}",
       "description": "重新应用这个版本当时的计划，原样恢复；要改设置请用升级。"
     }
+  },
+  "runsPage": {
+    "title": "操作记录",
+    "description": "swissd 对推理服务执行过的每一次部署、升级、回滚和卸载。展开一行可以看完整输出。",
+    "action": "操作",
+    "service": "服务",
+    "took": "耗时",
+    "plan": "计划",
+    "clearService": "显示全部服务",
+    "actions": {
+      "install": "部署",
+      "apply": "升级",
+      "rollback": "回滚",
+      "uninstall": "卸载"
+    }
+  },
+  "nodes": {
+    "title": "节点",
+    "description": "集群节点和 GPU 库存：哪些型号有空位、能装下多大的部署、哪些节点不可用。",
+    "kpi": {
+      "free": "空闲 GPU",
+      "largest": "单节点最大空位",
+      "gpuNodes": "GPU 节点",
+      "used": "使用中 GPU",
+      "notMeasured": "未统计",
+      "ofAllocatable": "共 {n} 张可分配",
+      "schedulable": "其中 {n} 张可调度",
+      "noneSchedulable": "没有可调度的空闲 GPU",
+      "noRoom": "没有可调度的空位",
+      "onNodes": "分布在 {n} 个节点",
+      "unavailable": "{n} 个不可用"
+    },
+    "usageError": "无法统计 GPU 使用情况（集群级 Pod 列表被拒绝）：{error}",
+    "focus": {
+      "all": "全部",
+      "gpu": "GPU 节点",
+      "room": "有空位",
+      "full": "已满",
+      "unavailable": "不可用",
+      "cpu": "CPU 节点"
+    },
+    "search": "搜索节点、IP、污点或 Pod",
+    "product": {
+      "nodes": "{n} 个节点",
+      "largest": "最大空位 {n}",
+      "unlabelled": "未打标签"
+    },
+    "columns": {
+      "name": "节点",
+      "gpuType": "GPU 型号",
+      "gpus": "GPU",
+      "free": "空闲",
+      "used": "使用",
+      "state": "状态"
+    },
+    "state": {
+      "ready": "就绪",
+      "cordoned": "不可调度",
+      "notReady": "未就绪"
+    },
+    "detail": {
+      "pods": "占用 GPU 的 Pod",
+      "node": "节点信息",
+      "noPods": "没有占用 GPU 的 Pod",
+      "kubelet": "Kubelet",
+      "internalIP": "内网 IP",
+      "externalIP": "外网 IP",
+      "resource": "GPU 资源",
+      "taints": "污点",
+      "conditions": "Conditions",
+      "namespace": "命名空间",
+      "pod": "Pod"
+    },
+    "empty": "没有符合条件的节点"
   }
 }

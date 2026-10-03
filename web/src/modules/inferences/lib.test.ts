@@ -10,7 +10,6 @@ import {
   revisionRows,
   rowState,
   showSLO,
-  swissLinks,
   visibleTabs,
 } from "@/modules/inferences/lib";
 
@@ -102,12 +101,6 @@ describe("paths", () => {
   it("puts the namespace in the query and leaves the default tab out", () => {
     expect(detailPath("qwen 3", "ai-ns")).toBe("qwen%203/details?namespace=ai-ns");
     expect(detailPath("q", "ns", "versions")).toBe("q/details?namespace=ns&tab=versions");
-  });
-  it("points the write paths at swiss's wizards", () => {
-    const l = swissLinks("/swiss");
-    expect(l.upgrade("ns", "r")).toBe("/swiss/upgrade/ns/r");
-    expect(l.rollback("ns", "r", 2)).toBe("/swiss/upgrade/ns/r?rollback=2");
-    expect(l.runs("ns", "r")).toBe("/swiss/runs?namespace=ns&release=r");
   });
 });
 
