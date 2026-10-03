@@ -95,10 +95,23 @@ export function whatMoves(current: Plan, proposed: Plan, currentCatalog?: string
 export const SECTIONS = ["basic", "resources", "routing", "slo", "advanced"] as const;
 export type Section = (typeof SECTIONS)[number];
 
-// A service id has to be a helm release name: dot-separated DNS labels, at most 53 characters.
+// The service id names the helm release and the Services the chart renders
+// from it ("<id>-cart"), so it has to be a DNS-1035 label: no dots, starting
+// with a letter. 53 is helm's limit for a release name.
 export function serviceIdError(id: string): "required" | "format" | "length" | undefined {
   if (!id.trim()) return "required";
   if (id.length > 53) return "length";
-  if (!/^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/.test(id)) return "format";
+  if (!/^[a-z]([-a-z0-9]*[a-z0-9])?$/.test(id)) return "format";
   return undefined;
+}
+
+// A model name made into a service id: "mimo-v2.5" -> "mimo-v2-5".
+export function defaultServiceId(model: string): string {
+  return model
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^[^a-z]+/, "")
+    .replace(/-+/g, "-")
+    .slice(0, 53)
+    .replace(/-+$/, "");
 }

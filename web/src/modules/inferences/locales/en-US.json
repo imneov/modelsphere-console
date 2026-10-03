@@ -353,7 +353,7 @@
     },
     "errors": {
       "required": "Required",
-      "format": "Lowercase letters, digits, - and ., each dot-separated part starting and ending with a letter or digit",
+      "format": "Lowercase letters, digits and -, starting with a letter and ending with a letter or digit (it names Kubernetes Services, so no dots)",
       "length": "At most 53 characters"
     },
     "review": {

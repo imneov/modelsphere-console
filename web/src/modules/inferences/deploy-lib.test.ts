@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DiffResult, Plan } from "@swiss/lib/api";
-import { chartChoice, extraValue, fracOutOfRange, gpuOptions, initialValue, pipelineState, serviceIdError, whatMoves } from "@/modules/inferences/deploy-lib";
+import { chartChoice, defaultServiceId, extraValue, fracOutOfRange, gpuOptions, initialValue, pipelineState, serviceIdError, whatMoves } from "@/modules/inferences/deploy-lib";
 
 const diff = (over: Partial<DiffResult>): DiffResult => ({ planHash: "h", changed: true, output: "", revision: 3, exists: true, ...over });
 
@@ -73,14 +73,20 @@ describe("whatMoves", () => {
   });
 });
 
-describe("serviceIdError", () => {
-  it("accepts a release name and rejects the rest", () => {
+describe("service id", () => {
+  it("must be a DNS-1035 label of at most 53 characters", () => {
     expect(serviceIdError("qwen3-8b")).toBeUndefined();
-    expect(serviceIdError("mimo-v2.5")).toBeUndefined();
-    expect(serviceIdError("a..b")).toBe("format");
     expect(serviceIdError("")).toBe("required");
+    expect(serviceIdError("mimo-v2.5")).toBe("format");
+    expect(serviceIdError("3b-model")).toBe("format");
     expect(serviceIdError("Qwen")).toBe("format");
     expect(serviceIdError("a-")).toBe("format");
     expect(serviceIdError("a".repeat(54))).toBe("length");
+  });
+  it("is made from the model name by default", () => {
+    expect(defaultServiceId("mimo-v2.5")).toBe("mimo-v2-5");
+    expect(defaultServiceId("Qwen3.6-35B-A3B")).toBe("qwen3-6-35b-a3b");
+    expect(defaultServiceId("1st.model")).toBe("st-model");
+    expect(serviceIdError(defaultServiceId("x".repeat(60) + "-y"))).toBeUndefined();
   });
 });

@@ -35,7 +35,7 @@ import { gpuShort } from "@swiss/lib/gpu";
 import { isChartRange, movableCatalogs } from "@swiss/lib/upgrade";
 import { useT } from "@/modules/inferences/i18n";
 import { detailPath } from "@/modules/inferences/lib";
-import { SECTIONS, chartChoice, gpuOptions, pipelineState, serviceIdError, whatMoves, type Section } from "@/modules/inferences/deploy-lib";
+import { SECTIONS, chartChoice, defaultServiceId, gpuOptions, pipelineState, serviceIdError, whatMoves, type Section } from "@/modules/inferences/deploy-lib";
 import { DeployForm } from "@/modules/inferences/components/DeployForm";
 import { InSwiss } from "@/modules/inferences/components/SwissScope";
 
@@ -104,7 +104,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   });
   const chart = chartChoice(chartList, chartVersion, upgrade ? current.data?.chart : undefined);
 
-  const initial = useMemo<Form>(() => (upgrade ? (current.data ? formFromPlan(current.data) : EMPTY) : { ...EMPTY, serviceId: target.model }), [upgrade, current.data, target]);
+  const initial = useMemo<Form>(() => (upgrade ? (current.data ? formFromPlan(current.data) : EMPTY) : { ...EMPTY, serviceId: defaultServiceId(target.model) }), [upgrade, current.data, target]);
   const [form, setForm] = useState<Form>(initial);
   useEffect(() => setForm(initial), [initial]);
   const dirty = useDirty({ form, version, variant, moveTo, chartVersion }, { form: initial, version: upgrade ? "" : (target.version ?? ""), variant: upgrade ? "" : (target.variant ?? ""), moveTo: "", chartVersion: "" });
@@ -119,7 +119,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const [force, setForce] = useState(false);
   const nav = useAnchorNav({ ids: [...SECTIONS], idPrefix: ID_PREFIX, enabled: step === "form", onExpand: (id) => setExpanded((e) => ({ ...e, [id]: true })) });
 
-  const release = upgrade ? target.release : form.serviceId || target.model;
+  const release = upgrade ? target.release : form.serviceId || defaultServiceId(target.model);
   const namespace = upgrade ? target.namespace : form.namespace || cluster.data?.namespace || "";
   const live = useQuery({ queryKey: ["status", namespace, release], queryFn: () => api.status(namespace, release), enabled: step === "review" && !!release && !!namespace });
 
@@ -128,7 +128,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
     mutationFn: () =>
       deployApi.plan(
         planRequest(
-          { ...form, serviceId: form.serviceId || (upgrade ? form.serviceId : target.model) },
+          { ...form, serviceId: form.serviceId || (upgrade ? form.serviceId : defaultServiceId(target.model)) },
           upgrade
             ? { model: recorded!.model, version: version || undefined, variant: variant || undefined, catalog: moveTo || undefined, chartVersion: chartVersion || undefined, fromRelease: target.release }
             : { model: target.model, version, variant: keptVariant, catalog: target.catalog, chartVersion: chartVersion || undefined },
@@ -155,7 +155,8 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
 
   const submit = () => {
     setSubmitted(true);
-    if (!upgrade && serviceIdError(form.serviceId || target.model)) {
+    apply.reset();
+    if (!upgrade && serviceIdError(form.serviceId || defaultServiceId(target.model))) {
       setExpanded((e) => ({ ...e, basic: true }));
       nav.go("basic");
       return;
@@ -289,7 +290,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
               submitted={submitted}
               target={targetFields}
               cluster={cluster.data}
-              defaults={{ serviceId: upgrade ? undefined : target.model, localPath: entry.data?.localPath, localPathTemplate: entry.data?.pathTemplate, image: imageOf(v, entry.data?.imageRepository) }}
+              defaults={{ serviceId: upgrade ? undefined : defaultServiceId(target.model), localPath: entry.data?.localPath, localPathTemplate: entry.data?.pathTemplate, image: imageOf(v, entry.data?.imageRepository) }}
               gpuOptions={gpuOptions(v?.requires.gpuProduct, nodes.data?.nodes.map((n) => n.GPUProduct))}
               expanded={expanded}
               onExpand={(s, o) => setExpanded((e) => ({ ...e, [s]: o }))}
@@ -327,7 +328,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
           </>
         ) : (
           <>
-            <Button variant="outline" onClick={() => (setStep("form"), setDiff(null), setPlan(null))} disabled={apply.isPending}>
+            <Button variant="outline" onClick={() => (setStep("form"), setDiff(null), setPlan(null), apply.reset(), dryRun.reset())} disabled={apply.isPending}>
               {t("deploy.review.back")}
             </Button>
             <Button onClick={() => apply.mutate()} disabled={!state.canApply || apply.isPending || !!readOnly}>
@@ -406,9 +407,7 @@ export function Review({
           state.nothingToDo ? (
             <p className="text-sm text-muted-foreground">{t("deploy.review.noChange")}</p>
           ) : (
-            <div className="max-h-[28rem] overflow-auto rounded-md border bg-muted/30 p-3 text-xs">
-              <DiffView output={diff.output} />
-            </div>
+            <DiffView output={diff.output} />
           )
         ) : null}
       </SectionCard>
@@ -424,7 +423,7 @@ export function Review({
       </FloatingField>
       {state.canForce && (
         <FloatingField layout="inline" label={t("deploy.review.force")} hint={t("deploy.review.forceHint")}>
-          <Switch checked={force} onCheckedChange={onForce} />
+          <Switch aria-label={t("deploy.review.force")} checked={force} onCheckedChange={onForce} />
         </FloatingField>
       )}
     </>

@@ -50,7 +50,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
   const f = (k: string) => t(`deploy.fields.${k}`);
   const text = (k: keyof Form) => ({ value: form[k] as string, onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange({ [k]: e.target.value }) });
   const count = (k: "replicaCount" | "scalerMin" | "scalerMax") => ({ value: form[k], inputMode: "numeric" as const, onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange({ [k]: digits(e.target.value) }) });
-  const sw = (k: keyof Form) => <Switch checked={form[k] as boolean} onCheckedChange={(v) => onChange({ [k]: v })} />;
+  const sw = (k: keyof Form, label: string) => <Switch aria-label={label} checked={form[k] as boolean} onCheckedChange={(v) => onChange({ [k]: v })} />;
   const idError = submitted ? serviceIdError(form.serviceId || defaults.serviceId || "") : undefined;
   const section = (id: Section, children: ReactNode) => (
     <div id={`${idPrefix}${id}`}>
@@ -74,7 +74,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
           </FloatingField>
           {!upgrade && (
             <FloatingField layout="inline" label={f("createNamespace")} hint={f("createNamespaceHint")}>
-              {sw("createNamespace")}
+              {sw("createNamespace", f("createNamespace"))}
             </FloatingField>
           )}
         </>,
@@ -95,7 +95,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
               </div>
             }
           >
-            {sw("scaler")}
+            {sw("scaler", f("scaler"))}
           </FloatingField>
           {!form.scaler && (
             <FloatingField label={f("replicas")}>
@@ -129,7 +129,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
                 </div>
               }
             >
-              <Switch checked={!!form.image.trim()} onCheckedChange={(v) => onChange({ image: v ? defaults.image!.site : "" })} />
+              <Switch aria-label={f("image")} checked={!!form.image.trim()} onCheckedChange={(v) => onChange({ image: v ? defaults.image!.site : "" })} />
             </FloatingField>
           )}
         </>,
@@ -149,10 +149,10 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
               </div>
             }
           >
-            <Switch checked={on.modelRoute} onCheckedChange={(v) => onChange(v ? { modelRoute: true } : { modelRoute: false, route: "" })} />
+            <Switch aria-label={f("modelRoute")} checked={on.modelRoute} onCheckedChange={(v) => onChange(v ? { modelRoute: true } : { modelRoute: false, route: "" })} />
           </FloatingField>
           <FloatingField layout="inline" label={f("exposeRoutedPeer")} hint={f("exposeRoutedPeerHint")}>
-            {sw("exposeRoutedPeer")}
+            {sw("exposeRoutedPeer", f("exposeRoutedPeer"))}
           </FloatingField>
           <FloatingField label={f("backendMaxConcurrency")} hint={f("backendMaxConcurrencyHint")}>
             <FieldInput {...text("backendMaxConcurrency")} inputMode="numeric" />
@@ -168,7 +168,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
               </div>
             }
           >
-            {sw("cart")}
+            {sw("cart", f("cart"))}
           </FloatingField>
           <RouteExtras form={form} onChange={onChange} />
         </>,
@@ -178,7 +178,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
         "slo",
         <>
           <FloatingField layout="inline" label={f("slo")} hint={f("sloHint")}>
-            {sw("slo")}
+            {sw("slo", f("slo"))}
           </FloatingField>
           <div className="grid grid-cols-2 gap-3">
             <FloatingField label={form.slo ? f("ttftFallback") : f("ttft")} hint={f("ttftHint")}>
@@ -210,7 +210,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
               </div>
             }
           >
-            <Switch checked={form.adaptiveCc} onCheckedChange={(v) => onChange(v ? { adaptiveCc: true } : { adaptiveCc: false, adaptiveCcMinFrac: "" })} />
+            <Switch aria-label={f("adaptiveCc")} checked={form.adaptiveCc} onCheckedChange={(v) => onChange(v ? { adaptiveCc: true } : { adaptiveCc: false, adaptiveCcMinFrac: "" })} />
           </FloatingField>
           <FloatingField
             layout="inline"
@@ -224,10 +224,10 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
               </div>
             }
           >
-            {sw("monitor")}
+            {sw("monitor", f("monitor"))}
           </FloatingField>
           <FloatingField layout="inline" label={f("serviceMonitor")} hint={f("serviceMonitorHint")}>
-            {sw("serviceMonitor")}
+            {sw("serviceMonitor", f("serviceMonitor"))}
           </FloatingField>
         </>,
       )}
@@ -292,7 +292,7 @@ function RouteExtras({ form, onChange }: { form: Form; onChange: (patch: Partial
                 <div className="truncate font-mono text-xs text-muted-foreground">{idle ? f("idle") : f("without", { fallback: d?.fallback ?? "-" })}</div>
               </div>
               {d?.kind === "boolean" ? (
-                <Switch checked={row.value === "true"} onCheckedChange={(v) => set(i, v ? "true" : "false")} />
+                <Switch aria-label={d?.label ?? row.key} checked={row.value === "true"} onCheckedChange={(v) => set(i, v ? "true" : "false")} />
               ) : (
                 <Input value={row.value} onChange={(e) => set(i, e.target.value)} inputMode={d?.kind === "number" ? "decimal" : undefined} placeholder={d?.fallback} aria-label={d?.label ?? row.key} />
               )}
