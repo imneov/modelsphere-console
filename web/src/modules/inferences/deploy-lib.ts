@@ -95,10 +95,10 @@ export function whatMoves(current: Plan, proposed: Plan, currentCatalog?: string
 export const SECTIONS = ["basic", "resources", "routing", "slo", "advanced"] as const;
 export type Section = (typeof SECTIONS)[number];
 
-// A service id has to be a helm release name: a DNS label, at most 53 characters.
+// A service id has to be a helm release name: dot-separated DNS labels, at most 53 characters.
 export function serviceIdError(id: string): "required" | "format" | "length" | undefined {
   if (!id.trim()) return "required";
   if (id.length > 53) return "length";
-  if (!/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(id)) return "format";
+  if (!/^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/.test(id)) return "format";
   return undefined;
 }

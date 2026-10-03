@@ -76,6 +76,8 @@ describe("whatMoves", () => {
 describe("serviceIdError", () => {
   it("accepts a release name and rejects the rest", () => {
     expect(serviceIdError("qwen3-8b")).toBeUndefined();
+    expect(serviceIdError("mimo-v2.5")).toBeUndefined();
+    expect(serviceIdError("a..b")).toBe("format");
     expect(serviceIdError("")).toBe("required");
     expect(serviceIdError("Qwen")).toBe("format");
     expect(serviceIdError("a-")).toBe("format");

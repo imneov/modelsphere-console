@@ -10,6 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  FieldHint,
   FieldInput,
   FieldSelect,
   FieldTextarea,
@@ -246,8 +247,7 @@ function Tolerations({ rows, onChange }: { rows: Toleration[]; onChange: (v: Tol
   const f = (k: string) => t(`deploy.fields.${k}`);
   const patch = (i: number, p: Partial<Toleration>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
   return (
-    <FloatingField layout="block" label={f("tolerations")} hint={f("tolerationsHint")}>
-      <div className="flex flex-col gap-2 py-1">
+    <Group label={f("tolerations")} hint={f("tolerationsHint")}>
         {rows.map((r, i) => (
           <div key={i} className="grid grid-cols-[1fr_7rem_1fr_9rem_auto] items-center gap-2">
             <Input value={r.key} onChange={(e) => patch(i, { key: e.target.value })} placeholder={f("tolKey")} aria-label={f("tolKey")} />
@@ -262,8 +262,7 @@ function Tolerations({ rows, onChange }: { rows: Toleration[]; onChange: (v: Tol
         <Button variant="ghost" size="sm" className="w-fit" onClick={() => onChange([...rows, { key: "", operator: "Equal", value: "", effect: "" }])}>
           <Plus className="size-3.5" /> {f("tolAdd")}
         </Button>
-      </div>
-    </FloatingField>
+    </Group>
   );
 }
 
@@ -282,8 +281,7 @@ function RouteExtras({ form, onChange }: { form: Form; onChange: (patch: Partial
   const set = (i: number, value: string) => onChange({ nginxExtras: form.nginxExtras.map((r, j) => (j === i ? { ...r, value } : r)) });
 
   return (
-    <FloatingField layout="block" label={f("extras")} hint={f("extrasHint")}>
-      <div className="flex flex-col gap-2 py-1">
+    <Group label={f("extras")} hint={f("extrasHint")}>
         {form.nginxExtras.map((row, i) => {
           const d = DIRECTIVES_BY_KEY.get(row.key);
           const idle = !!d?.needsAdaptive && !form.adaptiveCc;
@@ -339,7 +337,18 @@ function RouteExtras({ form, onChange }: { form: Form; onChange: (patch: Partial
           </Badge>
         </div>
         {customError && <p className="text-xs text-warning">{customError}</p>}
+    </Group>
+  );
+}
+
+function Group({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border bg-background p-3">
+      <div className="flex items-center gap-1.5 text-sm">
+        {label}
+        <FieldHint>{hint}</FieldHint>
       </div>
-    </FloatingField>
+      {children}
+    </div>
   );
 }
