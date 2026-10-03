@@ -23,9 +23,7 @@ import { LoadHint } from "@/modules/inferences/components/LoadHint";
 
 const RECENT = 5;
 
-// The overview: what the release is (basic information), how far its install
-// got, where to call it, and on the right the last few things done to it --
-// swissd has no events, and its run log is the honest record of what happened.
+// "Recent activity" sits where Rise Global shows events: swissd has none, its run log is the record.
 export function Overview({
   namespace,
   release,

@@ -9,9 +9,6 @@ export interface UninstallTarget {
   release: string;
 }
 
-// Uninstall, typed to confirm: it removes a release that takes 20-40 minutes to
-// load back, so the name is the one thing the operator must have read first.
-// The list and the detail page share it; onDone says where to go afterwards.
 export function UninstallDialog({
   target,
   onClose,
@@ -23,7 +20,7 @@ export function UninstallDialog({
 }) {
   const t = useT();
   const qc = useQueryClient();
-  // What the call itself cannot report: it succeeded, and left the plan behind.
+  // The uninstall succeeded but left its plan ConfigMap behind.
   const [planError, setPlanError] = useState("");
   const run = useMutation({
     mutationFn: (x: UninstallTarget) => deployApi.uninstall(x.namespace, x.release),
@@ -49,8 +46,6 @@ export function UninstallDialog({
       onConfirm={async () => {
         if (!target) return;
         const r = await run.mutateAsync(target);
-        // The release is gone either way; a plan left behind is worth saying,
-        // and saying it means not closing.
         if (r.planError) {
           setPlanError(t("uninstall.planError", { error: r.planError }));
           throw new Error(r.planError);

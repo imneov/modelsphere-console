@@ -7,9 +7,6 @@ import { useT } from "@/modules/inferences/i18n";
 import { modelLine, revisionRows, type RevisionRow } from "@/modules/inferences/lib";
 import { RollbackSheet } from "@/modules/inferences/components/RollbackSheet";
 
-// helm's revisions, newest first, with the run that made each one for the when,
-// who and why. A row expands to the values helm holds for it; rolling back goes
-// to swiss's upgrade wizard, which shows the diff before it does anything.
 export function Versions({ namespace, release, canRollBack }: { namespace: string; release: string; canRollBack: boolean }) {
   const t = useT();
   const [rollingBack, setRollingBack] = useState<number | null>(null);

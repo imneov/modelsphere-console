@@ -57,8 +57,7 @@ export function chartChoice(list: { data?: ChartVersions; error?: Error | null }
 
 export type Action = "install" | "apply" | "rollback";
 
-// compose -> dry run -> apply. The dry run says whether the release exists
-// (install vs apply) and whether anything changes; nothing applies before it.
+// The dry run decides install vs apply, and whether there is anything to apply.
 export function pipelineState(o: { rollback?: boolean; diff: DiffResult | null; exists?: boolean; applied: boolean }) {
   const exists = o.diff?.exists ?? o.exists;
   const action: Action = o.rollback ? "rollback" : exists === false ? "install" : "apply";
@@ -91,7 +90,6 @@ export function whatMoves(current: Plan, proposed: Plan, currentCatalog?: string
   ];
 }
 
-// The form's sections, in the order the sheet shows and anchors them.
 export const SECTIONS = ["basic", "resources", "routing", "slo", "advanced"] as const;
 export type Section = (typeof SECTIONS)[number];
 
@@ -105,7 +103,6 @@ export function serviceIdError(id: string): "required" | "format" | "length" | u
   return undefined;
 }
 
-// A model name made into a service id: "mimo-v2.5" -> "mimo-v2-5".
 export function defaultServiceId(model: string): string {
   return model
     .toLowerCase()

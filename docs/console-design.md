@@ -225,44 +225,64 @@ page -- the tables are the likely one, since Rise's `TableHead`/`TableCell` are
 
 ### The inferences module
 
-`/inferences` is a second view on swissd beside the swiss module, laid out the
-way Rise Global's model service pages are: a resource table of releases
-(`/inferences`), and a detail page with a header card over tabs
-(`/inferences/:release/details?namespace=…&tab=…`) instead of every panel
-stacked down the page. `/swiss` is unchanged; both read the same swissd.
+`/inferences` is every swiss page redone in Rise Global's model service layout,
+beside the swiss module (`/swiss` is unchanged; both read the same swissd).
+
+| Page | Path | Layout |
+|---|---|---|
+| Inference services | `/inferences` | resource table, server-side paging, row menu |
+| Service detail | `/inferences/:release/details?namespace=…&tab=…` | header card over tabs: overview, instances, cluster resources, health check, SLO, versions, activity, plan |
+| Model library | `/inferences/catalog?catalog=…&q=…` | card grid, facet filters in the URL (swiss's parameter names) |
+| Model detail | `/inferences/catalog/:name?catalog=…&version=…` | header card over variants and information tabs |
+| Nodes | `/inferences/nodes` | GPU KPIs, a card per GPU product, node table with pods, taints and conditions on expand |
+| Activity | `/inferences/runs?action=…&namespace=…&release=…` | every run, output on expand |
+| Site profile | `/inferences/site-profile` | grouped read view; edit in a sheet, form or YAML |
+| Setup | `/inferences/setup` | first run; swiss's gate sends an uninitialised site here |
+
+Writes are right-side sheets, as Rise Global's are:
+
+```
+deploy / upgrade sheet:  form (anchored, collapsible sections) -> compose -> dry run -> review (what moves, diff, plan, note, force) -> install | apply
+rollback sheet:          diff of the revision -> note -> rollback(expectRevision)
+uninstall:               ConfirmDialog, typed to confirm
+```
 
 | Part | Where it comes from |
 |---|---|
-| list, header card, tabs, overview, instances, versions, activity | `web/src/modules/inferences/`, on `@modelsphere/ui` |
-| state, tabs, install track, revisions joined with runs | `modules/inferences/lib.ts`, pure and tested |
-| API client and types | `@swiss/lib/api` |
-| cluster resources, health check, SLO, plan panels | swiss's own components (`ReleaseObjects`, `Endpoint`, `SLOCard`, `Provenance`) |
-| deploy, upgrade, roll back | links to swiss's wizards under `/swiss` |
-| uninstall | `ConfirmDialog`, typed to confirm |
+| pages, sheets, forms | `web/src/modules/inferences/`, on `@modelsphere/ui` |
+| state, tabs, install track, revision/run join, catalog filters and fit, node aggregation, pipeline state, chart version choice, service-id rule | `lib.ts`, `catalog-lib.ts`, `nodes-lib.ts`, `deploy-lib.ts`, `profile-lib.ts`; pure and tested |
+| API client, types, form model (`Form`, `planRequest`, `formFromPlan`), catalog and GPU helpers, route directives | swiss: `@swiss/lib/*`, `@swiss/components/DeploySettings` (its pure exports) |
+| cluster resources, health check, SLO, plan, diff panels | swiss's components (`ReleaseObjects`, `Endpoint`, `SLOCard`, `Provenance`, `DiffView`) |
 
-It is the one module that imports another. The API client and the panels are
-swiss's domain, and a copy would be a second implementation of the same thing
-drifting from the first; the layout is what this module owns. The cost:
-`inferences` cannot be installed without the swiss module.
+It is the one module that imports another. The API client, the form model and
+the panels are swiss's domain, and a copy would be a second implementation of
+the same thing drifting from the first; the layout is what this module owns.
+Helpers swiss keeps private are ported into the module's `*-lib.ts` with a note.
+The cost: `inferences` cannot be installed without the swiss module.
 
-swiss's components resolve their `/…` links against the module they render in,
-so they render in swiss's context: `SwissScope` wraps every page in swiss's
-`Gate` under swiss's `ModuleProvider` (its redirect to setup is swiss's page) and
-puts this module's context back for the page; `InSwiss` does the same around
-each embedded panel. The shell exports `ModuleProvider` for this.
+Contexts: swiss's `Gate` runs in this module's context (`SwissScope`), so its
+redirect to `/setup` lands on `/inferences/setup`. swiss's embedded panels write
+their links as swiss paths and render under swiss's `ModuleProvider`
+(`InSwiss`); the shell exports `ModuleProvider` for this.
+
+The service id becomes the helm release and the chart's Service names
+(`<id>-cart`), so it is checked as a DNS-1035 label and defaults to the model
+name made into one (`mimo-v2.5` -> `mimo-v2-5`).
 
 Not there yet:
 
 - **Logs and events tabs.** swissd has no endpoint for either; adding them is a
   swissd change and starts with a design proposal (`AGENTS.md`).
-- **Search on the list.** swissd pages its list (at most 100 a page) and takes no
-  query; filtering one page on the client would miss the others. It needs `?q=`
-  on swissd's `/api/deployments`.
-- **swiss's panels are English.** They are swiss's, and swiss's pages have no
-  Chinese yet.
-- **Cluster resources needs a recent swissd.** An older one (0.5.6, for one) has no
-  `/objects`: the tab says so, and the install
-  track reports the route and scaler as unreadable rather than absent.
+- **Search on the services list.** swissd pages its list (at most 100 a page) and
+  takes no query; filtering one page on the client would miss the others. It
+  needs `?q=` on swissd's `/api/deployments`.
+- **swiss's panels and the route directive texts are English.** They are swiss's,
+  and swiss's pages have no Chinese yet.
+- **Cluster resources needs a recent swissd.** An older one (0.5.6, for one) has
+  no `/objects`: the tab says so, and the install track reports the route and
+  scaler as unreadable rather than absent.
+- **Upgrade picks chart versions through `/api/catalog/:name/chart-versions`**,
+  which swissd has from 0.6.2 (swiss #13).
 
 ## Backends
 

@@ -21,8 +21,7 @@ import { StatusDot } from "@/modules/inferences/components/StatusDot";
 import { DeploySheet, type DeployTarget } from "@/modules/inferences/components/DeploySheet";
 import { UninstallDialog, type UninstallTarget } from "@/modules/inferences/components/UninstallDialog";
 
-// swissd caps a page at 100: each row reads its plan, which is the cost paging
-// exists to bound.
+// swissd caps a page at 100.
 const PAGE_SIZES = [10, 25, 50, 100];
 
 type Row = Deployment & { key: string };
@@ -37,20 +36,16 @@ export function InferenceList() {
   const [uninstalling, setUninstalling] = useState<UninstallTarget | null>(null);
   const [upgrading, setUpgrading] = useState<DeployTarget | null>(null);
 
-  // The same key prefix as swiss's own list, so an uninstall from either side
-  // refreshes both.
+  // swiss's key prefix, so an uninstall from either side refreshes both.
   const list = useQuery({
     queryKey: ["deployments", "inferences", page, pageSize],
     queryFn: () => api.deployments(page, pageSize),
-    // A release changes on a human timescale; a rollout takes 20-40 minutes.
     refetchInterval: 15_000,
-    // Keeps the current page up while the next loads, so paging is not a reload.
     placeholderData: (prev) => prev,
   });
   const cluster = useQuery({ queryKey: ["cluster"], queryFn: api.cluster });
   const readOnly = cluster.data ? !cluster.data.allowDeploy : false;
 
-  // Already in the server's order, which is the order pages are cut on.
   const rows: Row[] = (list.data?.deployments ?? []).map((d) => ({ ...d, key: `${d.namespace}/${d.release}` }));
   const open = (d: Deployment) => navigate(p(detailPath(d.release, d.namespace)));
 
@@ -105,8 +100,6 @@ export function InferenceList() {
   const writeBlocked = (d: Deployment): boolean | string =>
     readOnly ? t("disabled.readOnly") : !d.model ? t("disabled.untracked") : false;
 
-  // More than two fold behind "…", leaving Details inline -- the same shape as
-  // Rise Global's lists.
   const rowActions: ResourceRowAction<Row>[] = [
     { key: "detail", label: t("actions.detail"), onClick: open },
     { key: "upgrade", label: t("actions.upgrade"), onClick: (d) => setUpgrading({ kind: "upgrade", namespace: d.namespace, release: d.release }), disabled: writeBlocked },

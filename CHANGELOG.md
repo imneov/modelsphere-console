@@ -15,7 +15,8 @@ chart's `appVersion`; the image and chart are released together under it.
 - Dependabot for Go modules, npm, GitHub Actions and the Dockerfile.
 - English install guide for the chart; the Chinese one is kept as `helm/console/README.zh-CN.md`.
 - Contributor guide, issue and PR templates, security policy (#12).
-- Inference services (`/inferences`): swissd's releases in Rise Global's model service layout -- a resource table with a name/model cell, a state dot and a row menu, and a detail page with a header card over tabs (overview, instances, cluster resources, health check, SLO, versions, activity, plan). `/swiss` is unchanged; deploy, upgrade and roll back still open its wizards.
+- Inference services (`/inferences`): every swiss page in Rise Global's model service layout, beside `/swiss` -- services list and tabbed detail, model library and model detail, nodes, activity, site profile and setup. Deploy, upgrade and roll back in right-side sheets that compose, dry-run and show what moves and the diff before confirming.
+- `@modelsphere/ui`: a second batch forked from Rise Global's design system -- sheet, floating fields, form sections, detail header, panel tabs, section cards, property lists, status indicator, filter chips, code views.
 
 ### Changed
 - Shell, access control, Playground and router pages use `@modelsphere/ui` in Rise Global's current look: page banner, resource tables with search and pagination, deletes confirmed by typing the name. The swiss module's components follow.

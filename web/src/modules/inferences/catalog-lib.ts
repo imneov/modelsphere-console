@@ -70,7 +70,6 @@ export interface Option {
   count: number;
 }
 
-// Each facet's values with how many models carry them, most common first.
 export function facetOptions(all: Facets[]) {
   const tally = (pick: (x: Facets) => (string | undefined)[]) => {
     const n = new Map<string, number>();
@@ -106,7 +105,6 @@ export function fitness(v: Pick<IndexVariant, "requires">, nodes?: Node[]): Fit 
   return { ok: matching >= needed, matching, needed };
 }
 
-// Module-relative paths, for useModulePath.
 export const catalogPath = (catalog: string) => (catalog ? `catalog?catalog=${encodeURIComponent(catalog)}` : "catalog");
 export function modelPath(name: string, catalog: string, version?: string) {
   const q = new URLSearchParams();

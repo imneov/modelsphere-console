@@ -1,7 +1,3 @@
-// What the inferences pages decide, kept out of the components so it can be
-// tested without rendering: which state a release is in, which tabs a release
-// has, how revisions line up with the runs that made them, and the install
-// track. Strings are i18n keys plus params; the components translate them.
 import type {
   Deployment,
   LLMScalerSpec,
@@ -19,27 +15,21 @@ import type {
 export type Tone = "success" | "info" | "warning" | "error" | "muted";
 
 export interface State {
-  // "state.<key>" in the module's strings.
   key: string;
   tone: Tone;
-  // Shown as-is when the key is "other": a helm status swiss has no word for.
   raw?: string;
 }
 
-// A list row knows helm's status and swiss's plan phase, not the pods: those
-// cost a status read per row, which is what paging exists to avoid.
+// A list row has no pod counts: those cost a status read per row.
 export function rowState(d: Pick<Deployment, "status" | "phase">): State {
   if (d.phase === "failed" || d.status === "failed") return { key: "failed", tone: "error" };
   if (d.phase === "applying" || d.status?.startsWith("pending")) return { key: "applying", tone: "info" };
   if (d.status === "uninstalling") return { key: "uninstalling", tone: "warning" };
-  // Helm applied it; whether the pods serve is only known on the detail page.
   if (d.status === "deployed") return { key: "applied", tone: "success" };
   if (!d.status) return { key: "unknown", tone: "muted" };
   return { key: "other", tone: "muted", raw: d.status };
 }
 
-// The detail page has the pods, so "deployed" splits into serving and loading:
-// a cold load takes 20-40 minutes and is not a failure.
 export function releaseState(s: ReleaseStatus): State {
   const p = s.planStatus;
   if (!s.exists && !p) return { key: "notInstalled", tone: "muted" };
@@ -61,22 +51,15 @@ export function stalled(s: Pick<ReleaseStatus, "pods">): boolean {
 export const TABS = ["overview", "instances", "resources", "check", "slo", "versions", "runs", "plan"] as const;
 export type Tab = (typeof TABS)[number];
 
-// The SLO tab is there when swiss's own page shows the SLO card: the plan is
-// applied and the operator turned SLO on. The plan tab needs a plan, which an
-// untracked release does not have.
 export function visibleTabs(opts: { slo: boolean; plan: boolean }): Tab[] {
   return TABS.filter((t) => (t === "slo" ? opts.slo : t === "plan" ? opts.plan : true));
 }
 
-// A tab in the URL that this release does not have (an old link, SLO turned
-// off since) falls back to the overview rather than an empty page.
 export function parseTab(raw: string | null, visible: readonly Tab[]): Tab {
   return visible.find((t) => t === raw) ?? "overview";
 }
 
-// Copied from swiss's DeploymentDetail, where it is not exported: the form layer
-// is what the operator set, and compose writes sloRequirement.enabled there
-// explicitly, so a missing key is off rather than the chart's default.
+// Copied from swiss's DeploymentDetail, where it is not exported.
 export function sloEnabled(plan?: Plan): boolean {
   const raw = plan?.layers?.form?.sloRequirement;
   if (!raw || typeof raw !== "object") return false;
@@ -87,27 +70,22 @@ export function showSLO(status: ReleaseStatus, plan?: Plan): boolean {
   return status.planStatus?.phase === "applied" && sloEnabled(plan);
 }
 
-// Module-relative, for useModulePath: "<release>/details?namespace=<ns>[&tab=…]".
 export function detailPath(release: string, namespace: string, tab?: Tab): string {
   const q = new URLSearchParams({ namespace });
   if (tab && tab !== "overview") q.set("tab", tab);
   return `${encodeURIComponent(release)}/details?${q}`;
 }
 
-// "qwen3 v1.2 · h100x1": the model line under a release name.
 export function modelLine(m: { model?: string; version?: string; variant?: string }): string {
   if (!m.model) return "";
   return [m.model + (m.version ? ` v${m.version}` : ""), m.variant].filter(Boolean).join(" · ");
 }
 
 export interface RevisionRow extends Revision {
-  // The run that left the release at this revision, when the log has one: it
-  // carries what helm's revision list does not -- when, who and why.
   run?: Run;
 }
 
-// Newest revision first. A revision several runs report (an apply that changed
-// nothing records the revision it found) takes the latest of them.
+// An apply that changed nothing records the revision it found, so a revision can have several runs.
 export function revisionRows(revisions: Revision[], runs: Run[]): RevisionRow[] {
   const byRevision = new Map<number, Run>();
   for (const r of runs) {
@@ -122,24 +100,16 @@ export function revisionRows(revisions: Revision[], runs: Run[]): RevisionRow[] 
 
 export type StepState = "ok" | "wait" | "bad" | "off";
 export interface Step {
-  // "steps.<key>.label" in the module's strings.
   key: "applied" | "pods" | "route" | "scaler";
   state: StepState;
-  // "steps.<key>.<detail>" and its params.
   detail: string;
   params?: Record<string, string | number>;
 }
 
 type Picked<Spec, Status> = { result?: ObjectResult; spec?: Spec; status?: Status };
 
-// The install track from swiss's DeploymentDetail (where these are private),
-// with the words moved to the module's strings. Applied says what helm did;
-// the other three say what the controllers made of it -- a release can be
-// applied with ready pods and still serve nobody, because nothing routed to it.
-//
-// objectsUnreadable: the objects read failed as a whole (an older swissd has no
-// such endpoint). Then nothing is known about the route or the scaler, and
-// saying "no ModelRoute" would be a claim the page cannot back.
+// From swiss's DeploymentDetail, where these are private. objectsUnreadable: an
+// older swissd has no /objects, and then the route and scaler are unknown, not absent.
 export function installSteps(
   s: ReleaseStatus,
   route: Picked<ModelRouteSpec, ModelRouteStatus>,
@@ -194,7 +164,6 @@ function scalerStep({ result, status }: Picked<LLMScalerSpec, LLMScalerStatus>):
   return { key, state: "ok", detail: "steady", params: { n: cur } };
 }
 
-// "45s", "12m", "3h7m": a pod's age, read at a glance.
 export function age(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
