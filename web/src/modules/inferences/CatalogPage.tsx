@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -28,9 +28,10 @@ import { api } from "@swiss/lib/api";
 import { facetsOf, formatUplift, sorters, type Facets } from "@swiss/lib/catalog";
 import { useCatalogChoice } from "@swiss/components/CatalogChoice";
 import { useT } from "@/modules/inferences/i18n";
+import { DeploySheet, type DeployTarget } from "@/modules/inferences/components/DeploySheet";
 import { activeFilters, facetOptions, filtersFrom, matches, modelPath, withFilters, withoutFilters, type CatalogFilters } from "@/modules/inferences/catalog-lib";
 
-export function CatalogPage({ onDeploy }: { onDeploy?: (model: string, catalog: string) => void }) {
+export function CatalogPage() {
   const t = useT();
   const p = useModulePath();
   const [params, setParams] = useSearchParams();
@@ -46,6 +47,9 @@ export function CatalogPage({ onDeploy }: { onDeploy?: (model: string, catalog: 
   const set = (patch: Partial<CatalogFilters>) => setParams((prev) => withFilters(prev, patch), { replace: true });
   const shown = all.filter((x) => matches(x, f)).sort(sorters[f.sort]);
   const filtered = activeFilters(f).length > 0;
+  const [deploying, setDeploying] = useState<DeployTarget | null>(null);
+  const cluster = useQuery({ queryKey: ["cluster"], queryFn: api.cluster });
+  const onDeploy = cluster.data?.allowDeploy ? (model: string, catalog: string) => setDeploying({ kind: "deploy", model, catalog }) : undefined;
 
   const facet = (key: "family" | "engine" | "hardware" | "tag") => (
     <FilterSelect
@@ -131,6 +135,7 @@ export function CatalogPage({ onDeploy }: { onDeploy?: (model: string, catalog: 
           </div>
         </div>
       </div>
+      <DeploySheet target={deploying} onClose={() => setDeploying(null)} />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -26,8 +27,9 @@ import { gpuModels, vendorLabel } from "@swiss/lib/gpu";
 import { useCatalogChoice } from "@swiss/components/CatalogChoice";
 import { useT } from "@/modules/inferences/i18n";
 import { catalogPath, fitness } from "@/modules/inferences/catalog-lib";
+import { DeploySheet, type DeployTarget } from "@/modules/inferences/components/DeploySheet";
 
-export function ModelPage({ onDeploy }: { onDeploy?: (target: { model: string; catalog: string; version?: string; variant?: string }) => void }) {
+export function ModelPage() {
   const t = useT();
   const p = useModulePath();
   const navigate = useNavigate();
@@ -43,6 +45,9 @@ export function ModelPage({ onDeploy }: { onDeploy?: (target: { model: string; c
   });
   const index = useQuery({ queryKey: ["catalog", choice.selected], queryFn: () => api.catalog(choice.selected), enabled: !!choice.selected });
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: api.nodes, retry: false });
+  const cluster = useQuery({ queryKey: ["cluster"], queryFn: api.cluster });
+  const [deploying, setDeploying] = useState<DeployTarget | null>(null);
+  const onDeploy = cluster.data?.allowDeploy ? (x: { model: string; catalog: string; version?: string; variant?: string }) => setDeploying({ kind: "deploy", ...x }) : undefined;
 
   const setParam = (k: string, v?: string) =>
     setParams((prev) => {
@@ -159,6 +164,7 @@ export function ModelPage({ onDeploy }: { onDeploy?: (target: { model: string; c
           />
         </SectionCard>
       </TabsContent>
+      <DeploySheet target={deploying} onClose={() => setDeploying(null)} />
     </Tabs>,
   );
 }

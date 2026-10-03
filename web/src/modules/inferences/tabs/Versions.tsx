@@ -1,19 +1,18 @@
-import { useNavigate } from "react-router";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge, ResourceTable, Tabs, TabsContent, TabsList, TabsTrigger, type ResourceColumn, type ResourceRowAction } from "@modelsphere/ui";
 import { formatDateTime } from "@/shell";
 import { api } from "@swiss/lib/api";
 import { useT } from "@/modules/inferences/i18n";
-import { modelLine, revisionRows, swissLinks, type RevisionRow } from "@/modules/inferences/lib";
-import { swissBase } from "@/modules/inferences/components/SwissScope";
+import { modelLine, revisionRows, type RevisionRow } from "@/modules/inferences/lib";
+import { RollbackSheet } from "@/modules/inferences/components/RollbackSheet";
 
 // helm's revisions, newest first, with the run that made each one for the when,
 // who and why. A row expands to the values helm holds for it; rolling back goes
 // to swiss's upgrade wizard, which shows the diff before it does anything.
 export function Versions({ namespace, release, canRollBack }: { namespace: string; release: string; canRollBack: boolean }) {
   const t = useT();
-  const navigate = useNavigate();
-  const swiss = swissLinks(swissBase);
+  const [rollingBack, setRollingBack] = useState<number | null>(null);
   const revisions = useQuery({
     queryKey: ["revisions", namespace, release],
     queryFn: () => api.revisions(namespace, release),
@@ -53,12 +52,13 @@ export function Versions({ namespace, release, canRollBack }: { namespace: strin
     {
       key: "rollback",
       label: t("actions.rollback"),
-      onClick: (r) => navigate(swiss.rollback(namespace, release, r.revision)),
+      onClick: (r) => setRollingBack(r.revision),
       disabled: (r) => (r.current ? t("disabled.current") : !canRollBack ? t("disabled.readOnly") : false),
     },
   ];
 
   return (
+    <>
     <ResourceTable<RevisionRow>
       showColumnToggle={false}
       title={t("versions.title")}
@@ -73,6 +73,8 @@ export function Versions({ namespace, release, canRollBack }: { namespace: strin
       expandable={{ render: (r) => <RevisionValues namespace={namespace} release={release} revision={r.revision} /> }}
       emptyTitle={t("versions.empty")}
     />
+    <RollbackSheet target={rollingBack === null ? null : { namespace, release, revision: rollingBack }} onClose={() => setRollingBack(null)} />
+    </>
   );
 }
 

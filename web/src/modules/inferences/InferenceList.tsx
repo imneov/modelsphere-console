@@ -16,10 +16,10 @@ import { Bot, Plus } from "lucide-react";
 import { formatDateTime, useModulePath } from "@/shell";
 import { api, type Deployment } from "@swiss/lib/api";
 import { useT } from "@/modules/inferences/i18n";
-import { detailPath, modelLine, rowState, swissLinks } from "@/modules/inferences/lib";
+import { detailPath, modelLine, rowState } from "@/modules/inferences/lib";
 import { StatusDot } from "@/modules/inferences/components/StatusDot";
+import { DeploySheet, type DeployTarget } from "@/modules/inferences/components/DeploySheet";
 import { UninstallDialog, type UninstallTarget } from "@/modules/inferences/components/UninstallDialog";
-import { swissBase } from "@/modules/inferences/components/SwissScope";
 
 // swissd caps a page at 100: each row reads its plan, which is the cost paging
 // exists to bound.
@@ -32,10 +32,10 @@ export function InferenceList() {
   const p = useModulePath();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const swiss = swissLinks(swissBase);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [uninstalling, setUninstalling] = useState<UninstallTarget | null>(null);
+  const [upgrading, setUpgrading] = useState<DeployTarget | null>(null);
 
   // The same key prefix as swiss's own list, so an uninstall from either side
   // refreshes both.
@@ -109,7 +109,7 @@ export function InferenceList() {
   // Rise Global's lists.
   const rowActions: ResourceRowAction<Row>[] = [
     { key: "detail", label: t("actions.detail"), onClick: open },
-    { key: "upgrade", label: t("actions.upgrade"), onClick: (d) => navigate(swiss.upgrade(d.namespace, d.release)), disabled: writeBlocked },
+    { key: "upgrade", label: t("actions.upgrade"), onClick: (d) => setUpgrading({ kind: "upgrade", namespace: d.namespace, release: d.release }), disabled: writeBlocked },
     { key: "versions", label: t("actions.versions"), onClick: (d) => navigate(p(detailPath(d.release, d.namespace, "versions"))) },
     {
       key: "uninstall",
@@ -121,7 +121,7 @@ export function InferenceList() {
   ];
 
   const deploy = (
-    <Button onClick={() => navigate(swiss.catalog)}>
+    <Button onClick={() => navigate(p("catalog"))}>
       <Plus className="size-4" /> {t("list.deploy")}
     </Button>
   );
@@ -158,6 +158,7 @@ export function InferenceList() {
         />
       </div>
       <UninstallDialog target={uninstalling} onClose={() => setUninstalling(null)} />
+      <DeploySheet target={upgrading} onClose={() => setUpgrading(null)} />
     </div>
   );
 }

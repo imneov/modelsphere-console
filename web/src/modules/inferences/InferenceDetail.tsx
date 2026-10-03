@@ -11,9 +11,10 @@ import { Endpoint } from "@swiss/components/Endpoint";
 import { SLOCard } from "@swiss/components/SLOCard";
 import { Provenance } from "@swiss/components/Provenance";
 import { useT } from "@/modules/inferences/i18n";
-import { modelLine, parseTab, releaseState, showSLO, swissLinks, visibleTabs, type Tab } from "@/modules/inferences/lib";
+import { modelLine, parseTab, releaseState, showSLO, visibleTabs, type Tab } from "@/modules/inferences/lib";
 import { statusOf } from "@/modules/inferences/components/StatusDot";
-import { InSwiss, swissBase } from "@/modules/inferences/components/SwissScope";
+import { InSwiss } from "@/modules/inferences/components/SwissScope";
+import { DeploySheet } from "@/modules/inferences/components/DeploySheet";
 import { UninstallDialog } from "@/modules/inferences/components/UninstallDialog";
 import { Overview } from "@/modules/inferences/tabs/Overview";
 import { Instances } from "@/modules/inferences/tabs/Instances";
@@ -27,8 +28,8 @@ export function InferenceDetail() {
   const { release = "" } = useParams();
   const [search, setSearch] = useSearchParams();
   const namespace = search.get("namespace") ?? "";
-  const swiss = swissLinks(swissBase);
   const [uninstalling, setUninstalling] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
 
   // Query keys match swiss's pages, so the two views share one cache.
   const status = useQuery({
@@ -111,7 +112,7 @@ export function InferenceDetail() {
               key: "upgrade",
               label: t("actions.upgrade"),
               disabled: readOnly ? t("disabled.readOnly") : !plan.data ? t("disabled.untracked") : false,
-              onClick: () => navigate(swiss.upgrade(namespace, release)),
+              onClick: () => setUpgrading(true),
             },
             {
               key: "uninstall",
@@ -171,6 +172,7 @@ export function InferenceDetail() {
         )}
       </Tabs>
 
+      <DeploySheet target={upgrading ? { kind: "upgrade", namespace, release } : null} onClose={() => setUpgrading(false)} />
       <UninstallDialog
         target={uninstalling ? { namespace, release } : null}
         onClose={() => setUninstalling(false)}
