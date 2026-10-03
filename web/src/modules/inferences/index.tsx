@@ -1,10 +1,12 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Bot } from "lucide-react";
+import { Bot, Library } from "lucide-react";
 import type { ConsoleModule } from "@/shell";
 import { useT } from "@/modules/inferences/i18n";
 import { SwissScope } from "@/modules/inferences/components/SwissScope";
 
 const InferenceList = lazy(() => import("@/modules/inferences/InferenceList").then((m) => ({ default: m.InferenceList })));
+const CatalogPage = lazy(() => import("@/modules/inferences/CatalogPage").then((m) => ({ default: m.CatalogPage })));
+const ModelPage = lazy(() => import("@/modules/inferences/ModelPage").then((m) => ({ default: m.ModelPage })));
 const InferenceDetail = lazy(() => import("@/modules/inferences/InferenceDetail").then((m) => ({ default: m.InferenceDetail })));
 
 function Loading() {
@@ -33,5 +35,7 @@ export const inferencesModule: ConsoleModule = {
   pages: [
     { path: "", element: page(<InferenceList />), permission: "swiss.view", menu: { label: "推理服务", icon: Bot } },
     { path: ":release/details", element: page(<InferenceDetail />), permission: "swiss.view" },
+    { path: "catalog", element: page(<CatalogPage />), permission: "swiss.view", menu: { label: "模型库", icon: Library } },
+    { path: "catalog/:name", element: page(<ModelPage />), permission: "swiss.view" },
   ],
 };

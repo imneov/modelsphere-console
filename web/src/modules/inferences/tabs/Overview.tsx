@@ -71,6 +71,8 @@ export function Overview({
       <div className="min-w-0 space-y-4">
         <SectionCard title={t("overview.basic")}>
           <PropertyList
+            columns={1}
+            labelClassName="w-28 shrink-0"
             items={[
               {
                 label: t("detail.fields.state"),

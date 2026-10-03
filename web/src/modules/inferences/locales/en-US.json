@@ -3,7 +3,8 @@
     "模型服务": "Model Serving"
   },
   "menu": {
-    "index": "Inference Services"
+    "index": "Inference Services",
+    "catalog": "Model Library"
   },
   "list": {
     "title": "Inference Services",
@@ -179,5 +180,71 @@
   "plan": {
     "title": "Plan",
     "description": "What this release was composed from, read from the ConfigMap beside it."
+  },
+  "catalog": {
+    "title": "Model Library",
+    "description": "The models a catalog can deploy. Open a card for its variants and where they fit, and deploy from a variant.",
+    "search": "Search models, families or hardware",
+    "catalog": "Catalog",
+    "family": "Family",
+    "engine": "Engine",
+    "hardware": "Hardware",
+    "tag": "Tag",
+    "tuned": "Tuned only",
+    "hidedep": "Hide deprecated",
+    "sort": "Sort",
+    "sortName": "Name",
+    "sortUplift": "Uplift",
+    "sortFamily": "Family",
+    "clear": "Clear filters",
+    "count": "{n} models",
+    "countFiltered": "{shown} of {n} models",
+    "variants": "{n} variants",
+    "uplift": "Tuned {pct}",
+    "deprecated": "Deprecated",
+    "empty": "No models in this catalog yet",
+    "noMatch": "No models match the filters",
+    "noCatalog": "No model catalog is configured.",
+    "noCatalogAction": "Add one in the site profile",
+    "choose": "Several catalogs are configured. Pick one:",
+    "default": "Default"
+  },
+  "model": {
+    "back": "Model Library",
+    "tabs": {
+      "variants": "Variants",
+      "info": "Information"
+    },
+    "fields": {
+      "family": "Family",
+      "source": "Weights",
+      "servedName": "Served as",
+      "license": "License",
+      "version": "Version",
+      "digest": "Digest",
+      "tags": "Tags",
+      "size": "{n} GiB",
+      "sizeLabel": "Size"
+    },
+    "version": "Version",
+    "latest": "latest",
+    "default": "Default",
+    "optimized": "Tuned",
+    "baseline": "Baseline",
+    "gpus": "{n} GPU",
+    "gpusNodes": "{n} GPU × {nodes} nodes",
+    "anyGpu": "any {vendor}",
+    "topology": "Topology",
+    "rdma": "RDMA",
+    "chart": "Chart",
+    "runsOn": "Runs on",
+    "fitOk": "{n} nodes fit",
+    "fitBad": "Needs {needed} nodes, {n} fit",
+    "fitUnknown": "Node list unavailable",
+    "report": "Perf report",
+    "docs": "Docs",
+    "deploy": "Deploy",
+    "deprecated": "Deprecated: {reason}",
+    "noVariants": "This version has no variants"
   }
 }
