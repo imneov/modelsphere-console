@@ -1,24 +1,24 @@
-import { cn } from "@modelsphere/ui";
+import { StatusIndicator, type StatusVariant } from "@modelsphere/ui";
+import type { TFn } from "@/shell";
 import type { State, Tone } from "@/modules/inferences/lib";
 import { useT } from "@/modules/inferences/i18n";
 
-const DOT: Record<Tone, string> = {
-  success: "bg-success",
-  info: "bg-info animate-pulse",
-  warning: "bg-warning",
-  error: "bg-destructive",
-  muted: "bg-muted-foreground/60",
+const VARIANT: Record<Tone, StatusVariant> = {
+  success: "success",
+  info: "info",
+  warning: "warning",
+  error: "error",
+  muted: "neutral",
 };
 
-// A dot and a word: the state read at a glance, the way Rise Global's lists
-// show it. The kit has no status indicator, so it lives here.
-export function StatusDot({ state, suffix, className }: { state: State; suffix?: string; className?: string }) {
+const label = (state: State, t: TFn, suffix?: string) =>
+  [t(`state.${state.key}`, { raw: state.raw ?? "" }), suffix].filter(Boolean).join(" ");
+
+export function statusOf(state: State, t: TFn, suffix?: string) {
+  return { tone: VARIANT[state.tone], label: label(state, t, suffix), animated: state.key === "applying" };
+}
+
+export function StatusDot({ state, suffix }: { state: State; suffix?: string }) {
   const t = useT();
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap", className)}>
-      <span className={cn("size-2 shrink-0 rounded-full", DOT[state.tone])} aria-hidden />
-      <span>{t(`state.${state.key}`, { raw: state.raw ?? "" })}</span>
-      {suffix && <span className="text-muted-foreground">{suffix}</span>}
-    </span>
-  );
+  return <StatusIndicator variant={VARIANT[state.tone]} animated={state.key === "applying"} label={label(state, t, suffix)} />;
 }

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Button, cn } from "@modelsphere/ui";
+import { Badge, Button, PropertyList, SectionCard, cn } from "@modelsphere/ui";
 import { CircleCheck, CircleDashed, CircleX, Loader2, TriangleAlert } from "lucide-react";
 import { formatDateTime } from "@/shell";
 import {
@@ -17,7 +17,6 @@ import { pick } from "@swiss/components/ReleaseObjects";
 import { AccessPoint } from "@swiss/components/Endpoint";
 import { useT } from "@/modules/inferences/i18n";
 import { installSteps, modelLine, releaseState, type Step, type StepState } from "@/modules/inferences/lib";
-import { Field, Section } from "@/modules/inferences/components/Section";
 import { StatusDot } from "@/modules/inferences/components/StatusDot";
 import { InSwiss } from "@/modules/inferences/components/SwissScope";
 import { LoadHint } from "@/modules/inferences/components/LoadHint";
@@ -64,31 +63,37 @@ export function Overview({
     pick<LLMScalerSpec, LLMScalerStatus>(objects, "LLMScaler"),
     objectsUnreadable,
   );
+  const updated = p?.updatedAt ?? p?.startedAt;
   const catalog = source && [source.catalogName ?? source.catalog, source.ref].filter(Boolean).join(" @ ");
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="min-w-0 space-y-4">
-        <Section title={t("overview.basic")}>
-          <dl className="text-sm">
-            <Field label={t("detail.fields.state")}>
-              <span className="inline-flex flex-wrap items-center gap-2">
-                <StatusDot state={releaseState(s)} />
-                {s.helmStatus && <Badge variant="outline">helm {s.helmStatus}</Badge>}
-              </span>
-            </Field>
-            <Field label={t("detail.fields.model")}>{modelLine(source ?? {}) || s.model}</Field>
-            <Field label={t("detail.fields.catalog")}>{catalog}</Field>
-            <Field label={t("detail.fields.chart")}>{plan && `${plan.chart.name}-${plan.chart.version}`}</Field>
-            <Field label={t("detail.fields.revision")}>{s.exists ? String(s.revision) : undefined}</Field>
-            <Field label={t("detail.fields.route")}>{s.route && <code className="font-mono text-xs">/{s.route}/</code>}</Field>
-            <Field label={t("detail.fields.namespace")}>{namespace}</Field>
-            <Field label={t("detail.fields.updated")}>{(p?.updatedAt ?? p?.startedAt) && formatDateTime(p?.updatedAt ?? p?.startedAt ?? "")}</Field>
-            <Field label={t("detail.fields.note")}>{p?.note && <span className="italic text-muted-foreground">{p.note}</span>}</Field>
-          </dl>
-        </Section>
+        <SectionCard title={t("overview.basic")}>
+          <PropertyList
+            items={[
+              {
+                label: t("detail.fields.state"),
+                value: (
+                  <span className="inline-flex flex-wrap items-center gap-2">
+                    <StatusDot state={releaseState(s)} />
+                    {s.helmStatus && <Badge variant="outline">helm {s.helmStatus}</Badge>}
+                  </span>
+                ),
+              },
+              { label: t("detail.fields.model"), value: modelLine(source ?? {}) || s.model },
+              { label: t("detail.fields.catalog"), value: catalog },
+              { label: t("detail.fields.chart"), value: plan && `${plan.chart.name}-${plan.chart.version}` },
+              { label: t("detail.fields.revision"), value: s.exists ? String(s.revision) : undefined },
+              { label: t("detail.fields.route"), value: s.route && <code className="font-mono text-xs">/{s.route}/</code> },
+              { label: t("detail.fields.namespace"), value: namespace },
+              { label: t("detail.fields.updated"), value: updated && formatDateTime(updated) },
+              { label: t("detail.fields.note"), value: p?.note && <span className="italic text-muted-foreground">{p.note}</span> },
+            ].filter((i) => i.value)}
+          />
+        </SectionCard>
 
-        <Section title={t("overview.install")}>
+        <SectionCard title={t("overview.install")}>
           <div className="space-y-3">
             <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {steps.map((step) => (
@@ -100,26 +105,26 @@ export function Overview({
             <LoadHint status={s} onViewInstances={onViewInstances} />
             {s.warning && <Callout tone="warn">{s.warning}</Callout>}
           </div>
-        </Section>
+        </SectionCard>
 
-        <Section title={t("overview.access")} hint={s.route && <code className="font-mono">/{s.route}/</code>}>
+        <SectionCard title={t("overview.access")} summary={s.route && <code className="font-mono">/{s.route}/</code>}>
           <InSwiss>
             <AccessPoint status={s} />
           </InSwiss>
-        </Section>
+        </SectionCard>
       </div>
 
-      <Section
+      <SectionCard
         title={t("overview.recent")}
-        hint={t("overview.recentHint", { n: RECENT })}
-        action={
+        summary={t("overview.recentHint", { n: RECENT })}
+        actions={
           <Button variant="outline" size="sm" onClick={onAllRuns}>
             {t("actions.viewAll")}
           </Button>
         }
       >
         <RecentRuns runs={runs.data?.runs.slice(0, RECENT)} hasStore={runs.data?.hasStore ?? true} loading={runs.isPending} />
-      </Section>
+      </SectionCard>
     </div>
   );
 }
