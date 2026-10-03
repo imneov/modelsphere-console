@@ -4,6 +4,16 @@ The ModelSphere UI kit: shadcn components on [Base UI](https://base-ui.com), a r
 
 It is a fork of the parts of Rise Global's design system (`rise-global/design`, commit `684df9fc`) that the ModelSphere console uses, published with approval. From here on it is its own library: changes are not synced either way.
 
+A second batch came from `rise-global/design` commit `f9c21d1b`, also with approval, for the inferences pages:
+
+| Components | Local changes |
+|---|---|
+| `ui/sheet`, `ui/combobox`, `ui/input-group`, `FormSection`, `FloatingField` and its `Field*`, `NumberField`, `FieldRepeater`, `FieldHint` | `FieldHierarchy` removed (no hierarchy select here); `FormSection`'s chevron is lucide's, not the icon registry's |
+| `DetailHeader`, `PanelTabs`, `SectionCard`, `PropertyList`, `StatusIndicator`, `LoadingBlock` | none |
+| `FilterSelect`, `FilterDivider` | none |
+| `CodeBlock`, `CodeToolbar`, `CodeViewSheet` | `CodeViewSheet` shows a `CodeBlock`: the Monaco editor loads from the internet and is not forked |
+| `useDirty`, `useAnchorNav`, `useScrollShadow` | none |
+
 | | |
 |---|---|
 | Delivered as | TypeScript source, not built. The consumer's bundler compiles it and the consumer's Tailwind generates its CSS |
@@ -15,7 +25,7 @@ It is a fork of the parts of Rise Global's design system (`rise-global/design`, 
 | Layer | What |
 |---|---|
 | `src/components/ui/` | shadcn (base-nova) components; local patches are listed at the top of each file |
-| `src/components/` | composites: `ResourceTable`, `PageBanner`, `ConfirmDialog`, `DataSelect`, `RefreshButton`, `CopyButton`, `Spinner`, `TypeToConfirm` |
+| `src/components/` | composites: `ResourceTable`, `PageBanner`, `ConfirmDialog`, `DataSelect`, `RefreshButton`, `CopyButton`, `Spinner`, `TypeToConfirm`; forms (`FloatingField`, `FormSection`, `FieldRepeater`), detail pages (`DetailHeader`, `PanelTabs`, `SectionCard`, `PropertyList`, `StatusIndicator`), filters, code views |
 | `src/locales/` | component strings, `ui.zh-CN.ts` (source) and `ui.en-US.ts` (typed `typeof zhCN`, so a missing or extra key fails `tsc`) |
 | `src/i18n/` | the string store; `i18n-host.ts` is the host's entry |
 | `tokens/` | colours (OKLCH), radius, shadows, fonts, motion; `tailwind-preset.cjs` |
