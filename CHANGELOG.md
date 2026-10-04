@@ -17,6 +17,7 @@ chart's `appVersion`; the image and chart are released together under it.
 - Contributor guide, issue and PR templates, security policy (#12).
 - Inference services (`/inferences`): every swiss page in Rise Global's model service layout, beside `/swiss` -- services list and tabbed detail, model library and model detail, nodes, activity, site profile and setup. Deploy, upgrade and roll back in right-side sheets that compose, dry-run and show what moves and the diff before confirming.
 - `@modelsphere/ui`: a second batch forked from Rise Global's design system -- sheet, floating fields, form sections, detail header, panel tabs, section cards, property lists, status indicator, filter chips, code views.
+- Workload reads served by console itself: a release's events, its pods and their containers, and a container's log (`/api/k8s/namespaces/{ns}/...`), authorized as `events`, `pods` and `pods/log`. The inference service page shows them as logs and events tabs. action required for custom RBAC: the chart's ClusterRole now grants console's ServiceAccount `events` list/watch, `pods` get/list and `pods/log` get.
 
 ### Changed
 - Shell, access control, Playground and router pages use `@modelsphere/ui` in Rise Global's current look: page banner, resource tables with search and pagination, deletes confirmed by typing the name. The swiss module's components follow.

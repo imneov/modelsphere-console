@@ -231,7 +231,7 @@ beside the swiss module (`/swiss` is unchanged; both read the same swissd).
 | Page | Path | Layout |
 |---|---|---|
 | Inference services | `/inferences` | resource table, server-side paging, row menu |
-| Service detail | `/inferences/:release/details?namespace=…&tab=…` | header card over tabs: overview, instances, cluster resources, health check, SLO, versions, activity, plan |
+| Service detail | `/inferences/:release/details?namespace=…&tab=…` | header card over tabs: overview, instances, logs, events, cluster resources, health check, SLO, versions, activity, plan |
 | Model library | `/inferences/catalog?catalog=…&q=…` | card grid, facet filters in the URL (swiss's parameter names) |
 | Model detail | `/inferences/catalog/:name?catalog=…&version=…` | header card over variants and information tabs |
 | Nodes | `/inferences/nodes` | GPU KPIs, a card per GPU product, node table with pods, taints and conditions on expand |
@@ -269,10 +269,11 @@ The service id becomes the helm release and the chart's Service names
 (`<id>-cart`), so it is checked as a DNS-1035 label and defaults to the model
 name made into one (`mimo-v2.5` -> `mimo-v2-5`).
 
+The logs and events tabs, and the overview's latest events, read console's own
+workload API rather than swissd's (see "Workload reads").
+
 Not there yet:
 
-- **Logs and events tabs.** swissd has no endpoint for either; adding them is a
-  swissd change and starts with a design proposal (`AGENTS.md`).
 - **Search on the services list.** swissd pages its list (at most 100 a page) and
   takes no query; filtering one page on the client would miss the others. It
   needs `?q=` on swissd's `/api/deployments`.
@@ -283,6 +284,28 @@ Not there yet:
   scaler as unreadable rather than absent.
 - **Upgrade picks chart versions through `/api/catalog/:name/chart-versions`**,
   which swissd has from 0.6.2 (swiss #13).
+
+### Workload reads (`/api/k8s/...`)
+
+Events and logs are Kubernetes data, not swiss's, so console serves them itself
+with its own login and authorization instead of a swissd endpoint.
+
+| Endpoint | Returns | Authorized as | ServiceAccount needs |
+|---|---|---|---|
+| `GET /api/k8s/namespaces/{ns}/events?prefix=<release>` | events of objects named `<release>` or `<release>-*`, newest first, at most 500 | `list events` | `events` list, watch |
+| `GET /api/k8s/namespaces/{ns}/pods?prefix=<release>` | those pods with their containers' state | `list pods` | `pods` list |
+| `GET /api/k8s/namespaces/{ns}/pods/{pod}` | one pod's containers | `get pods` | `pods` get |
+| `GET /api/k8s/namespaces/{ns}/pods/{pod}/log?container=&tailLines=&sinceSeconds=&previous=` | `text/plain`, at most 5000 lines and 2 MiB, with timestamps | `get pods/log` | `pods/log` get |
+
+- The resources are console's (`iam.theriseunion.io`), not the backend's: a role
+  grants reading workloads on its own. The seeded admin passes everything.
+- Authorization is platform-scope like the rest of console: a user who may read
+  events reads them in every namespace.
+- A 403 from the cluster means console's ServiceAccount lacks the grant and is
+  returned as 502 with that said, so it is not read as the caller's.
+- The prefix match is the server's coarse cut; the page narrows it to the names
+  a release's chart gives (`ofRelease`).
+- Logs need a typed clientset; `cluster.Kube` builds one beside the dynamic client.
 
 ## Backends
 
