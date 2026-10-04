@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { ObjectResult, Plan, ReleaseStatus, Run } from "@swiss/lib/api";
 import {
   age,
+  ofRelease,
+  warnings,
   detailPath,
   installSteps,
   modelLine,
@@ -81,7 +83,7 @@ describe("releaseState", () => {
 
 describe("tabs", () => {
   it("drops SLO and plan when the release has neither", () => {
-    expect(visibleTabs({ slo: false, plan: false })).toEqual(["overview", "instances", "resources", "check", "versions", "runs"]);
+    expect(visibleTabs({ slo: false, plan: false })).toEqual(["overview", "instances", "logs", "events", "resources", "check", "versions", "runs"]);
   });
   it("falls back to the overview for a tab this release does not have", () => {
     const tabs = visibleTabs({ slo: false, plan: true });
@@ -160,5 +162,22 @@ describe("age", () => {
     expect(age(45)).toBe("45s");
     expect(age(720)).toBe("12m");
     expect(age(3 * 3600 + 7 * 60)).toBe("3h7m");
+  });
+});
+
+describe("ofRelease", () => {
+  it("keeps the release's own objects", () => {
+    for (const n of ["mimo", "mimo-cart", "mimo-7d9f8c6b5", "mimo-7d9f8c6b5-x2k9p", "mimo-cart-5c6d7-abcde", "mimo-0", "mimo-0-1"]) expect(ofRelease(n, "mimo")).toBe(true);
+  });
+  it("drops a sibling release that shares the prefix", () => {
+    expect(ofRelease("mimo-v2-5", "mimo")).toBe(false);
+    expect(ofRelease("mimo-v2-5-7d9f8c6b5-x2k9p", "mimo")).toBe(false);
+    expect(ofRelease("mimox", "mimo")).toBe(false);
+  });
+  it("keeps any pod the status lists", () => {
+    expect(ofRelease("odd-name", "mimo", ["odd-name"])).toBe(true);
+  });
+  it("counts warnings", () => {
+    expect(warnings([{ type: "Warning" }, { type: "Normal" }, { type: "Warning" }])).toBe(2);
   });
 });

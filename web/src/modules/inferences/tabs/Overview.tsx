@@ -20,10 +20,10 @@ import { installSteps, modelLine, releaseState, type Step, type StepState } from
 import { StatusDot } from "@/modules/inferences/components/StatusDot";
 import { InSwiss } from "@/modules/inferences/components/SwissScope";
 import { LoadHint } from "@/modules/inferences/components/LoadHint";
+import { EventRow, useReleaseEvents } from "@/modules/inferences/tabs/Events";
 
 const RECENT = 5;
 
-// "Recent activity" sits where Rise Global shows events: swissd has none, its run log is the record.
 export function Overview({
   namespace,
   release,
@@ -32,6 +32,7 @@ export function Overview({
   objects,
   objectsUnreadable,
   onAllRuns,
+  onAllEvents,
   onViewInstances,
 }: {
   namespace: string;
@@ -41,11 +42,13 @@ export function Overview({
   objects?: ObjectResult[];
   objectsUnreadable: boolean;
   onAllRuns: () => void;
+  onAllEvents: () => void;
   onViewInstances: () => void;
 }) {
   const t = useT();
   const p = s.planStatus;
   const source = plan?.source;
+  const events = useReleaseEvents(namespace, release, s.pods.map((p) => p.name));
   const runs = useQuery({
     queryKey: ["runs", namespace, release],
     queryFn: () => api.runs({ namespace, release, limit: 200 }),
@@ -114,6 +117,30 @@ export function Overview({
         </SectionCard>
       </div>
 
+      <div className="space-y-4">
+      <SectionCard
+        title={t("events.recent")}
+        summary={t("events.recentHint", { n: RECENT })}
+        actions={
+          <Button variant="outline" size="sm" onClick={onAllEvents}>
+            {t("actions.viewAll")}
+          </Button>
+        }
+      >
+        {events.error ? (
+          <p className="text-sm text-muted-foreground">{t("events.noAccess", { error: events.error.message })}</p>
+        ) : events.isPending ? (
+          <p className="text-sm text-muted-foreground">{t("common:status.loading")}</p>
+        ) : events.events.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("events.empty")}</p>
+        ) : (
+          <ol className="-my-2.5 divide-y">
+            {events.events.slice(0, RECENT).map((e, i) => (
+              <EventRow key={i} e={e} compact />
+            ))}
+          </ol>
+        )}
+      </SectionCard>
       <SectionCard
         title={t("overview.recent")}
         summary={t("overview.recentHint", { n: RECENT })}
@@ -125,6 +152,7 @@ export function Overview({
       >
         <RecentRuns runs={runs.data?.runs.slice(0, RECENT)} hasStore={runs.data?.hasStore ?? true} loading={runs.isPending} />
       </SectionCard>
+      </div>
     </div>
   );
 }

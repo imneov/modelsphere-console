@@ -48,7 +48,7 @@ export function stalled(s: Pick<ReleaseStatus, "pods">): boolean {
   return s.pods.some((p) => !p.ready && p.ageSeconds > STALL_SECONDS);
 }
 
-export const TABS = ["overview", "instances", "resources", "check", "slo", "versions", "runs", "plan"] as const;
+export const TABS = ["overview", "instances", "logs", "events", "resources", "check", "slo", "versions", "runs", "plan"] as const;
 export type Tab = (typeof TABS)[number];
 
 export function visibleTabs(opts: { slo: boolean; plan: boolean }): Tab[] {
@@ -168,4 +168,17 @@ export function age(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
   return `${Math.floor(seconds / 3600)}h${Math.floor((seconds % 3600) / 60)}m`;
+}
+
+// The server matches "<release>" and "<release>-*"; this narrows it to the names
+// a release's chart gives (the cart deployment, ReplicaSet hashes, pod suffixes,
+// LeaderWorkerSet indexes), so release "mimo" does not take "mimo-v2-5"'s events.
+export function ofRelease(name: string, release: string, pods: readonly string[] = []): boolean {
+  if (pods.includes(name)) return true;
+  if (name !== release && !name.startsWith(`${release}-`)) return false;
+  return /^(-cart)?(-[a-z0-9]{5,10}){0,2}(-\d+){0,2}$/.test(name.slice(release.length));
+}
+
+export function warnings(events: readonly { type: string }[]): number {
+  return events.filter((e) => e.type === "Warning").length;
 }

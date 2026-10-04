@@ -25,7 +25,8 @@
     "check": "服务检查",
     "rollback": "回滚到此版",
     "values": "查看 values",
-    "viewAll": "全部"
+    "viewAll": "全部",
+    "logs": "日志"
   },
   "disabled": {
     "readOnly": "这个 swissd 是只读的：需要同时打开 server.allowDeploy 和 rbac.allowDeploy",
@@ -77,7 +78,9 @@
     "slo": "SLO",
     "versions": "版本管理",
     "runs": "操作记录",
-    "plan": "部署计划"
+    "plan": "部署计划",
+    "logs": "日志",
+    "events": "事件"
   },
   "overview": {
     "basic": "基本信息",
@@ -564,5 +567,45 @@
       "name": "集群名必填",
       "pathTemplate": "路径模板必填"
     }
+  },
+  "events": {
+    "title": "事件",
+    "summary": "{n} 条 · {w} 条告警",
+    "allObjects": "全部对象（{n}）",
+    "warningsOnly": "只看告警",
+    "empty": "没有事件",
+    "emptyWarnings": "没有告警事件",
+    "expand": "展开",
+    "collapse": "收起",
+    "times": "×{n}",
+    "recent": "最近事件",
+    "recentHint": "最近 {n} 条",
+    "noAccess": "无法读取事件：{error}",
+    "retention": "Kubernetes 默认只保留 1 小时内的事件"
+  },
+  "logs": {
+    "title": "日志",
+    "pod": "Pod",
+    "container": "容器",
+    "lines": "行数",
+    "linesN": "最近 {n} 行",
+    "since": "时间范围",
+    "sinceAll": "全部",
+    "since5m": "5 分钟内",
+    "since1h": "1 小时内",
+    "since6h": "6 小时内",
+    "since24h": "24 小时内",
+    "previous": "上一次运行",
+    "previousHint": "容器重启过时，看重启前那次运行的日志",
+    "follow": "自动刷新",
+    "refresh": "刷新",
+    "copy": "复制",
+    "download": "下载",
+    "noPods": "还没有 Pod，没有日志可看",
+    "empty": "没有日志输出",
+    "loading": "正在读取日志…",
+    "truncated": "只显示最近 {n} 行，最多 2 MiB",
+    "init": "初始化容器",
+    "restarts": "重启 {n} 次"
   }
 }

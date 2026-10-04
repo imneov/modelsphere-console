@@ -20,6 +20,8 @@ import { Overview } from "@/modules/inferences/tabs/Overview";
 import { Instances } from "@/modules/inferences/tabs/Instances";
 import { Versions } from "@/modules/inferences/tabs/Versions";
 import { Runs } from "@/modules/inferences/tabs/Runs";
+import { Logs } from "@/modules/inferences/tabs/Logs";
+import { Events } from "@/modules/inferences/tabs/Events";
 
 export function InferenceDetail() {
   const t = useT();
@@ -56,11 +58,13 @@ export function InferenceDetail() {
   const s = status.data;
   const visible = visibleTabs({ slo: !!s && showSLO(s, plan.data), plan: !!plan.data });
   const tab = parseTab(search.get("tab"), visible);
-  const setTab = (next: Tab) =>
+  const setTab = (next: Tab, pod?: string) =>
     setSearch(
       (q) => {
         if (next === "overview") q.delete("tab");
         else q.set("tab", next);
+        if (pod) q.set("pod", pod);
+        else q.delete("pod");
         return q;
       },
       { replace: true },
@@ -95,6 +99,7 @@ export function InferenceDetail() {
   const readOnly = cluster.data ? !cluster.data.allowDeploy : false;
   const source = plan.data?.source;
   const model = modelLine(source ?? {}) || s.model;
+  const pods = s.pods.map((p) => p.name);
   const counts: Partial<Record<Tab, number>> = { instances: s.pods.length, versions: revisions.data?.revisions.length };
 
   return (
@@ -133,10 +138,16 @@ export function InferenceDetail() {
         <PanelTabs items={visible.map((key) => ({ value: key, label: t(`tabs.${key}`), count: counts[key] }))} />
 
         <TabsContent value="overview">
-          <Overview namespace={namespace} release={release} status={s} plan={plan.data} objects={objects.data?.objects} objectsUnreadable={objects.isError} onAllRuns={() => setTab("runs")} onViewInstances={() => setTab("instances")} />
+          <Overview namespace={namespace} release={release} status={s} plan={plan.data} objects={objects.data?.objects} objectsUnreadable={objects.isError} onAllRuns={() => setTab("runs")} onAllEvents={() => setTab("events")} onViewInstances={() => setTab("instances")} />
         </TabsContent>
         <TabsContent value="instances">
-          <Instances status={s} />
+          <Instances status={s} onLogs={(pod) => setTab("logs", pod)} />
+        </TabsContent>
+        <TabsContent value="logs">
+          <Logs key={search.get("pod") ?? ""} namespace={namespace} pods={pods} initialPod={search.get("pod") ?? undefined} />
+        </TabsContent>
+        <TabsContent value="events">
+          <Events namespace={namespace} release={release} pods={pods} />
         </TabsContent>
         <TabsContent value="resources">
           <InSwiss>

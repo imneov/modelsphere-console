@@ -35,7 +35,8 @@
     "check": "Health check",
     "rollback": "Roll back to this",
     "values": "View values",
-    "viewAll": "All"
+    "viewAll": "All",
+    "logs": "Logs"
   },
   "disabled": {
     "readOnly": "This swissd is read-only: turn on both server.allowDeploy and rbac.allowDeploy",
@@ -87,7 +88,9 @@
     "slo": "SLO",
     "versions": "Versions",
     "runs": "Activity",
-    "plan": "Plan"
+    "plan": "Plan",
+    "logs": "Logs",
+    "events": "Events"
   },
   "overview": {
     "basic": "Basic information",
@@ -574,5 +577,45 @@
       "name": "The cluster name is required",
       "pathTemplate": "The path template is required"
     }
+  },
+  "events": {
+    "title": "Events",
+    "summary": "{n} events · {w} warnings",
+    "allObjects": "All objects ({n})",
+    "warningsOnly": "Warnings only",
+    "empty": "No events",
+    "emptyWarnings": "No warning events",
+    "expand": "More",
+    "collapse": "Less",
+    "times": "×{n}",
+    "recent": "Recent events",
+    "recentHint": "Last {n}",
+    "noAccess": "Events could not be read: {error}",
+    "retention": "Kubernetes keeps events for an hour by default"
+  },
+  "logs": {
+    "title": "Logs",
+    "pod": "Pod",
+    "container": "Container",
+    "lines": "Lines",
+    "linesN": "Last {n} lines",
+    "since": "Since",
+    "sinceAll": "All",
+    "since5m": "Last 5 minutes",
+    "since1h": "Last hour",
+    "since6h": "Last 6 hours",
+    "since24h": "Last 24 hours",
+    "previous": "Previous run",
+    "previousHint": "After a restart, the log of the run before it",
+    "follow": "Auto refresh",
+    "refresh": "Refresh",
+    "copy": "Copy",
+    "download": "Download",
+    "noPods": "No pods yet, so no logs",
+    "empty": "No log output",
+    "loading": "Reading the log…",
+    "truncated": "Showing the last {n} lines, at most 2 MiB",
+    "init": "init",
+    "restarts": "{n} restarts"
   }
 }

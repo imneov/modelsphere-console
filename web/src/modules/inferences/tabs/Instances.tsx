@@ -1,11 +1,11 @@
-import { Badge, ResourceTable, type ResourceColumn } from "@modelsphere/ui";
+import { Badge, ResourceTable, type ResourceColumn, type ResourceRowAction } from "@modelsphere/ui";
 import type { Pod, ReleaseStatus } from "@swiss/lib/api";
 import { useT } from "@/modules/inferences/i18n";
 import { age } from "@/modules/inferences/lib";
 import { LoadHint } from "@/modules/inferences/components/LoadHint";
 
 // The release's pods, from the status read the page already polls.
-export function Instances({ status: s }: { status: ReleaseStatus }) {
+export function Instances({ status: s, onLogs }: { status: ReleaseStatus; onLogs: (pod: string) => void }) {
   const t = useT();
   const columns: ResourceColumn<Pod>[] = [
     {
@@ -31,11 +31,12 @@ export function Instances({ status: s }: { status: ReleaseStatus }) {
     { key: "ageSeconds", title: t("instances.columns.age"), width: 100, render: (pod) => <span className="tabular-nums">{age(pod.ageSeconds)}</span> },
   ];
 
+  const rowActions: ResourceRowAction<Pod>[] = [{ key: "logs", label: t("actions.logs"), onClick: (pod) => onLogs(pod.name) }];
   return (
     <div className="space-y-3">
       <LoadHint status={s} />
       {s.warning && <p className="text-sm text-warning">{s.warning}</p>}
-      <ResourceTable<Pod> showColumnToggle={false} data={s.pods} columns={columns} rowKey="name" emptyTitle={t("instances.empty")} />
+      <ResourceTable<Pod> showColumnToggle={false} rowActions={rowActions} data={s.pods} columns={columns} rowKey="name" emptyTitle={t("instances.empty")} />
     </div>
   );
 }
