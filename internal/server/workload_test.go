@@ -126,6 +126,29 @@ func TestPodContainers(t *testing.T) {
 	}
 }
 
+func TestPodsByRelease(t *testing.T) {
+	pod := func(name string) *corev1.Pod {
+		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ai"}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c"}}}}
+	}
+	h := workloadServer(t, pod("qwen-7d9f-x"), pod("qwen-cart-5c6d-y"), pod("qwenx-1"), pod("other"))
+	tok := login(t, h, "admin", "admin-pw")
+	rec := do(h, "GET", "/api/k8s/namespaces/ai/pods?prefix=qwen", tok, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	var got struct{ Items []cluster.PodInfo }
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Items) != 2 || got.Items[0].Name != "qwen-7d9f-x" || got.Items[1].Name != "qwen-cart-5c6d-y" || got.Items[0].Containers[0].Name != "c" {
+		t.Fatalf("got %+v", got.Items)
+	}
+	bob := login(t, h, "bob", "bob-pw")
+	if rec := do(h, "GET", "/api/k8s/namespaces/ai/pods", bob, ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("bob: status %d", rec.Code)
+	}
+}
+
 func TestPodLog(t *testing.T) {
 	h := workloadServer(t, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "ai"}})
 	tok := login(t, h, "admin", "admin-pw")

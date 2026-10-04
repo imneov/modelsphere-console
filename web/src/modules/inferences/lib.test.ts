@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ObjectResult, Plan, ReleaseStatus, Run } from "@swiss/lib/api";
 import {
   age,
+  defaultContainer,
   ofRelease,
   warnings,
   detailPath,
@@ -179,5 +180,13 @@ describe("ofRelease", () => {
   });
   it("counts warnings", () => {
     expect(warnings([{ type: "Warning" }, { type: "Normal" }, { type: "Warning" }])).toBe(2);
+  });
+});
+
+describe("defaultContainer", () => {
+  it("picks the running app container, then the first app one, skipping init", () => {
+    expect(defaultContainer([{ name: "init", init: true, state: "terminated" }, { name: "engine", state: "waiting" }, { name: "side", state: "running" }])).toBe("side");
+    expect(defaultContainer([{ name: "init", init: true, state: "running" }, { name: "engine", state: "waiting" }])).toBe("engine");
+    expect(defaultContainer([])).toBe("");
   });
 });

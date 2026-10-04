@@ -4,6 +4,7 @@ import { Button, DataSelect, FieldHint, Switch, cn } from "@modelsphere/ui";
 import { Download, RefreshCw } from "lucide-react";
 import { CopyButton } from "@/shell";
 import { useT } from "@/modules/inferences/i18n";
+import { defaultContainer, ofRelease } from "@/modules/inferences/lib";
 import { workloadApi } from "@/modules/inferences/workload-api";
 
 const LINES = [100, 500, 1000, 5000];
@@ -15,10 +16,10 @@ const SINCE = [
   { value: 86400, key: "since24h" },
 ];
 
-export function Logs({ namespace, pods, initialPod }: { namespace: string; pods: readonly string[]; initialPod?: string }) {
+export function Logs({ namespace, release, statusPods, initialPod }: { namespace: string; release: string; statusPods: readonly string[]; initialPod?: string }) {
   const t = useT();
-  const [pod, setPod] = useState(initialPod && pods.includes(initialPod) ? initialPod : (pods[0] ?? ""));
-  const [container, setContainer] = useState("");
+  const [picked, setPod] = useState(initialPod ?? "");
+  const [pickedContainer, setContainer] = useState("");
   const [lines, setLines] = useState(500);
   const [since, setSince] = useState(0);
   const [previous, setPrevious] = useState(false);
@@ -26,17 +27,17 @@ export function Logs({ namespace, pods, initialPod }: { namespace: string; pods:
   const pre = useRef<HTMLPreElement>(null);
   const atBottom = useRef(true);
 
-  useEffect(() => {
-    if (!pods.includes(pod) && pods[0]) setPod(pods[0]);
-  }, [pods, pod]);
-
-  const info = useQuery({ queryKey: ["k8s-pod", namespace, pod], queryFn: () => workloadApi.pod(namespace, pod), enabled: !!pod, retry: false });
-  const containers = info.data?.containers ?? [];
-  useEffect(() => {
-    if (containers.length && !containers.some((c) => c.name === container)) {
-      setContainer((containers.find((c) => !c.init && c.state === "running") ?? containers.find((c) => !c.init) ?? containers[0]!).name);
-    }
-  }, [containers, container]);
+  const list = useQuery({
+    queryKey: ["k8s-pods", namespace, release],
+    queryFn: () => workloadApi.pods(namespace, release),
+    refetchInterval: 15_000,
+    retry: false,
+  });
+  const listed = (list.data?.items ?? []).filter((p) => ofRelease(p.name, release, statusPods));
+  const pods = listed.map((p) => p.name);
+  const pod = pods.includes(picked) ? picked : (pods.find((p) => statusPods.includes(p)) ?? pods[0] ?? "");
+  const containers = listed.find((p) => p.name === pod)?.containers ?? [];
+  const container = containers.some((c) => c.name === pickedContainer) ? pickedContainer : defaultContainer(containers);
 
   const log = useQuery({
     queryKey: ["k8s-log", namespace, pod, container, lines, since, previous],
@@ -51,7 +52,8 @@ export function Logs({ namespace, pods, initialPod }: { namespace: string; pods:
     if (el && atBottom.current) el.scrollTop = el.scrollHeight;
   }, [log.data]);
 
-  if (!pods.length) return <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">{t("logs.noPods")}</p>;
+  if (list.isPending) return <p className="text-sm text-muted-foreground">{t("common:status.loading")}</p>;
+  if (!pods.length && !list.error) return <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">{t("logs.noPods")}</p>;
 
   const text = log.data ?? "";
   const download = () => {
@@ -64,7 +66,16 @@ export function Logs({ namespace, pods, initialPod }: { namespace: string; pods:
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <DataSelect className="w-80" value={pod} onValueChange={setPod} options={pods.map((p) => ({ value: p, label: p }))} aria-label={t("logs.pod")} />
+        <DataSelect
+          className="w-80"
+          value={pod}
+          onValueChange={(v) => (setPod(v), setContainer(""))}
+          aria-label={t("logs.pod")}
+          options={listed.map((p) => {
+            const restarts = p.containers.reduce((n, c) => n + c.restartCount, 0);
+            return { value: p.name, label: p.name, description: [p.phase, restarts ? t("logs.restarts", { n: restarts }) : ""].filter(Boolean).join(" · ") };
+          })}
+        />
         <DataSelect
           className="w-56"
           value={container}
@@ -97,8 +108,8 @@ export function Logs({ namespace, pods, initialPod }: { namespace: string; pods:
           </Button>
         </div>
       </div>
-      {info.error || log.error ? (
-        <p className="text-sm text-destructive">{(info.error ?? log.error)!.message}</p>
+      {list.error || log.error ? (
+        <p className="text-sm text-destructive">{(list.error ?? log.error)!.message}</p>
       ) : (
         <pre
           ref={pre}
@@ -116,3 +127,4 @@ export function Logs({ namespace, pods, initialPod }: { namespace: string; pods:
     </div>
   );
 }
+

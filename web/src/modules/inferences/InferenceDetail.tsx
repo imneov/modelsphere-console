@@ -144,7 +144,7 @@ export function InferenceDetail() {
           <Instances status={s} onLogs={(pod) => setTab("logs", pod)} />
         </TabsContent>
         <TabsContent value="logs">
-          <Logs key={search.get("pod") ?? ""} namespace={namespace} pods={pods} initialPod={search.get("pod") ?? undefined} />
+          <Logs key={search.get("pod") ?? ""} namespace={namespace} release={release} statusPods={pods} initialPod={search.get("pod") ?? undefined} />
         </TabsContent>
         <TabsContent value="events">
           <Events namespace={namespace} release={release} pods={pods} />

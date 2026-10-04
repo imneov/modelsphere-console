@@ -39,6 +39,7 @@ const ns = (namespace: string) => `/api/k8s/namespaces/${encodeURIComponent(name
 
 export const workloadApi = {
   events: (namespace: string, prefix: string) => request<{ items: K8sEvent[] }>("GET", `${ns(namespace)}/events?prefix=${encodeURIComponent(prefix)}`),
+  pods: (namespace: string, prefix: string) => request<{ items: PodInfo[] }>("GET", `${ns(namespace)}/pods?prefix=${encodeURIComponent(prefix)}`),
   pod: (namespace: string, pod: string) => request<PodInfo>("GET", `${ns(namespace)}/pods/${encodeURIComponent(pod)}`),
   log: async (namespace: string, pod: string, q: LogQuery) => {
     const p = new URLSearchParams();

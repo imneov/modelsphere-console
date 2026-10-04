@@ -15,6 +15,7 @@ import (
 // backend they describe, so a role can grant them on their own.
 func (s *Server) mountWorkload(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/k8s/namespaces/{ns}/events", s.handleEvents)
+	mux.HandleFunc("GET /api/k8s/namespaces/{ns}/pods", s.handlePods)
 	mux.HandleFunc("GET /api/k8s/namespaces/{ns}/pods/{pod}", s.handlePod)
 	mux.HandleFunc("GET /api/k8s/namespaces/{ns}/pods/{pod}/log", s.handlePodLog)
 }
@@ -32,6 +33,18 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		events = []cluster.Event{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": events})
+}
+
+func (s *Server) handlePods(w http.ResponseWriter, r *http.Request) {
+	if !s.authorize(w, r, "list", "pods", "") || !s.haveKube(w) {
+		return
+	}
+	pods, err := s.kube.Pods(r.Context(), r.PathValue("ns"), r.URL.Query().Get("prefix"))
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": pods})
 }
 
 func (s *Server) handlePod(w http.ResponseWriter, r *http.Request) {

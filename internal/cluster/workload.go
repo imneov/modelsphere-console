@@ -122,6 +122,30 @@ func (k *Kube) Pod(ctx context.Context, namespace, name string) (*PodInfo, error
 	if err != nil {
 		return nil, err
 	}
+	return podInfo(pod), nil
+}
+
+// Pods in a namespace named after prefix, as Events matches objects: every pod
+// of a release, the ones swissd's status does not list (the cart's) included.
+func (k *Kube) Pods(ctx context.Context, namespace, prefix string) ([]PodInfo, error) {
+	if k.typed == nil {
+		return nil, ErrNoClientset
+	}
+	list, err := k.typed.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	out := []PodInfo{}
+	for i := range list.Items {
+		if ownedBy(list.Items[i].Name, prefix) {
+			out = append(out, *podInfo(&list.Items[i]))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+func podInfo(pod *corev1.Pod) *PodInfo {
 	info := &PodInfo{Name: pod.Name, Phase: string(pod.Status.Phase), Node: pod.Spec.NodeName}
 	statuses := map[string]corev1.ContainerStatus{}
 	for _, cs := range append(pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...) {
@@ -146,7 +170,7 @@ func (k *Kube) Pod(ctx context.Context, namespace, name string) (*PodInfo, error
 	for _, c := range pod.Spec.Containers {
 		add(c, false)
 	}
-	return info, nil
+	return info
 }
 
 type LogOptions struct {

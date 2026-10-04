@@ -182,3 +182,8 @@ export function ofRelease(name: string, release: string, pods: readonly string[]
 export function warnings(events: readonly { type: string }[]): number {
   return events.filter((e) => e.type === "Warning").length;
 }
+
+// The engine, not an init or sidecar container: the first running app container, else the first one.
+export function defaultContainer(cs: readonly { name: string; init?: boolean; state: string }[]): string {
+  return (cs.find((c) => !c.init && c.state === "running") ?? cs.find((c) => !c.init) ?? cs[0])?.name ?? "";
+}
