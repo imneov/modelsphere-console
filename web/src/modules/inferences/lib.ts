@@ -183,7 +183,9 @@ export function warnings(events: readonly { type: string }[]): number {
   return events.filter((e) => e.type === "Warning").length;
 }
 
-// The engine, not an init or sidecar container: the first running app container, else the first one.
-export function defaultContainer(cs: readonly { name: string; init?: boolean; state: string }[]): string {
-  return (cs.find((c) => !c.init && c.state === "running") ?? cs.find((c) => !c.init) ?? cs[0])?.name ?? "";
+// The container worth reading first: an app container in trouble (restarted or
+// not ready), else the first running one, else the first app container.
+export function defaultContainer(cs: readonly { name: string; init?: boolean; state: string; ready?: boolean; restartCount?: number }[]): string {
+  const app = cs.filter((c) => !c.init);
+  return (app.find((c) => (c.restartCount ?? 0) > 0 && !c.ready) ?? app.find((c) => c.state === "running") ?? app[0] ?? cs[0])?.name ?? "";
 }

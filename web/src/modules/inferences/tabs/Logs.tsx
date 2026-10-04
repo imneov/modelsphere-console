@@ -90,12 +90,12 @@ export function Logs({ namespace, release, statusPods, initialPod }: { namespace
         <DataSelect className="w-36" value={String(lines)} onValueChange={(v) => setLines(Number(v))} aria-label={t("logs.lines")} options={LINES.map((n) => ({ value: String(n), label: t("logs.linesN", { n }) }))} />
         <DataSelect className="w-36" value={String(since)} onValueChange={(v) => setSince(Number(v))} aria-label={t("logs.since")} options={SINCE.map((s) => ({ value: String(s.value), label: t(`logs.${s.key}`) }))} />
         <label className="flex items-center gap-2 text-sm">
-          <Switch aria-label={t("logs.previous")} checked={previous} onCheckedChange={setPrevious} />
+          <Switch checked={previous} onCheckedChange={setPrevious} />
           {t("logs.previous")}
           <FieldHint>{t("logs.previousHint")}</FieldHint>
         </label>
         <label className="flex items-center gap-2 text-sm">
-          <Switch aria-label={t("logs.follow")} checked={follow} onCheckedChange={setFollow} />
+          <Switch checked={follow} onCheckedChange={setFollow} />
           {t("logs.follow")}
         </label>
         <div className="ms-auto flex items-center gap-1">

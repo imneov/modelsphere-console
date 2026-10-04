@@ -184,7 +184,10 @@ describe("ofRelease", () => {
 });
 
 describe("defaultContainer", () => {
-  it("picks the running app container, then the first app one, skipping init", () => {
+  it("picks a crashing app container before a healthy sidecar", () => {
+    expect(defaultContainer([{ name: "reload", state: "running", ready: true }, { name: "cart", state: "waiting", restartCount: 193 }])).toBe("cart");
+  });
+  it("else the first running app container, skipping init", () => {
     expect(defaultContainer([{ name: "init", init: true, state: "terminated" }, { name: "engine", state: "waiting" }, { name: "side", state: "running" }])).toBe("side");
     expect(defaultContainer([{ name: "init", init: true, state: "running" }, { name: "engine", state: "waiting" }])).toBe("engine");
     expect(defaultContainer([])).toBe("");
