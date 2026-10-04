@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -27,6 +28,8 @@ var (
 
 type Kube struct {
 	dyn dynamic.Interface
+	// For what the dynamic client cannot do: pod logs are a subresource stream.
+	typed kubernetes.Interface
 }
 
 // NewKube builds a client. An empty kubeconfig means in-cluster first, then the
@@ -40,12 +43,22 @@ func NewKube(kubeconfig, context_ string) (*Kube, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dynamic client: %w", err)
 	}
-	return &Kube{dyn: dyn}, nil
+	typed, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("clientset: %w", err)
+	}
+	return &Kube{dyn: dyn, typed: typed}, nil
 }
 
 // NewKubeFrom wraps a dynamic client the caller already has, which is how tests
 // hand this package a fake.
 func NewKubeFrom(dyn dynamic.Interface) *Kube { return &Kube{dyn: dyn} }
+
+// WithTyped adds a clientset to a Kube built from a dynamic client alone.
+func (k *Kube) WithTyped(typed kubernetes.Interface) *Kube {
+	k.typed = typed
+	return k
+}
 
 // Dynamic exposes the dynamic client for the iam store to build resource
 // clients against the iam.theriseunion.io GroupVersionResources.
