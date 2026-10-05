@@ -3,7 +3,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Label, PageBanner } f
 import { Eraser, FlaskConical } from "lucide-react";
 import { buildPayload } from "@/modules/playground/api";
 import { Composer } from "@/modules/playground/components/Composer";
-import { ModelSelect, useModels } from "@/modules/playground/components/ModelSelect";
+import { ModelSelect, NoModels, useModels } from "@/modules/playground/components/ModelSelect";
 import { ParamsPanel } from "@/modules/playground/components/ParamsPanel";
 import { Transcript } from "@/modules/playground/components/Transcript";
 import { ViewCode } from "@/modules/playground/components/ViewCode";
@@ -55,6 +55,8 @@ export function Chat() {
                 <ModelSelect id="pg-model" value={model} onChange={setModel} />
                 {models.error ? (
                   <p className="text-xs text-destructive">{modelsHint(t, models.error)}</p>
+                ) : models.data?.length === 0 ? (
+                  <NoModels />
                 ) : (
                   <p className="text-xs text-muted-foreground">{t("chat.modelsSource")}</p>
                 )}
