@@ -118,6 +118,7 @@ func (s *Server) Handler() http.Handler {
 		// Federation: everything under a backend prefix. Needs the authorizer,
 		// hence inside this block.
 		s.mountBackends(mux)
+		s.mountWorkload(mux)
 
 		if s.router != nil {
 			s.mountRouter(mux)

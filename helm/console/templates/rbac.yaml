@@ -15,6 +15,17 @@ rules:
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["clusterroles", "clusterrolebindings"]
     verbs: ["get", "list", "watch"]
+  # Read-only workload views for the module pages: a release's events, its pods'
+  # containers and their logs (/api/k8s/...).
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

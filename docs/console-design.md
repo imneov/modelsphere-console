@@ -96,7 +96,7 @@ unchanged. Moving either one moves both.
 ## Modules
 
 The console is a shell plus compile-time modules. A module is a feature area
-(iam, swiss, playground, router, later container management); the shell owns everything
+(iam, swiss, inferences, playground, router, later container management); the shell owns everything
 around it.
 
 | Owned by | What |
@@ -122,10 +122,11 @@ export const swissModule: ConsoleModule = {
 
 Rules:
 
-- A module imports from `@/shell` only, never from a file under it or from another module.
+- A module imports from `@/shell` only, never from a file under it or from another module. One exception: `inferences` builds on swiss (see "The inferences module").
 - `permission` is a UI permission (a Role's `uiPermissions`); it guards the route and hides the menu entry.
 - Links go through `useModulePath()`: `p("catalog")` → `/swiss/catalog`. A leading `/` is still relative to the module.
 - API calls go through `apiFetch` (drop-in `fetch` with the session) or `request<T>` (JSON helper).
+- The sidebar opens the group of the module the current path is mounted under (`activeGroupTitle`), so a page with no menu entry -- a detail page -- still keeps its module's group open.
 - `validateModules` rejects duplicate ids/basePaths, shell-reserved paths and ids (`common`, `shell`: they are i18n namespaces) and pages declared twice at startup.
 - Text goes through `useT()` (see "i18n"); the declaration's `title` and menu labels stay Chinese.
 
@@ -221,6 +222,96 @@ The shell is Rise in both builds. The flag swaps the module, not console's
 chrome, and is there for the case where a Rise component reads wrong on a deploy
 page -- the tables are the likely one, since Rise's `TableHead`/`TableCell` are
 `h-12 px-4` against swiss's `h-10 px-3`.
+
+### The inferences module
+
+`/inferences` is every swiss page redone in Rise Global's model service layout,
+beside the swiss module (`/swiss` is unchanged; both read the same swissd).
+
+| Page | Path | Layout |
+|---|---|---|
+| Inference services | `/inferences` | resource table, server-side paging, row menu |
+| Service detail | `/inferences/:release/details?namespace=…&tab=…` | header card over tabs: overview, instances, logs, events, cluster resources, health check, versions, activity, plan; SLO edited in a sheet from the header |
+| Model library | `/inferences/catalog?catalog=…&q=…` | card grid, facet filters in the URL (swiss's parameter names) |
+| Model detail | `/inferences/catalog/:name?catalog=…&version=…` | header card over variants and information tabs |
+| Nodes | `/inferences/nodes` | GPU KPIs, a card per GPU product, node table with pods, taints and conditions on expand |
+| Activity | `/inferences/runs?action=…&namespace=…&release=…` | every run, output on expand |
+| Site profile | `/inferences/site-profile` | grouped read view; edit in a sheet, form or YAML |
+| Setup | `/inferences/setup` | first run; swiss's gate sends an uninitialised site here |
+
+Writes are right-side sheets, as Rise Global's are:
+
+```
+deploy / upgrade sheet:  form (anchored, collapsible sections) -> compose -> dry run -> review (what moves, diff, plan, note, force) -> install | apply
+rollback sheet:          diff of the revision -> note -> rollback(expectRevision)
+SLO sheet:               swiss's SLO form (save, reset)
+uninstall:               ConfirmDialog, typed to confirm
+```
+
+| Part | Where it comes from |
+|---|---|
+| pages, sheets, forms | `web/src/modules/inferences/`, on `@modelsphere/ui` |
+| state, tabs, install track, revision/run join, catalog filters and fit, node aggregation, pipeline state, chart version choice, service-id rule | `lib.ts`, `catalog-lib.ts`, `nodes-lib.ts`, `deploy-lib.ts`, `profile-lib.ts`; pure and tested |
+| API client, types, form model (`Form`, `planRequest`, `formFromPlan`), catalog and GPU helpers, route directives | swiss: `@swiss/lib/*`, `@swiss/components/DeploySettings` (its pure exports) |
+| cluster resources, health check, SLO, plan, diff panels | swiss's components (`ReleaseObjects`, `Endpoint`, `SLOCard`, `Provenance`, `DiffView`) |
+
+It is the one module that imports another. The API client, the form model and
+the panels are swiss's domain, and a copy would be a second implementation of
+the same thing drifting from the first; the layout is what this module owns.
+Helpers swiss keeps private are ported into the module's `*-lib.ts` with a note.
+The cost: `inferences` cannot be installed without the swiss module.
+
+Contexts: swiss's `Gate` runs in this module's context (`SwissScope`), so its
+redirect to `/setup` lands on `/inferences/setup`. swiss's embedded panels write
+their links as swiss paths and render under swiss's `ModuleProvider`
+(`InSwiss`); the shell exports `ModuleProvider` for this.
+
+The service id becomes the helm release and the chart's Service names
+(`<id>-cart`), so it is checked as a DNS-1035 label and defaults to the model
+name made into one (`mimo-v2.5` -> `mimo-v2-5`).
+
+The SLO is shown read-only under cluster resources; editing it is a header
+action, "Edit SLO", opening swiss's SLO form in a sheet. The action is always
+there: greyed out, with the reason on hover, until the plan is applied with SLO
+on (when swiss's page shows its SLO card).
+
+The logs and events tabs, and the overview's latest events, read console's own
+workload API rather than swissd's (see "Workload reads").
+
+Not there yet:
+
+- **Search on the services list.** swissd pages its list (at most 100 a page) and
+  takes no query; filtering one page on the client would miss the others. It
+  needs `?q=` on swissd's `/api/deployments`.
+- **swiss's panels and the route directive texts are English.** They are swiss's,
+  and swiss's pages have no Chinese yet.
+- **Cluster resources needs a recent swissd.** An older one (0.5.6, for one) has
+  no `/objects`: the tab says so, and the install track reports the route and
+  scaler as unreadable rather than absent.
+- **Upgrade picks chart versions through `/api/catalog/:name/chart-versions`**,
+  which swissd has from 0.6.2 (swiss #13).
+
+### Workload reads (`/api/k8s/...`)
+
+Events and logs are Kubernetes data, not swiss's, so console serves them itself
+with its own login and authorization instead of a swissd endpoint.
+
+| Endpoint | Returns | Authorized as | ServiceAccount needs |
+|---|---|---|---|
+| `GET /api/k8s/namespaces/{ns}/events?prefix=<release>` | events of objects named `<release>` or `<release>-*`, newest first, at most 500 | `list events` | `events` list, watch |
+| `GET /api/k8s/namespaces/{ns}/pods?prefix=<release>` | those pods with their containers' state | `list pods` | `pods` list |
+| `GET /api/k8s/namespaces/{ns}/pods/{pod}` | one pod's containers | `get pods` | `pods` get |
+| `GET /api/k8s/namespaces/{ns}/pods/{pod}/log?container=&tailLines=&sinceSeconds=&previous=` | `text/plain`, at most 5000 lines and 2 MiB, with timestamps | `get pods/log` | `pods/log` get |
+
+- The resources are console's (`iam.theriseunion.io`), not the backend's: a role
+  grants reading workloads on its own. The seeded admin passes everything.
+- Authorization is platform-scope like the rest of console: a user who may read
+  events reads them in every namespace.
+- A 403 from the cluster means console's ServiceAccount lacks the grant and is
+  returned as 502 with that said, so it is not read as the caller's.
+- The prefix match is the server's coarse cut; the page narrows it to the names
+  a release's chart gives (`ofRelease`).
+- Logs need a typed clientset; `cluster.Kube` builds one beside the dynamic client.
 
 ## Backends
 
