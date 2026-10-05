@@ -12,7 +12,7 @@ import {
   releaseState,
   revisionRows,
   rowState,
-  showSLO,
+  sloBlocked,
   visibleTabs,
 } from "@/modules/inferences/lib";
 
@@ -83,20 +83,21 @@ describe("releaseState", () => {
 });
 
 describe("tabs", () => {
-  it("drops SLO and plan when the release has neither", () => {
-    expect(visibleTabs({ slo: false, plan: false })).toEqual(["overview", "instances", "logs", "events", "resources", "check", "versions", "runs"]);
+  it("drops the plan when the release has none", () => {
+    expect(visibleTabs({ plan: false })).toEqual(["overview", "instances", "logs", "events", "resources", "check", "versions", "runs"]);
   });
   it("falls back to the overview for a tab this release does not have", () => {
-    const tabs = visibleTabs({ slo: false, plan: true });
+    const tabs = visibleTabs({ plan: true });
     expect(parseTab("slo", tabs)).toBe("overview");
     expect(parseTab(null, tabs)).toBe("overview");
     expect(parseTab("versions", tabs)).toBe("versions");
   });
-  it("shows SLO only for an applied plan with SLO turned on in the form layer", () => {
+  it("edits SLO only for an applied plan with SLO turned on in the form layer, and says why not", () => {
     const plan = { layers: { form: { sloRequirement: { enabled: true } } } } as unknown as Plan;
-    expect(showSLO(status({ planStatus: { phase: "applied" } }), plan)).toBe(true);
-    expect(showSLO(status({ planStatus: { phase: "applying" } }), plan)).toBe(false);
-    expect(showSLO(status({ planStatus: { phase: "applied" } }), { layers: {} } as unknown as Plan)).toBe(false);
+    expect(sloBlocked(status({ planStatus: { phase: "applied" } }), plan)).toBeUndefined();
+    expect(sloBlocked(status({ planStatus: { phase: "applying" } }), plan)).toBe("pending");
+    expect(sloBlocked(status({ planStatus: { phase: "applied" } }), { layers: {} } as unknown as Plan)).toBe("off");
+    expect(sloBlocked(status({ planStatus: { phase: "applied" } }))).toBe("off");
   });
 });
 

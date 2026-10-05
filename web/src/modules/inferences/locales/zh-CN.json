@@ -26,12 +26,15 @@
     "rollback": "回滚到此版",
     "values": "查看 values",
     "viewAll": "全部",
-    "logs": "日志"
+    "logs": "日志",
+    "slo": "编辑 SLO"
   },
   "disabled": {
     "readOnly": "这个 swissd 是只读的：需要同时打开 server.allowDeploy 和 rbac.allowDeploy",
     "untracked": "没有纳管计划的 release 不能在这里升级",
-    "current": "这已经是当前版本"
+    "current": "这已经是当前版本",
+    "sloOff": "部署时没有开启 SLO，可在升级时打开",
+    "sloPending": "部署完成后才能查看 SLO"
   },
   "state": {
     "applied": "已应用",
@@ -75,7 +78,6 @@
     "instances": "实例",
     "resources": "集群资源",
     "check": "服务检查",
-    "slo": "SLO",
     "versions": "版本管理",
     "runs": "操作记录",
     "plan": "部署计划",
@@ -156,6 +158,10 @@
     "supplied": "用户提供的 values",
     "all": "合并后的全部 values",
     "suppliedError": "读取用户提供的 values 失败：{error}"
+  },
+  "slo": {
+    "title": "{release} 的 SLO",
+    "description": "扩缩容器据此决定副本数：要守住的延迟与吞吐，以及副本数的上下限。"
   },
   "runs": {
     "columns": {

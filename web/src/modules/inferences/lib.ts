@@ -48,11 +48,11 @@ export function stalled(s: Pick<ReleaseStatus, "pods">): boolean {
   return s.pods.some((p) => !p.ready && p.ageSeconds > STALL_SECONDS);
 }
 
-export const TABS = ["overview", "instances", "logs", "events", "resources", "check", "slo", "versions", "runs", "plan"] as const;
+export const TABS = ["overview", "instances", "logs", "events", "resources", "check", "versions", "runs", "plan"] as const;
 export type Tab = (typeof TABS)[number];
 
-export function visibleTabs(opts: { slo: boolean; plan: boolean }): Tab[] {
-  return TABS.filter((t) => (t === "slo" ? opts.slo : t === "plan" ? opts.plan : true));
+export function visibleTabs(opts: { plan: boolean }): Tab[] {
+  return TABS.filter((t) => (t === "plan" ? opts.plan : true));
 }
 
 export function parseTab(raw: string | null, visible: readonly Tab[]): Tab {
@@ -66,8 +66,12 @@ export function sloEnabled(plan?: Plan): boolean {
   return (raw as { enabled?: boolean }).enabled === true;
 }
 
-export function showSLO(status: ReleaseStatus, plan?: Plan): boolean {
-  return status.planStatus?.phase === "applied" && sloEnabled(plan);
+// Why editing the SLO is greyed out, or undefined when it can be edited: swiss's
+// own page shows the SLO card for an applied plan with SLO on.
+export function sloBlocked(status: ReleaseStatus, plan?: Plan): "off" | "pending" | undefined {
+  if (!sloEnabled(plan)) return "off";
+  if (status.planStatus?.phase !== "applied") return "pending";
+  return undefined;
 }
 
 export function detailPath(release: string, namespace: string, tab?: Tab): string {

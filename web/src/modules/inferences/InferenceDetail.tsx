@@ -8,14 +8,14 @@ import { api } from "@swiss/lib/api";
 import { useReleaseObjects } from "@swiss/components/ReleaseObjects";
 import { ReleaseObjects } from "@swiss/components/ReleaseObjects";
 import { Endpoint } from "@swiss/components/Endpoint";
-import { SLOCard } from "@swiss/components/SLOCard";
 import { Provenance } from "@swiss/components/Provenance";
 import { useT } from "@/modules/inferences/i18n";
-import { modelLine, parseTab, releaseState, showSLO, visibleTabs, type Tab } from "@/modules/inferences/lib";
+import { modelLine, parseTab, releaseState, sloBlocked, visibleTabs, type Tab } from "@/modules/inferences/lib";
 import { statusOf } from "@/modules/inferences/components/StatusDot";
 import { InSwiss } from "@/modules/inferences/components/SwissScope";
 import { DeploySheet } from "@/modules/inferences/components/DeploySheet";
 import { UninstallDialog } from "@/modules/inferences/components/UninstallDialog";
+import { SLOSheet } from "@/modules/inferences/components/SLOSheet";
 import { Overview } from "@/modules/inferences/tabs/Overview";
 import { Instances } from "@/modules/inferences/tabs/Instances";
 import { Versions } from "@/modules/inferences/tabs/Versions";
@@ -32,6 +32,7 @@ export function InferenceDetail() {
   const namespace = search.get("namespace") ?? "";
   const [uninstalling, setUninstalling] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [editingSLO, setEditingSLO] = useState(false);
 
   // Query keys match swiss's pages, so the two views share one cache.
   const status = useQuery({
@@ -56,7 +57,7 @@ export function InferenceDetail() {
   });
 
   const s = status.data;
-  const visible = visibleTabs({ slo: !!s && showSLO(s, plan.data), plan: !!plan.data });
+  const visible = visibleTabs({ plan: !!plan.data });
   const tab = parseTab(search.get("tab"), visible);
   const setTab = (next: Tab, pod?: string) =>
     setSearch(
@@ -100,6 +101,7 @@ export function InferenceDetail() {
   const source = plan.data?.source;
   const model = modelLine(source ?? {}) || s.model;
   const pods = s.pods.map((p) => p.name);
+  const blocked = sloBlocked(s, plan.data);
   const counts: Partial<Record<Tab, number>> = { instances: s.pods.length, versions: revisions.data?.revisions.length };
 
   return (
@@ -113,6 +115,12 @@ export function InferenceDetail() {
           notice={!plan.data && plan.isError ? { tone: "warning", title: t("detail.untracked") } : undefined}
           actions={[
             { key: "check", label: t("actions.check"), onClick: () => setTab("check") },
+            {
+              key: "slo",
+              label: t("actions.slo"),
+              disabled: blocked === "off" ? t("disabled.sloOff") : blocked === "pending" ? t("disabled.sloPending") : false,
+              onClick: () => setEditingSLO(true),
+            },
             {
               key: "upgrade",
               label: t("actions.upgrade"),
@@ -159,13 +167,6 @@ export function InferenceDetail() {
             <Endpoint namespace={namespace} release={release} status={s} access={false} />
           </InSwiss>
         </TabsContent>
-        {visible.includes("slo") && (
-          <TabsContent value="slo">
-            <InSwiss>
-              <SLOCard namespace={namespace} release={release} canEdit={!readOnly} />
-            </InSwiss>
-          </TabsContent>
-        )}
         <TabsContent value="versions">
           <Versions namespace={namespace} release={release} canRollBack={!readOnly && !!plan.data} />
         </TabsContent>
@@ -183,6 +184,7 @@ export function InferenceDetail() {
         )}
       </Tabs>
 
+      <SLOSheet target={editingSLO ? { namespace, release } : null} canEdit={!readOnly} onClose={() => setEditingSLO(false)} />
       <DeploySheet target={upgrading ? { kind: "upgrade", namespace, release } : null} onClose={() => setUpgrading(false)} />
       <UninstallDialog
         target={uninstalling ? { namespace, release } : null}

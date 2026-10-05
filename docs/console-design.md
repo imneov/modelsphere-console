@@ -231,7 +231,7 @@ beside the swiss module (`/swiss` is unchanged; both read the same swissd).
 | Page | Path | Layout |
 |---|---|---|
 | Inference services | `/inferences` | resource table, server-side paging, row menu |
-| Service detail | `/inferences/:release/details?namespace=…&tab=…` | header card over tabs: overview, instances, logs, events, cluster resources, health check, SLO, versions, activity, plan |
+| Service detail | `/inferences/:release/details?namespace=…&tab=…` | header card over tabs: overview, instances, logs, events, cluster resources, health check, versions, activity, plan; SLO edited in a sheet from the header |
 | Model library | `/inferences/catalog?catalog=…&q=…` | card grid, facet filters in the URL (swiss's parameter names) |
 | Model detail | `/inferences/catalog/:name?catalog=…&version=…` | header card over variants and information tabs |
 | Nodes | `/inferences/nodes` | GPU KPIs, a card per GPU product, node table with pods, taints and conditions on expand |
@@ -244,6 +244,7 @@ Writes are right-side sheets, as Rise Global's are:
 ```
 deploy / upgrade sheet:  form (anchored, collapsible sections) -> compose -> dry run -> review (what moves, diff, plan, note, force) -> install | apply
 rollback sheet:          diff of the revision -> note -> rollback(expectRevision)
+SLO sheet:               swiss's SLO form (save, reset)
 uninstall:               ConfirmDialog, typed to confirm
 ```
 
@@ -268,6 +269,11 @@ their links as swiss paths and render under swiss's `ModuleProvider`
 The service id becomes the helm release and the chart's Service names
 (`<id>-cart`), so it is checked as a DNS-1035 label and defaults to the model
 name made into one (`mimo-v2.5` -> `mimo-v2-5`).
+
+The SLO is shown read-only under cluster resources; editing it is a header
+action, "Edit SLO", opening swiss's SLO form in a sheet. The action is always
+there: greyed out, with the reason on hover, until the plan is applied with SLO
+on (when swiss's page shows its SLO card).
 
 The logs and events tabs, and the overview's latest events, read console's own
 workload API rather than swissd's (see "Workload reads").

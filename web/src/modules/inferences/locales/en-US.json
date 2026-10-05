@@ -36,12 +36,15 @@
     "rollback": "Roll back to this",
     "values": "View values",
     "viewAll": "All",
-    "logs": "Logs"
+    "logs": "Logs",
+    "slo": "Edit SLO"
   },
   "disabled": {
     "readOnly": "This swissd is read-only: turn on both server.allowDeploy and rbac.allowDeploy",
     "untracked": "A release with no plan beside it cannot be upgraded here",
-    "current": "This is already the current revision"
+    "current": "This is already the current revision",
+    "sloOff": "SLO was not turned on at deploy; turn it on in an upgrade",
+    "sloPending": "SLO shows once the deploy has applied"
   },
   "state": {
     "applied": "Applied",
@@ -85,7 +88,6 @@
     "instances": "Instances",
     "resources": "Cluster resources",
     "check": "Health check",
-    "slo": "SLO",
     "versions": "Versions",
     "runs": "Activity",
     "plan": "Plan",
@@ -166,6 +168,10 @@
     "supplied": "Supplied values",
     "all": "All values, merged",
     "suppliedError": "Reading the supplied values failed: {error}"
+  },
+  "slo": {
+    "title": "SLO of {release}",
+    "description": "What the scaler sizes the service by: the latency and throughput to hold, and the replica bounds."
   },
   "runs": {
     "columns": {
