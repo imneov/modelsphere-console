@@ -46,7 +46,9 @@
   },
   "modelSelect": {
     "placeholder": "选择模型",
-    "none": "无可用模型"
+    "none": "还未部署模型",
+    "noneHint": "网关上还没有可调用的模型。先到模型部署里部署一个，就绪后会出现在这里。",
+    "deploy": "去部署"
   },
   "params": {
     "system": "系统提示词",

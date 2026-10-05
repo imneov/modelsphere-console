@@ -53,7 +53,9 @@
   },
   "modelSelect": {
     "placeholder": "Select a model",
-    "none": "No models available"
+    "none": "No model deployed yet",
+    "noneHint": "No model on the gateway is ready to call yet. Deploy one under Model Deployment; it shows up here once ready.",
+    "deploy": "Deploy a model"
   },
   "params": {
     "system": "System prompt",
