@@ -3,7 +3,7 @@ import { Button, Card, Dialog, DialogContent, DialogDescription, DialogHeader, D
 import { Columns2, Eraser, Plus, SlidersHorizontal, X } from "lucide-react";
 import { buildPayload } from "@/modules/playground/api";
 import { Composer } from "@/modules/playground/components/Composer";
-import { ModelSelect, useModels } from "@/modules/playground/components/ModelSelect";
+import { ModelSelect, NoModels, useModels } from "@/modules/playground/components/ModelSelect";
 import { ParamsPanel } from "@/modules/playground/components/ParamsPanel";
 import { Transcript } from "@/modules/playground/components/Transcript";
 import { ViewCode } from "@/modules/playground/components/ViewCode";
@@ -103,7 +103,7 @@ export function Compare() {
       />
 
       <div className="space-y-4 p-4">
-        {models.error ? <p className="text-sm text-destructive">{modelsHint(t, models.error)}</p> : null}
+        {models.error ? <p className="text-sm text-destructive">{modelsHint(t, models.error)}</p> : <NoModels className="text-sm" />}
 
         <div className={`grid gap-4 ${GRID[slots.length] ?? "lg:grid-cols-2"}`}>
           {slots.map((slot, i) => (

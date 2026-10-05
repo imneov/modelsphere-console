@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@modelsphere/ui";
 import { api } from "@/modules/playground/api";
 import { useT } from "@/modules/playground/i18n";
@@ -24,5 +25,21 @@ export function ModelSelect({ id, value, onChange, className }: { id?: string; v
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// NoModels says why the list is empty: the gateway answered, but no route on it
+// has a model ready to serve yet. A failed request is modelsHint's to explain.
+export function NoModels({ className }: { className?: string }) {
+  const t = useT();
+  const models = useModels();
+  if (!models.isSuccess || models.data.length > 0) return null;
+  return (
+    <p className={`text-xs text-muted-foreground ${className ?? ""}`}>
+      {t("modelSelect.noneHint")}{" "}
+      <Link to="/swiss" className="text-primary underline-offset-4 hover:underline">
+        {t("modelSelect.deploy")}
+      </Link>
+    </p>
   );
 }
