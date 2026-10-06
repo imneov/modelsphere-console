@@ -26,6 +26,7 @@ pick a model -> deploy an inference service -> wait until ready -> try it in the
 
 - The **sidebar** groups pages by feature and shows only the pages your account may open. If a menu is missing, your role does not grant it; ask an administrator.
 - **Top right**:
+  - User Guide: opens this guide from any page.
   - Language icon: switch between Chinese and English.
   - Palette icon: preferences, with three layouts (mixed nav, classic, minimal). Stored in this browser only.
   - Avatar: your identity, change password, sign out.

@@ -20,7 +20,7 @@ export const docsModule: ConsoleModule = {
   basePath: "/help",
   frame: "flush",
   pages: [
-    { path: "docs", element: page(<DocsPage />), menu: { label: "使用文档", icon: BookOpen } },
+    { path: "docs", element: page(<DocsPage />), menu: { label: "使用文档", icon: BookOpen }, topbar: true },
     { path: "docs/:chapter", element: page(<DocsPage />) },
   ],
 };

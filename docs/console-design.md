@@ -325,6 +325,9 @@ The user guide (`/help/docs`) is part of the web bundle, not a separate site.
 - Links starting with `/` are console routes and navigate in place;
   `chapters.test.ts` fails when one points at a page that does not exist, and
   when a locale lacks a chapter.
+- Linked from the top bar as well as the sidebar: the page declares
+  `topbar: true`, and the shell renders every such page the user may open
+  next to the language switch. The shell knows no module paths.
 - No permission: every signed-in user may read it. Chapters still say which
   permission each page needs.
 - Changing a page's behaviour means updating its chapter in both locales in the
