@@ -1,0 +1,14 @@
+{
+  "group": {
+    "帮助": "Help"
+  },
+  "menu": {
+    "docs": "User Guide"
+  },
+  "title": "User Guide",
+  "description": "From signing in to calling models from code: deploy inference services, try them in the Playground, issue API keys, manage users and roles.",
+  "chapters": "Contents",
+  "notFound": "No such chapter.",
+  "prev": "Previous",
+  "next": "Next"
+}

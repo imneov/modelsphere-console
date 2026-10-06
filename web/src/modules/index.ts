@@ -1,5 +1,6 @@
 // The installed modules, in sidebar order. Add or remove a line to plug one in or out.
 import { registerI18n, type ConsoleModule } from "@/shell";
+import { docsModule } from "@/modules/docs";
 import { iamModule } from "@/modules/iam";
 import { inferencesModule } from "@/modules/inferences";
 import { playgroundModule } from "@/modules/playground";
@@ -11,4 +12,4 @@ import swissNavEn from "@/modules/swiss-nav.en-US.json";
 // English lives beside it; its pages stay Chinese.
 registerI18n("swiss", { "en-US": swissNavEn });
 
-export const modules: ConsoleModule[] = [swissModule, inferencesModule, playgroundModule, routerModule, iamModule];
+export const modules: ConsoleModule[] = [swissModule, inferencesModule, playgroundModule, routerModule, iamModule, docsModule];

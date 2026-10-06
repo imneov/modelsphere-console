@@ -313,6 +313,23 @@ with its own login and authorization instead of a swissd endpoint.
   a release's chart gives (`ofRelease`).
 - Logs need a typed clientset; `cluster.Kube` builds one beside the dynamic client.
 
+### The docs module (user guide)
+
+The user guide (`/help/docs`) is part of the web bundle, not a separate site.
+
+- Content is Markdown, one file per chapter per locale:
+  `web/src/modules/docs/content/{locale}/{slug}.md`. The first `# ` line is the
+  chapter title; `CHAPTERS` in `chapters.ts` is the order.
+- Shipped with the binary, so it describes the pages of this build and needs no
+  network access — the same reason the UI is embedded.
+- Links starting with `/` are console routes and navigate in place;
+  `chapters.test.ts` fails when one points at a page that does not exist, and
+  when a locale lacks a chapter.
+- No permission: every signed-in user may read it. Chapters still say which
+  permission each page needs.
+- Changing a page's behaviour means updating its chapter in both locales in the
+  same PR.
+
 ## Backends
 
 Each module's backend is a `backends` entry; console proxies it after login.

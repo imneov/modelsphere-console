@@ -1,0 +1,6 @@
+/* Unlayered on purpose, like highlight.js's own theme: Tailwind's layered
+   utilities cannot override an unlayered rule. */
+.docs-markdown pre code.hljs {
+  background: transparent;
+  padding: 0;
+}
