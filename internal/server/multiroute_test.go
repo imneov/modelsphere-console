@@ -209,3 +209,49 @@ func TestLateRouteJoinsTheListSoon(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// The Playground lists deployments by route: it needs each route's own models,
+// including a route that is not ready, and to send a turn to the route it picked
+// even when another route serves the same model name.
+func TestPlaygroundByRoute(t *testing.T) {
+	_, h, gw := multiRouteServer(t)
+	gw.serve("qwen-b", "qwen-a")
+	admin := login(t, h, "admin", "admin-pw")
+
+	var body struct {
+		Routes []routeModels `json:"routes"`
+	}
+	rec := do(h, "GET", "/api/llm/routes", admin, "")
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("%d %s: %v", rec.Code, rec.Body.String(), err)
+	}
+	got := map[string]routeModels{}
+	for _, r := range body.Routes {
+		got[r.Route] = r
+	}
+	if r := got["broken"]; r.Error == "" || len(r.Models) != 0 {
+		t.Fatalf("broken = %+v, want an error and no models", r)
+	}
+	if r := got["qwen-b"]; r.Error != "" || strings.Join(r.Models, ",") != "qwen-a" {
+		t.Fatalf("qwen-b = %+v", r)
+	}
+
+	byRoute := func(route string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/api/llm/v1/chat/completions", strings.NewReader(`{"model":"qwen-a"}`))
+		req.Header.Set("Authorization", "Bearer "+admin)
+		req.Header.Set(routeHeader, route)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	// By name alone qwen-a goes to the first route serving it; the header picks.
+	if v := decode(t, do(h, "POST", "/api/llm/v1/chat/completions", admin, `{"model":"qwen-a"}`)); v["route"] != "qwen-a" {
+		t.Fatalf("by name went to %v", v)
+	}
+	if v := decode(t, byRoute("qwen-b")); v["route"] != "qwen-b" || v["path"] != "/v1/chat/completions" {
+		t.Fatalf("by route went to %v", v)
+	}
+	if rec := byRoute("elsewhere"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown route: %d %s", rec.Code, rec.Body.String())
+	}
+}
