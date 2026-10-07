@@ -37,7 +37,6 @@ import { useT } from "@/modules/inferences/i18n";
 import { detailPath } from "@/modules/inferences/lib";
 import { SECTIONS, chartChoice, defaultServiceId, gpuOptions, pipelineState, serviceIdError, whatMoves, type Section } from "@/modules/inferences/deploy-lib";
 import { DeployForm } from "@/modules/inferences/components/DeployForm";
-import { InSwiss } from "@/modules/inferences/components/SwissScope";
 
 export type DeployTarget =
   | { kind: "deploy"; model: string; catalog: string; version?: string; variant?: string }
@@ -413,9 +412,7 @@ export function Review({
       </SectionCard>
       {!rollback && (
         <SectionCard title={t("deploy.review.plan")} collapsible defaultExpanded={false}>
-          <InSwiss>
-            <Provenance plan={plan} />
-          </InSwiss>
+          <Provenance plan={plan} />
         </SectionCard>
       )}
       <FloatingField label={t("deploy.review.note")} hint={t("deploy.review.noteHint")} multiline>

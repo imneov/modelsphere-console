@@ -22,7 +22,7 @@ Which menus a user sees comes from the role's page permissions (`uiPermissions`)
 
 | Page permission | Menus |
 |---|---|
-| `swiss.view` | Model Deployment, Model Serving |
+| `swiss.view` | Model Serving |
 | `playground.use` | Playground |
 | `apikeys.view` | Router → API Keys |
 | `users.view` | Access Control → Users |

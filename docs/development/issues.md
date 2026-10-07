@@ -86,7 +86,7 @@ Maintainers apply labels during triage; the templates add the first ones. Create
 | `area/gateway` | `internal/gateway`: resolving the inference entrypoint |
 | `area/router` | `internal/router`, `web/src/modules/router`: `/v1`, API keys, metrics |
 | `area/playground` | `web/src/modules/playground` |
-| `area/swiss` | `web/src/modules/swiss`: the mounted model deployment pages |
+| `area/swiss` | `web/src/modules/swiss`: the swiss UI copy, its panels in Model Serving and the standalone build |
 | `area/shell` | `web/src/shell`: layout, navigation, permissions, preferences |
 | `area/helm` | `helm/console`, `install.sh` |
 | `area/ci` | `.github/`, `hack/` |

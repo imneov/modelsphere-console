@@ -39,7 +39,7 @@ Without `--version` the latest release is installed; running the command again u
 |---|---|---|---|
 | Console only | trying the UI, managing users | none | login, users and roles; no models, so Playground and `/v1` are unavailable |
 | Demo model | a cluster without an inference gateway | `--set demo.enabled=true` | adds Qwen2.5-0.5B on llama.cpp (CPU); Playground and `/v1` work |
-| Existing Swiss | a cluster already running Swiss and the OpenResty gateway | `--values console-values.yaml`, see [Connecting to an existing Swiss](#connecting-to-an-existing-swiss) | the model deployment pages, and every model on the gateway |
+| Existing Swiss | a cluster already running Swiss and the OpenResty gateway | `--values console-values.yaml`, see [Connecting to an existing Swiss](#connecting-to-an-existing-swiss) | the Model Serving pages, and every model on the gateway |
 
 Do not enable `demo.enabled` when connecting to Swiss: with it on, Playground and `/v1` talk only to the demo model and the models on the Swiss gateway do not appear.
 

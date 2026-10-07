@@ -96,7 +96,7 @@ unchanged. Moving either one moves both.
 ## Modules
 
 The console is a shell plus compile-time modules. A module is a feature area
-(iam, swiss, inferences, playground, router, later container management); the shell owns everything
+(iam, inferences, playground, router, docs, later container management); the shell owns everything
 around it.
 
 | Owned by | What |
@@ -108,14 +108,14 @@ around it.
 A module exports one declaration (`ConsoleModule`, `web/src/shell/module.tsx`):
 
 ```ts
-export const swissModule: ConsoleModule = {
-  id: "swiss",
-  title: "模型部署",            // sidebar group
-  basePath: "/swiss",          // every page mounts below it
-  overview: SwissOverview,     // optional cards on the home page
+export const inferencesModule: ConsoleModule = {
+  id: "inferences",
+  title: "模型服务",            // sidebar group
+  basePath: "/inferences",     // every page mounts below it
+  overview: InferencesOverview, // optional cards on the home page
   pages: [
-    { path: "", element: <Deployments />, permission: "swiss.view", menu: { label: "部署", icon: Rocket } },
-    { path: "catalog/:name", element: <Model />, permission: "swiss.view" },
+    { path: "", element: <InferenceList />, permission: "swiss.view", menu: { label: "推理服务", icon: Bot } },
+    { path: "catalog/:name", element: <ModelPage />, permission: "swiss.view" },
   ],
 };
 ```
@@ -124,7 +124,7 @@ Rules:
 
 - A module imports from `@/shell` only, never from a file under it or from another module. One exception: `inferences` builds on swiss (see "The inferences module").
 - `permission` is a UI permission (a Role's `uiPermissions`); it guards the route and hides the menu entry.
-- Links go through `useModulePath()`: `p("catalog")` → `/swiss/catalog`. A leading `/` is still relative to the module.
+- Links go through `useModulePath()`: `p("catalog")` → `/inferences/catalog`. A leading `/` is still relative to the module.
 - API calls go through `apiFetch` (drop-in `fetch` with the session) or `request<T>` (JSON helper).
 - The sidebar opens the group of the module the current path is mounted under (`activeGroupTitle`), so a page with no menu entry -- a detail page -- still keeps its module's group open.
 - `validateModules` rejects duplicate ids/basePaths, shell-reserved paths and ids (`common`, `shell`: they are i18n namespaces) and pages declared twice at startup.
@@ -164,9 +164,8 @@ So `group`/`menu` appear only in the non-Chinese files. `t()` returns one
 function per (locale, namespace): a fresh one per render would re-run every
 effect keyed on it (Global's request loop).
 
-`modules/swiss` is a mirror of `swiss/web` and is not edited: its sidebar English
-is `modules/swiss-nav.en-US.json`, registered in `modules/index.ts`, and its pages
-stay Chinese until swiss itself takes i18n.
+`modules/swiss` is a copy of `swiss/web` and is not edited, so the swiss panels
+Model Serving embeds stay Chinese until swiss itself takes i18n.
 
 `web/src/shell/i18n.test.tsx` checks, for every `locales/*.json`: the same keys in
 each language, valid ICU, no `{{…}}`, no `group`/`menu` in zh-CN; and an English
@@ -193,8 +192,8 @@ Rise Global keeps its own, closed library -- two libraries, no syncing.
 
 ### The swiss module's two UI kits
 
-The swiss pages are a mirror of `swiss/web/src` (`hack/sync-swiss-ui.sh`, pinned
-in `UPSTREAM`), so they must stay editable only upstream. That rules out
+The swiss pages are a copy of `swiss/web/src` (see "Bringing swiss in"), so they
+must stay editable only upstream. That rules out
 rewriting 56 `Badge` and 33 `Field` call sites onto the console's kit: the next
 sync would undo it.
 
@@ -225,8 +224,11 @@ page -- the tables are the likely one, since Rise's `TableHead`/`TableCell` are
 
 ### The inferences module
 
-`/inferences` is every swiss page redone in Rise Global's model service layout,
-beside the swiss module (`/swiss` is unchanged; both read the same swissd).
+`/inferences` (Model Serving) is every swiss page redone in Rise Global's model
+service layout. It replaced the swiss module's own pages, Model Deployment at
+`/swiss`, which the console no longer mounts: `modules/swiss` is a library here
+(API client, form model, panels) and the source of the standalone swiss UI
+(`build:swiss`).
 
 | Page | Path | Layout |
 |---|---|---|
@@ -259,12 +261,13 @@ It is the one module that imports another. The API client, the form model and
 the panels are swiss's domain, and a copy would be a second implementation of
 the same thing drifting from the first; the layout is what this module owns.
 Helpers swiss keeps private are ported into the module's `*-lib.ts` with a note.
-The cost: `inferences` cannot be installed without the swiss module.
+The cost: `inferences` cannot be built without `modules/swiss`.
 
 Contexts: swiss's `Gate` runs in this module's context (`SwissScope`), so its
-redirect to `/setup` lands on `/inferences/setup`. swiss's embedded panels write
-their links as swiss paths and render under swiss's `ModuleProvider`
-(`InSwiss`); the shell exports `ModuleProvider` for this.
+redirect to `/setup` lands on `/inferences/setup`; swiss links in the embedded
+components (`/site-profile`) resolve the same way. `SwissScope` also shows
+swissd's cluster warnings (site profile or catalog failing to load) above every
+page, as swiss's layout does.
 
 The service id becomes the helm release and the chart's Service names
 (`<id>-cart`), so it is checked as a DNS-1035 label and defaults to the model
@@ -571,10 +574,10 @@ then the edits that mount it, so a resync is "copy again, replay the edits".
 |---|---|
 | Left out | `main.tsx`, `index.css`, `vite-env.d.ts`, `components/Layout.tsx`, `routes/Login.tsx`, `routes/PreviewDeploySettings.tsx` |
 | Imports | `@/…` → `@swiss/…` (alias to `src/modules/swiss`) |
-| Links | `Link`, `NavLink`, `Navigate`, `useNavigate` come from `lib/host.ts`, which prefixes absolute paths with `/swiss` |
+| Links | `Link`, `NavLink`, `Navigate`, `useNavigate` come from `lib/host.ts`, which resolves absolute paths against the mounting module (`/inferences`) |
 | API | `lib/api.ts` fetches through `hostFetch(apiPath(…))`: `/api/x` → `/api/deploy/x`, with the console session |
 | Login | console's. `components/Session.tsx`'s gate shows an error instead of swiss's login, and still sends an uninitialised site to setup |
-| Layout | console's. `index.tsx` keeps swiss's cluster warnings above each page; the site switcher is not carried over |
+| Layout | console's. Model Serving's `SwissScope` keeps swiss's cluster warnings above each page; the site switcher is not carried over |
 | Theme | Rise tokens; `warning` and `success` added in `src/index.css` |
 | Access | every page needs UI permission `swiss.view`; calls need the verb on `backends/swiss` |
 
@@ -583,7 +586,7 @@ What swiss could still take on so the copy needs configuration, not page edits:
 | # | Today in `swiss/web` | Change in swiss | Why |
 |---|---|---|---|
 | 1 | imports use `@/…` | use `@swiss/…` | `@/` is the console's root; console adds one alias `@swiss` → `src/modules/swiss` |
-| 2 | absolute links `to="/catalog"`, `navigate("/")` | one `swissPath()` helper (console binds it to `useModulePath`) | pages mount under `/swiss` |
+| 2 | absolute links `to="/catalog"`, `navigate("/")` | one `swissPath()` helper (console binds it to `useModulePath`) | panels render under `/inferences` |
 | 3 | `fetch("/api/...")` | one client with a configurable base and fetch | console sets base `/api/deploy` and `apiFetch` |
 | 4 | `main.tsx` holds routes, router, query client, layout | `module.tsx` exports pages + menu; `main.tsx` keeps the standalone shell | console mounts the pages, not the app |
 | 5 | `index.css` declares the theme variables | move them to a standalone-only file | the Rise tokens provide the theme here |
@@ -612,7 +615,7 @@ requests carry the same headers Global's apiserver sets.
 | P2 | User management: user CRUD API + UI, i18n (zh-CN/en-US). **(i18n done: shell, iam, playground, router; swiss pages pending swiss.)** Open UI kit `@modelsphere/ui` replacing `@riseaicloud/ui` everywhere, swiss module included; `web/vendor/` deleted. **(done)** |
 | P3 | Full roles: authorizer + role/binding CRUD + role/permission UI. |
 | P4 | Federation: module shell, stack aligned with swiss, backend proxy with identity headers and per-backend RBAC. **(done)** |
-| P5 | swiss module: copy into `modules/swiss`, mounted through `lib/host.ts` (see "Bringing swiss in"). **(done)** Then: swiss prepares its frontend (table above) and exports `openapi.json`; CODEOWNERS. |
+| P5 | swiss module: copy into `modules/swiss`, mounted through `lib/host.ts` (see "Bringing swiss in"). **(done; unmounted again once Model Serving covered every page)** Then: swiss prepares its frontend (table above) and exports `openapi.json`; CODEOWNERS. |
 | P6 | Playground: chat module, `llm` backend resolved from the cluster (site profile or route ConfigMap) with the gateway key read from its Secret, streaming SSE end to end. **(done)** Then: Markdown, compare page, full parameters, stats, view code. **(done)** The router: `/v1`, API keys, usage metrics. **(done)** One-command install: built-in gateway and a CPU demo model. **(done)** |
 | P7 | Container management modules, moved over from Rise Global. |
 

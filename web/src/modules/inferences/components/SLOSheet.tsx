@@ -1,7 +1,6 @@
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@modelsphere/ui";
 import { SLOCard } from "@swiss/components/SLOCard";
 import { useT } from "@/modules/inferences/i18n";
-import { InSwiss } from "@/modules/inferences/components/SwissScope";
 
 export interface SLOTarget {
   namespace: string;
@@ -21,9 +20,7 @@ export function SLOSheet({ target, canEdit, onClose }: { target: SLOTarget | nul
           <SheetDescription>{t("slo.description")}</SheetDescription>
         </SheetHeader>
         <SheetBody className="min-h-0 flex-1 overflow-auto bg-surface-page px-5 py-4">
-          <InSwiss>
-            <SLOCard namespace={target.namespace} release={target.release} canEdit={canEdit} />
-          </InSwiss>
+          <SLOCard namespace={target.namespace} release={target.release} canEdit={canEdit} />
         </SheetBody>
       </SheetContent>
     </Sheet>
