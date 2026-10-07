@@ -18,7 +18,6 @@ import { AccessPoint } from "@swiss/components/Endpoint";
 import { useT } from "@/modules/inferences/i18n";
 import { installSteps, modelLine, releaseState, type Step, type StepState } from "@/modules/inferences/lib";
 import { StatusDot } from "@/modules/inferences/components/StatusDot";
-import { InSwiss } from "@/modules/inferences/components/SwissScope";
 import { LoadHint } from "@/modules/inferences/components/LoadHint";
 import { EventRow, useReleaseEvents } from "@/modules/inferences/tabs/Events";
 
@@ -111,9 +110,7 @@ export function Overview({
         </SectionCard>
 
         <SectionCard title={t("overview.access")} summary={s.route && <code className="font-mono">/{s.route}/</code>}>
-          <InSwiss>
-            <AccessPoint status={s} />
-          </InSwiss>
+          <AccessPoint status={s} />
         </SectionCard>
       </div>
 

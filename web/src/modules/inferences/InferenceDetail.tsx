@@ -12,7 +12,6 @@ import { Provenance } from "@swiss/components/Provenance";
 import { useT } from "@/modules/inferences/i18n";
 import { modelLine, parseTab, releaseState, sloBlocked, visibleTabs, type Tab } from "@/modules/inferences/lib";
 import { statusOf } from "@/modules/inferences/components/StatusDot";
-import { InSwiss } from "@/modules/inferences/components/SwissScope";
 import { DeploySheet } from "@/modules/inferences/components/DeploySheet";
 import { UninstallDialog } from "@/modules/inferences/components/UninstallDialog";
 import { SLOSheet } from "@/modules/inferences/components/SLOSheet";
@@ -158,14 +157,10 @@ export function InferenceDetail() {
           <Events namespace={namespace} release={release} pods={pods} />
         </TabsContent>
         <TabsContent value="resources">
-          <InSwiss>
-            <ReleaseObjects namespace={namespace} release={release} />
-          </InSwiss>
+          <ReleaseObjects namespace={namespace} release={release} />
         </TabsContent>
         <TabsContent value="check">
-          <InSwiss>
-            <Endpoint namespace={namespace} release={release} status={s} access={false} />
-          </InSwiss>
+          <Endpoint namespace={namespace} release={release} status={s} access={false} />
         </TabsContent>
         <TabsContent value="versions">
           <Versions namespace={namespace} release={release} canRollBack={!readOnly && !!plan.data} />
@@ -176,9 +171,7 @@ export function InferenceDetail() {
         {plan.data && (
           <TabsContent value="plan">
             <SectionCard title={t("plan.title")} summary={t("plan.description")}>
-              <InSwiss>
-                <Provenance plan={plan.data} />
-              </InSwiss>
+              <Provenance plan={plan.data} />
             </SectionCard>
           </TabsContent>
         )}
