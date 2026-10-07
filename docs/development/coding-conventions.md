@@ -60,7 +60,7 @@ r.log.Warn("gateway unresolved", "backend", r.backend.Name, "err", err)
 
 ### The swiss module is a copy
 
-`web/src/modules/swiss` mirrors [modelsphere/swiss](https://github.com/modelsphere/swiss)'s UI (see "Bringing swiss in" in [console-design.md](../console-design.md#bringing-swiss-in)). A change to its pages belongs upstream in swiss, then a resync here; edits made only here are undone by the next sync. Console-side glue (`lib/host`, `components/ui/rise`, `index.tsx`) is changed here.
+`web/src/modules/swiss` mirrors [modelsphere/swiss](https://github.com/modelsphere/swiss)'s UI (see "Bringing swiss in" in [console-design.md](../console-design.md#bringing-swiss-in)). A change to its pages belongs upstream in swiss, then a resync here; edits made only here are undone by the next sync. Console-side glue (`lib/host`, `components/ui/rise`) is changed here.
 
 ## Helm chart (`helm/console`)
 

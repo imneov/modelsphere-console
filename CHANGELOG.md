@@ -27,6 +27,7 @@ chart's `appVersion`; the image and chart are released together under it.
 - GitHub Actions in `publish.yml` pinned to commit SHAs.
 
 ### Removed
+- Model Deployment (`/swiss`, swiss's own pages mounted as a module): Model Serving (`/inferences`) covers every page. Old `/swiss` links land on the home page.
 - The proprietary `@riseaicloud/ui` and `@riseaicloud/tokens` (`web/vendor/`). The image now ships no closed code.
 
 ### Fixed

@@ -2,8 +2,6 @@
 
 Swiss (swissd) on the cluster performs every deployment. Each install, upgrade and rollback first composes a **plan** and previews the change; nothing runs until you confirm.
 
-> The Model Deployment and Model Serving groups operate on the same inference services. This chapter uses Model Serving.
-
 ## First use: site setup
 
 If swissd has no site profile yet, Model Serving opens on **Site setup**. Describe the cluster and save:
