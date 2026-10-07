@@ -3,7 +3,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Label, PageBanner } f
 import { Eraser, FlaskConical } from "lucide-react";
 import { buildPayload } from "@/modules/playground/api";
 import { Composer } from "@/modules/playground/components/Composer";
-import { ModelSelect, NoModels, useModels } from "@/modules/playground/components/ModelSelect";
+import { ModelSelect, NoModels, useModels, useTarget } from "@/modules/playground/components/ModelSelect";
 import { ParamsPanel } from "@/modules/playground/components/ParamsPanel";
 import { Transcript } from "@/modules/playground/components/Transcript";
 import { ViewCode } from "@/modules/playground/components/ViewCode";
@@ -17,11 +17,14 @@ export function Chat() {
   const models = useModels();
   const [model, setModel] = useState("");
   const [form, setForm] = useState<ParamsForm>(DEFAULT_FORM);
-  const params = useMemo(() => toChatParams(model, form), [model, form]);
+  // model is the picked deployment's route; target is that deployment while it
+  // is still listed and ready.
+  const target = useTarget(model);
+  const params = useMemo(() => toChatParams(target?.model ?? "", form, target?.id), [target?.model, target?.id, form]);
   const chat = useChat(params);
 
   useEffect(() => {
-    const first = models.data?.[0]?.id;
+    const first = models.data?.find((m) => m.ready)?.id;
     if (!model && first) setModel(first);
   }, [models.data, model]);
 
@@ -34,7 +37,7 @@ export function Chat() {
         icon={<FlaskConical className="size-5" />}
         actions={
           <div className="flex items-center gap-2">
-            <ViewCode payload={payload} disabled={!model} />
+            <ViewCode payload={payload} disabled={!target} />
             <Button variant="outline" onClick={chat.clear} disabled={!chat.turns.length}>
               <Eraser data-icon="inline-start" />
               {t("chat.newChat")}
@@ -55,7 +58,7 @@ export function Chat() {
                 <ModelSelect id="pg-model" value={model} onChange={setModel} />
                 {models.error ? (
                   <p className="text-xs text-destructive">{modelsHint(t, models.error)}</p>
-                ) : models.data?.length === 0 ? (
+                ) : models.data && !models.data.some((m) => m.ready) ? (
                   <NoModels />
                 ) : (
                   <p className="text-xs text-muted-foreground">{t("chat.modelsSource")}</p>
@@ -80,14 +83,14 @@ export function Chat() {
                 <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
                   <FlaskConical className="h-8 w-8 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
-                    {model ? tNodes(t, "chat.emptyWithModel", { model: <span className="font-mono text-foreground">{model}</span> }) : t("chat.emptyTitle")}
+                    {target ? tNodes(t, "chat.emptyWithModel", { model: <span className="font-mono text-foreground">{`${target.release} · ${target.model}`}</span> }) : t("chat.emptyTitle")}
                   </p>
                   <p className="max-w-md text-xs text-muted-foreground">{t("chat.emptyHint")}</p>
                 </div>
               }
             />
             <Composer
-              disabled={!model}
+              disabled={!target}
               streaming={chat.streaming}
               pendingUser={chat.turns.at(-1)?.role === "user"}
               onSend={chat.send}

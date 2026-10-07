@@ -1,10 +1,13 @@
 import { apiFetch, ApiError, getT, request } from "@/shell";
 import "@/modules/playground/i18n";
 import { SSEParser } from "@/modules/playground/sse";
+import { joinTargets, type RouteModels, type Target } from "@/modules/playground/targets";
+import { api as swiss } from "@swiss/lib/api";
 
 // console proxies this prefix to llm-openresty's route (console.yaml backends:
 // llm), adding the gateway key it holds. The browser never sees that key.
-const BASE = "/api/llm/v1";
+const GATEWAY = "/api/llm";
+const BASE = `${GATEWAY}/v1`;
 
 export interface Model {
   id: string;
@@ -20,6 +23,9 @@ export type ReasoningEffort = "" | "none" | "minimal" | "low" | "medium" | "high
 
 export interface ChatParams {
   model: string;
+  // The gateway route the deployment is published on. Two deployments may serve
+  // the same model name; the route is what picks one.
+  route?: string;
   system: string;
   temperature: number;
   topP: number;
@@ -72,6 +78,17 @@ export const api = {
     return body.data ?? [];
   },
 
+  // targets is the deployments the deployment pages list, each joined with what
+  // the gateway says about its route. One page of the largest size swissd
+  // serves: a Playground picker is not the place to page through releases.
+  targets: async (): Promise<Target[]> => {
+    const [deployments, routes] = await Promise.all([
+      swiss.deployments(1, 100),
+      request<{ routes?: RouteModels[] }>("GET", `${GATEWAY}/routes`),
+    ]);
+    return joinTargets(deployments.deployments ?? [], routes.routes ?? []);
+  },
+
   // streamChat posts one turn and reports deltas as they arrive. The
   // conversation id rides X-Session-Id, which the gateway pins to a backend:
   // every turn of a conversation hits the same engine, so its prefix cache is
@@ -91,7 +108,11 @@ export const api = {
     try {
       res = await apiFetch(`${BASE}/chat/completions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-Id": sessionId,
+          ...(params.route ? { "X-ModelSphere-Route": params.route } : {}),
+        },
         body: JSON.stringify(payload),
         signal,
       });

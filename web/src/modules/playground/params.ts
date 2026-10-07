@@ -28,9 +28,10 @@ export const DEFAULT_FORM: ParamsForm = {
 
 export const REASONING_EFFORTS: ReasoningEffort[] = ["none", "minimal", "low", "medium", "high"];
 
-export function toChatParams(model: string, form: ParamsForm): ChatParams {
+export function toChatParams(model: string, form: ParamsForm, route?: string): ChatParams {
   return {
     model,
+    route,
     system: form.system.trim(),
     temperature: optional(form.temperature),
     topP: optional(form.topP),
