@@ -20,13 +20,6 @@ Open it:
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ $svc }} 8080:{{ .Values.service.port }}
   # then http://localhost:8080/
 {{- end }}
-{{- if .Values.demo.enabled }}
-
-Demo model: {{ .Values.demo.model.name }}, served on CPU by llama.cpp. Its weights
-(~500 MB) download on first start; the Playground lists it once this is ready:
-
-  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ $svc }}-demo --timeout=20m
-{{- end }}
 {{- if include "console.router.enabled" . }}
 
 Programs call the same models at http://<console address>/v1 with an API key an

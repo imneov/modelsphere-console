@@ -16,12 +16,11 @@
 
 ## 快速上手
 
-先确认[前置条件](#前置条件)。以下装 Console 和一个 CPU 演示模型，装完就能在 Playground 对话、用 `/v1` 调用：
+先确认[前置条件](#前置条件)。以下只装 Console；模型由 Swiss 部署，见[接入已有 Swiss](#接入已有-swiss)：
 
 ```bash
 helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
   --namespace modelsphere --create-namespace \
-  --set demo.enabled=true \
   --wait --timeout 20m
 
 kubectl -n modelsphere port-forward svc/console-console 8080:8080
@@ -33,15 +32,12 @@ kubectl -n modelsphere port-forward svc/console-console 8080:8080
 
 不写 `--version` 时安装最新正式版；重复执行即升级。版本见[选择版本](#选择版本)。
 
-## 三种装法
+## 两种装法
 
 | 装法 | 适用 | 额外 values | 得到什么 |
 |---|---|---|---|
 | 只装 Console | 先看界面、管用户 | 无 | 登录、用户和角色；没有模型，Playground 和 `/v1` 不可用 |
-| 演示模型 | 集群里没有推理网关 | `--set demo.enabled=true` | 加一个 llama.cpp 跑的 Qwen2.5-0.5B（CPU），Playground 和 `/v1` 可用 |
-| 接入已有 Swiss | 集群已运行 Swiss 和 OpenResty 推理网关 | `--values console-values.yaml`，见[接入已有 Swiss](#接入已有-swiss) | 模型服务页面，以及网关上的全部模型 |
-
-接入 Swiss 时不要再开 `demo.enabled`：开了之后 Playground 和 `/v1` 只连演示模型，Swiss 网关上的模型不会出现。
+| 接入已有 Swiss | 集群已运行 Swiss 和 OpenResty 推理网关 | `--values console-values.yaml`，见[接入已有 Swiss](#接入已有-swiss) | 模型服务页面；Playground 和 `/v1` 调用在那里部署的模型 |
 
 ## 选择版本
 
@@ -59,9 +55,7 @@ kubectl -n modelsphere port-forward svc/console-console 8080:8080
 | `helm` 3.8 及以上（Helm 4 也可）、`kubectl` | 全部 | 从 OCI 仓库安装需要 Helm 3.8+ | `helm version` |
 | Helm 使用 cluster-admin 级权限 | 全部 | Chart 创建 IAM CRD、ClusterRole/ClusterRoleBinding（platform-admin 角色含 `*` 权限，Kubernetes 只允许已持有这些权限的用户创建），接入 Swiss 时还要在其他 namespace 创建 Role | `kubectl auth can-i '*' '*' --all-namespaces` 输出 `yes` |
 | linux/amd64 节点 | 全部 | 镜像只有 amd64 | `kubectl get nodes -L kubernetes.io/arch` |
-| 节点能访问 `ghcr.io` | 全部 | Console 镜像（演示模式下还有 llama.cpp 镜像）在 GHCR | — |
-| 默认 StorageClass、约 2 CPU / 2 GiB 空闲 | 演示模型 | 模型权重存在 PVC 中 | `kubectl get storageclass` |
-| 节点能访问 modelscope.cn 或 hf-mirror.com | 演示模型 | 首次启动下载约 500 MB 权重 | — |
+| 节点能访问 `ghcr.io` | 全部 | Console 镜像在 GHCR | — |
 | Swiss Chart 0.6.0 及以上且开启 `auth.proxyKey`，或 Swiss 以 `auth.disabled=true` 运行 | 接入 Swiss | Console 用 proxyKey 代表登录用户访问 Swiss | 见[找到 Swiss 和网关](#1-找到-swiss-和网关) |
 | Swiss site profile 已存在，且 `cluster.profile.key` 为 `profile.yaml`（默认值） | 接入 Swiss | Console 从 profile 读取网关入口，且只读 `profile.yaml` 这个 key；profile 在 Swiss 网页首次保存设置时才创建 | 同上 |
 
@@ -161,7 +155,6 @@ helm -n modelsphere uninstall console
 
 | 对象 | 原因 | 手动清理 |
 |---|---|---|
-| 演示模型 PVC `console-console-demo` | 带 `helm.sh/resource-policy: keep`，避免重装时重新下载权重 | `kubectl -n modelsphere delete pvc console-console-demo` |
 | 路由 API 密钥 Secret `console-console-api-keys` | Console 运行时创建，不属于 release | `kubectl -n modelsphere delete secret console-console-api-keys` |
 | 复制的 `swiss-proxy-key` | 手动创建 | `kubectl -n modelsphere delete secret swiss-proxy-key` |
 | IAM 数据：User、IAMRole、IAMRoleBinding、LoginRecord（集群级） | Console 运行时创建（Chart 种下的管理员 User 属于 release，会被删除） | 见下 |
@@ -180,7 +173,6 @@ kubectl delete crd users.iam.theriseunion.io iamroles.iam.theriseunion.io \
 
 | values | 作用 |
 |---|---|
-| `demo.enabled=true` | 安装 CPU 演示模型 |
 | `externalSwiss.*` | 接入已有 Swiss，见上文 |
 | `playground.gateway.*` | 直接指定推理网关（没有 Swiss 时用 `configMap` + `service`） |
 | `service.type` | 暴露方式，默认 `NodePort` |

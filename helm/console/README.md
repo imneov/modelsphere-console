@@ -16,12 +16,11 @@
 
 ## Quick start
 
-Check the [prerequisites](#prerequisites) first. This installs Console with a CPU demo model; afterwards you can chat in the Playground and call `/v1`:
+Check the [prerequisites](#prerequisites) first. This installs Console on its own; models come from Swiss, see [Connecting to an existing Swiss](#connecting-to-an-existing-swiss):
 
 ```bash
 helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
   --namespace modelsphere --create-namespace \
-  --set demo.enabled=true \
   --wait --timeout 20m
 
 kubectl -n modelsphere port-forward svc/console-console 8080:8080
@@ -33,15 +32,12 @@ Open `http://127.0.0.1:8080` and sign in as `admin` / `P@88w0rd`.
 
 Without `--version` the latest release is installed; running the command again upgrades. See [Choosing a version](#choosing-a-version).
 
-## Three ways to install
+## Two ways to install
 
 | Mode | For | Extra values | What you get |
 |---|---|---|---|
 | Console only | trying the UI, managing users | none | login, users and roles; no models, so Playground and `/v1` are unavailable |
-| Demo model | a cluster without an inference gateway | `--set demo.enabled=true` | adds Qwen2.5-0.5B on llama.cpp (CPU); Playground and `/v1` work |
-| Existing Swiss | a cluster already running Swiss and the OpenResty gateway | `--values console-values.yaml`, see [Connecting to an existing Swiss](#connecting-to-an-existing-swiss) | the Model Serving pages, and every model on the gateway |
-
-Do not enable `demo.enabled` when connecting to Swiss: with it on, Playground and `/v1` talk only to the demo model and the models on the Swiss gateway do not appear.
+| Existing Swiss | a cluster already running Swiss and the OpenResty gateway | `--values console-values.yaml`, see [Connecting to an existing Swiss](#connecting-to-an-existing-swiss) | the Model Serving pages; the Playground and `/v1` call the models deployed there |
 
 ## Choosing a version
 
@@ -59,9 +55,7 @@ Builds from `main` need the full version. **Do not use `--devel` to get the "lat
 | `helm` 3.8 or later (Helm 4 works), `kubectl` | all | installing from an OCI registry needs Helm 3.8+ | `helm version` |
 | Helm runs with cluster-admin rights | all | the chart creates IAM CRDs and a ClusterRole/ClusterRoleBinding (the platform-admin role has `*`, and Kubernetes only lets a user who already holds those rights create it); with Swiss it also creates Roles in other namespaces | `kubectl auth can-i '*' '*' --all-namespaces` prints `yes` |
 | linux/amd64 nodes | all | the image is amd64 only | `kubectl get nodes -L kubernetes.io/arch` |
-| nodes can reach `ghcr.io` | all | the Console image (and in demo mode the llama.cpp image) is on GHCR | — |
-| a default StorageClass, about 2 CPU / 2 GiB free | demo model | the weights are stored in a PVC | `kubectl get storageclass` |
-| nodes can reach modelscope.cn or hf-mirror.com | demo model | about 500 MB of weights are downloaded on first start | — |
+| nodes can reach `ghcr.io` | all | the Console image is on GHCR | — |
 | Swiss chart 0.6.0 or later with `auth.proxyKey` on, or Swiss running with `auth.disabled=true` | existing Swiss | Console calls Swiss on behalf of the signed-in user with the proxyKey | see [Find Swiss and the gateway](#1-find-swiss-and-the-gateway) |
 | a Swiss site profile exists and `cluster.profile.key` is `profile.yaml` (the default) | existing Swiss | Console reads the gateway entrypoint from the profile, and only from the `profile.yaml` key; Swiss creates the profile the first time settings are saved in its UI | same as above |
 
@@ -161,7 +155,6 @@ These objects are not deleted with the release, and are reused on reinstall:
 
 | Object | Why | Manual cleanup |
 |---|---|---|
-| demo model PVC `console-console-demo` | annotated `helm.sh/resource-policy: keep`, so a reinstall does not download the weights again | `kubectl -n modelsphere delete pvc console-console-demo` |
 | router API key Secret `console-console-api-keys` | created by Console at runtime, not part of the release | `kubectl -n modelsphere delete secret console-console-api-keys` |
 | the copied `swiss-proxy-key` | created by hand | `kubectl -n modelsphere delete secret swiss-proxy-key` |
 | IAM data: User, IAMRole, IAMRoleBinding, LoginRecord (cluster-scoped) | created by Console at runtime (the administrator User seeded by the chart belongs to the release and is deleted) | see below |
@@ -180,7 +173,6 @@ Every setting is documented in the comments of `values.yaml` (`helm show values 
 
 | Value | Effect |
 |---|---|
-| `demo.enabled=true` | installs the CPU demo model |
 | `externalSwiss.*` | connects to an existing Swiss, see above |
 | `playground.gateway.*` | points at an inference gateway directly (without Swiss, use `configMap` + `service`) |
 | `service.type` | how the UI is exposed; `NodePort` by default |

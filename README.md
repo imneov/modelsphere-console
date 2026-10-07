@@ -26,14 +26,14 @@ Console is a Go backend-for-frontend with a React UI compiled into the same bina
 - **Playground.** Streaming chat with any model behind the gateway, a 2–4 column compare view, full sampling parameters, per-answer TTFT, tokens/s and cache hit rate, reasoning output, and "view code" for cURL, Python and Node.js.
 - **OpenAI-compatible router.** Programs call `/v1` with API keys that administrators issue — with expiry and optional per-model scope. Keys are stored hashed; usage is exported as Prometheus metrics.
 - **Gateway discovery.** The inference entrypoint, routes and gateway key are read from the cluster (Swiss's site profile or the route ConfigMap) and followed as they change — no URLs or keys copied into configuration.
-- **One `helm install`.** The image and chart are published together to GHCR. With no gateway on the cluster, `demo.enabled=true` adds a small CPU model so there is something to chat with.
+- **One `helm install`.** The image and chart are published together to GHCR; point Console at Swiss and the models deployed there are in the Playground and `/v1`.
 - **Upgrade path to Rise Global.** Identity is wire-compatible with Rise Global (same CRDs, same token claims), so upgrading is a configuration change, not a data migration.
 
 ## Quick start
 
 **Prerequisites**
 
-1. a Kubernetes cluster with linux/amd64 nodes that can reach `ghcr.io`, a default StorageClass, and `kubectl` pointing at it with cluster-admin rights;
+1. a Kubernetes cluster with linux/amd64 nodes that can reach `ghcr.io`, and `kubectl` pointing at it with cluster-admin rights;
 2. `helm` 3.8 or later (Helm 4 works too).
 
 **Step 1: install**
@@ -41,11 +41,10 @@ Console is a Go backend-for-frontend with a React UI compiled into the same bina
 ```bash
 helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
   --namespace modelsphere --create-namespace \
-  --set demo.enabled=true \
   --wait --timeout 20m
 ```
 
-This installs Console with a CPU demo model (`qwen2.5-0.5b-instruct`, about 500 MB downloaded on first start). To connect to a cluster that already runs Swiss, or to pick a version, see the [install guide](helm/console/README.md).
+This installs Console on its own. Models come from [Swiss](https://github.com/modelsphere/swiss): to connect to a cluster that already runs it, or to pick a version, see the [install guide](helm/console/README.md).
 
 **Step 2: log in**
 
@@ -59,14 +58,14 @@ Open <http://127.0.0.1:8080> and sign in as `admin` / `P@88w0rd`.
 
 **Step 3: call a model**
 
-In the UI, go to **路由 → API 密钥** (Router → API keys) and create a key, then:
+Deploy a model under **模型服务** (Model Serving). Once it is ready, go to **路由 → API 密钥** (Router → API keys) and create a key, then call it by its served name:
 
 ```bash
 export MODELSPHERE_API_KEY=<the key you created>
 curl http://127.0.0.1:8080/v1/chat/completions \
   -H "Authorization: Bearer $MODELSPHERE_API_KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"model":"qwen2.5-0.5b-instruct",
+  -d '{"model":"<served model name>",
        "messages":[{"role":"user","content":"hello"}],"max_tokens":32}'
 ```
 
@@ -136,7 +135,7 @@ Before contributing, read [`CONTRIBUTING.md`](CONTRIBUTING.md): issues, branches
 
 | Document | What is in it |
 |---|---|
-| [`helm/console/README.md`](helm/console/README.md) | the complete install: prerequisites, versions, the demo model and existing-Swiss modes, uninstall, publishing |
+| [`helm/console/README.md`](helm/console/README.md) | the complete install: prerequisites, versions, existing-Swiss mode, uninstall, publishing |
 | [`docs/console-design.md`](docs/console-design.md) | design and decisions: identity and Rise Global compatibility, modules, backends, Playground, router |
 | [`helm/console/values.yaml`](helm/console/values.yaml) | every chart setting, with comments |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/development/`](docs/development/README.md) | how to contribute: local development, workflow, conventions, issues, pull requests, review, design proposals |

@@ -43,7 +43,7 @@ Console keeps users and roles in CRDs and reads the gateway from the cluster, so
 
 | Option | Gets you | Command |
 |---|---|---|
-| The chart, on kind or any dev cluster | CRDs, the seeded `admin`, a built-in gateway and a CPU demo model | `helm upgrade --install console ./helm/console -n modelsphere --create-namespace --set demo.enabled=true --wait --timeout 20m` |
+| The chart, on kind or any dev cluster | CRDs and the seeded `admin`; no models without a swissd | `helm upgrade --install console ./helm/console -n modelsphere --create-namespace --wait` |
 | CRDs only | identity only; you create users yourself | `kubectl apply -f helm/console/crds/` |
 | A shared cluster that runs the stack | real swissd and gateway | ask a maintainer for a kubeconfig; never point a dev build at production |
 
