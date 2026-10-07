@@ -38,7 +38,7 @@ Backend (Go, compiled into the image)
 Container base image
   gcr.io/distroless/static-debian12 — see the image's own licenses.
 
-The services this console federates to (swiss, the inference gateway, the
-optional llama.cpp demo model) are separate projects under their own licenses.
+The services this console federates to (swiss, the inference gateway) are
+separate projects under their own licenses.
 The Helm chart pulls the swiss chart as a dependency; nothing here
 redistributes their code.

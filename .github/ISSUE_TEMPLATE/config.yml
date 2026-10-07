@@ -5,4 +5,4 @@ contact_links:
     about: Privately, never as a public issue. See SECURITY.md.
   - name: Install guide
     url: https://github.com/modelsphere/console/blob/main/helm/console/README.md
-    about: Prerequisites, versions, the demo model and existing-Swiss modes.
+    about: Prerequisites, versions and the existing-Swiss mode.
