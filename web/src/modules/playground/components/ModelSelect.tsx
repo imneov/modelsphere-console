@@ -48,9 +48,8 @@ export function ModelSelect({ id, value, onChange, className }: { id?: string; v
                 {m.release}
                 {m.ready ? <span className="ml-1.5 font-mono text-xs text-muted-foreground">model={m.model}</span> : null}
               </span>
-              <span className="truncate text-xs text-muted-foreground">
-                {[catalogLine(m), m.ready ? null : reasonText(t, m.reason)].filter(Boolean).join(" · ")}
-              </span>
+              <span className="truncate text-xs text-muted-foreground">{catalogLine(m)}</span>
+              {m.ready ? null : <span className="text-xs text-muted-foreground">{reasonText(t, m.reason)}</span>}
             </div>
           </SelectItem>
         ))}
