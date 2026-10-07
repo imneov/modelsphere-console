@@ -75,7 +75,7 @@ const res = await client.chat.completions.create({
 console.log(res.choices[0].message.content);
 ```
 
-模型名就是 `/v1/models` 返回的 `id`，也可以在 Playground 的模型下拉框里看到。在 Playground 里调好参数后，用 **查看代码** 可以直接得到对应的请求。
+模型名就是 `/v1/models` 返回的 `id`，也就是 Playground 模型下拉框里「·」后面的部分。在 Playground 里调好参数后，用 **查看代码** 可以直接得到对应的请求。
 
 ## 多轮对话保持缓存
 

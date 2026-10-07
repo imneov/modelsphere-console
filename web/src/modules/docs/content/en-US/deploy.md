@@ -28,7 +28,7 @@ Open the [Model Library](/inferences/catalog):
 |---|---|---|
 | Basics | Service name, namespace | The service name also names the helm release, route, scaler and SLO; lowercase letters, digits and `-`, at most 53 characters. **Cannot be changed later** |
 | Resources & scheduling | Autoscaling / replicas, GPU models, tolerations | Autoscaling is on by default: LLMScaler keeps replicas between the bounds |
-| Routing | Publish route, route path, concurrency limit | Only with "Publish route" on does the model appear on the gateway and in the Playground |
+| Routing | Publish route, route path, concurrency limit | Only with "Publish route" on can the model be called through the gateway and the Playground |
 | SLO & monitoring | TTFT / TPS thresholds, ServiceMonitor | The scaler sizes replicas against the SLO |
 | Advanced | Image override, model path, YAML overrides | Rarely needed |
 

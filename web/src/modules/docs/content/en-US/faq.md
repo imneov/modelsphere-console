@@ -6,10 +6,15 @@ The sidebar shows only pages your account may open. Ask an administrator to gran
 
 ## The Playground says no model is deployed
 
-The gateway has no model to call yet. Check:
+[Inference Services](/inferences) has no deployment yet; [deploy](/help/docs/deploy) one.
 
-1. whether [Inference Services](/inferences) has a service in the Serving state;
-2. whether "Publish route" was on when it was deployed — a model without a route does not appear on the gateway.
+## A model in the Playground is greyed out
+
+The deployment exists but cannot be called yet; the reason is under the greyed-out entry:
+
+- **no gateway route**: "Publish route" was off when it was deployed, so the model is reachable only inside the cluster. Upgrade the service with the route on.
+- **route not on the gateway yet**: the route was just created and the gateway has not picked it up; wait a moment.
+- **route has no ready instance yet**: the model is still loading or its instances are failing; see the next question.
 
 ## An inference service stays in Loading
 

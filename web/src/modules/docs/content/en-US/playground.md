@@ -6,7 +6,7 @@ The Playground lets you talk to deployed models in the browser, to check their a
 
 Open [Chat](/playground):
 
-1. Pick a model at the top. The list is what the gateway serves right now (`GET /v1/models`). If it says no model is deployed yet, [deploy](/help/docs/deploy) one; it appears here once ready.
+1. Pick a model at the top. The list is the deployments in [Inference Services](/inferences), ready ones first, shown as `release · served name`; one that cannot be called yet is greyed out with why. If it says no model is deployed yet, [deploy](/help/docs/deploy) one; it appears here once ready.
 2. Type below: **Enter sends, Shift+Enter adds a line**. **Stop** ends a generation early.
 3. Under every answer: time to first token (TTFT), duration, input/output tokens, tok/s and cache hit rate.
 

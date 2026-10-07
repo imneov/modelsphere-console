@@ -75,7 +75,7 @@ const res = await client.chat.completions.create({
 console.log(res.choices[0].message.content);
 ```
 
-The model name is the `id` returned by `/v1/models`, also shown in the Playground's model picker. Once parameters are tuned in the Playground, **View code** gives you the matching request.
+The model name is the `id` returned by `/v1/models`, the part after the `·` in the Playground's model picker. Once parameters are tuned in the Playground, **View code** gives you the matching request.
 
 ## Keep the cache across turns
 
