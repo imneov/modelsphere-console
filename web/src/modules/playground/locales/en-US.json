@@ -11,7 +11,7 @@
     "newChat": "New chat",
     "params": "Parameters",
     "model": "Model",
-    "modelsSource": "The gateway's current model list (GET /v1/models).",
+    "modelsSource": "The deployments in Model Serving; one not ready yet is greyed out with why.",
     "sessionHint": "A conversation keeps one X-Session-Id: the gateway pins the whole conversation to one inference instance, so the prefix cache stays warm.",
     "transcript": "Conversation",
     "emptyTitle": "Pick a model to start chatting.",
@@ -52,10 +52,17 @@
     "stopped": "Stopped"
   },
   "modelSelect": {
-    "placeholder": "Select a model",
+    "placeholder": "Select a deployment",
     "none": "No model deployed yet",
-    "noneHint": "No model on the gateway is ready to call yet. Deploy one under Model Deployment; it shows up here once ready.",
-    "deploy": "Deploy a model"
+    "noneReady": "No deployment is ready",
+    "noneHint": "No model is deployed yet. Deploy one under Model Serving; it shows up here once ready.",
+    "deploy": "Deploy a model",
+    "noneReadyHint": "There are deployments, but none can chat yet:",
+    "reason": {
+      "noRoute": "no gateway route, cannot be called from here",
+      "notPublished": "route {route} is not on the gateway yet",
+      "notServing": "route {route} has no ready instance yet"
+    }
   },
   "params": {
     "system": "System prompt",

@@ -32,10 +32,13 @@ type modelIndex struct {
 }
 
 type catalog struct {
-	sig        string
-	at         time.Time
-	models     []string
-	route      map[string]string
+	sig    string
+	at     time.Time
+	models []string
+	route  map[string]string
+	// routes is every route in the order asked, with what it answered: the
+	// Playground lists deployments by route, and two routes may serve one name.
+	routes     []routeModels
 	refreshing bool
 	// partial: a route did not answer. openresty loads a new route up to a
 	// minute after autoconfig writes it, so such a list is re-asked sooner.
@@ -132,6 +135,11 @@ func (ix *modelIndex) probe(ctx context.Context, name string, t *backendTarget) 
 	c := &catalog{route: map[string]string{}}
 	answered := 0
 	for i, route := range routes {
+		rm := routeModels{Route: route, Models: lists[i]}
+		if errs[i] != nil {
+			rm.Error = errs[i].Error()
+		}
+		c.routes = append(c.routes, rm)
 		if errs[i] != nil {
 			ix.log.Warn("route did not list its models", "backend", name, "route", route, "err", errs[i])
 			continue
@@ -228,6 +236,19 @@ func first(s []string) string {
 	return s[0]
 }
 
+// routeModels is one route as the Playground sees it: the models it lists, or
+// why it listed none -- a route whose engines are not ready yet does not answer.
+type routeModels struct {
+	Route  string   `json:"route"`
+	Models []string `json:"models"`
+	Error  string   `json:"error,omitempty"`
+}
+
+// routeHeader names the route a request is for. The Playground lists deployments,
+// and two of them may serve the same model name; the name alone would always pick
+// the first.
+const routeHeader = "X-ModelSphere-Route"
+
 // modelList is the OpenAI shape of a model list.
 func modelList(ids []string) map[string]any {
 	data := make([]map[string]string, 0, len(ids))
@@ -244,6 +265,15 @@ func modelList(ids []string) map[string]any {
 func (s *Server) routeByModel(w http.ResponseWriter, r *http.Request, b config.Backend, t *backendTarget) *backendTarget {
 	rest := strings.TrimPrefix(r.URL.Path, strings.TrimSuffix(b.Prefix, "/"))
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		if strings.TrimSuffix(rest, "/") == "/routes" {
+			c, err := s.models.get(r.Context(), b.Name, t, "")
+			if err != nil {
+				writeError(w, http.StatusBadGateway, fmt.Sprintf("backend %s: %v", b.Name, err))
+				return nil
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"routes": c.routes})
+			return nil
+		}
 		if strings.TrimSuffix(rest, "/") == "/v1/models" {
 			c, err := s.models.get(r.Context(), b.Name, t, "")
 			if err != nil {
@@ -253,6 +283,17 @@ func (s *Server) routeByModel(w http.ResponseWriter, r *http.Request, b config.B
 			writeJSON(w, http.StatusOK, modelList(c.models))
 			return nil
 		}
+	}
+
+	if want := r.Header.Get(routeHeader); want != "" {
+		r.Header.Del(routeHeader)
+		if !slices.Contains(t.routes, want) {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("backend %s has no route %q", b.Name, want))
+			return nil
+		}
+		routed := *t
+		routed.url.Path = strings.TrimSuffix(t.url.Path, "/") + "/" + want
+		return &routed
 	}
 
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, config.DefaultMaxBodyBytes))

@@ -4,7 +4,7 @@
     "newChat": "新建对话",
     "params": "参数",
     "model": "模型",
-    "modelsSource": "网关当前的模型列表（GET /v1/models）。",
+    "modelsSource": "模型服务里的部署；未就绪的会置灰并注明原因。",
     "sessionHint": "同一个对话使用固定的 X-Session-Id：网关把整段对话固定在同一个推理实例上，前缀缓存因此保持命中。",
     "transcript": "对话",
     "emptyTitle": "选择一个模型开始对话。",
@@ -45,10 +45,17 @@
     "stopped": "已停止"
   },
   "modelSelect": {
-    "placeholder": "选择模型",
+    "placeholder": "选择部署",
     "none": "还未部署模型",
-    "noneHint": "网关上还没有可调用的模型。先到模型部署里部署一个，就绪后会出现在这里。",
-    "deploy": "去部署"
+    "noneReady": "部署均未就绪",
+    "noneHint": "还没有部署任何模型。先到模型服务里部署一个，就绪后会出现在这里。",
+    "deploy": "去部署",
+    "noneReadyHint": "已有部署，但都还不能对话：",
+    "reason": {
+      "noRoute": "未开启网关路由，无法从这里调用",
+      "notPublished": "路由 {route} 尚未发布到网关",
+      "notServing": "路由 {route} 暂无就绪实例"
+    }
   },
   "params": {
     "system": "系统提示词",
