@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Boxes } from "lucide-react";
-import { activeGroupTitle, joinPath, navGroups, validateModules, type ConsoleModule } from "@/shell/module";
+import { activeGroupTitle, joinPath, navGroups, topbarItems, validateModules, type ConsoleModule } from "@/shell/module";
 
 const mod = (over: Partial<ConsoleModule> = {}): ConsoleModule => ({
   id: "swiss",
@@ -93,5 +93,23 @@ describe("navGroups", () => {
 
   it("drops a module whose every menu page is hidden", () => {
     expect(labels(() => false).map(([t]) => t)).toEqual(["", "模型部署"]);
+  });
+});
+
+describe("topbarItems", () => {
+  const help = mod({
+    id: "docs",
+    title: "帮助",
+    basePath: "/help",
+    pages: [
+      { path: "docs", element: null, menu: { label: "使用文档", icon: Boxes }, topbar: true },
+      { path: "docs/:chapter", element: null },
+      { path: "admin", element: null, permission: "x.view", menu: { label: "管理", icon: Boxes }, topbar: true },
+    ],
+  });
+
+  it("lists only pages declared for the top bar that the user may open", () => {
+    expect(topbarItems([mod(), help], () => false).map((i) => `${i.label}@${i.to}`)).toEqual(["使用文档@/help/docs"]);
+    expect(topbarItems([mod(), help], () => true).map((i) => i.to)).toEqual(["/help/docs", "/help/admin"]);
   });
 });

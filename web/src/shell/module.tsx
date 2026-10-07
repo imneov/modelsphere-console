@@ -33,6 +33,8 @@ export interface ModulePage {
   // Present means the page gets a sidebar entry. label is Chinese; other
   // languages: "{module id}:menu.{pageKey(path)}".
   menu?: { label: string; icon: LucideIcon };
+  // Also link the page from the top bar, with its menu label and icon.
+  topbar?: boolean;
 }
 
 const ModuleContext = createContext<ConsoleModule | null>(null);
@@ -106,19 +108,28 @@ export interface NavGroup {
 export function navGroups(modules: ConsoleModule[], has: (permission: string) => boolean): NavGroup[] {
   const groups: NavGroup[] = [{ items: [{ to: "/", label: "概览", ns: "shell", key: "overview", icon: LayoutDashboard, end: true }] }];
   for (const m of modules) {
-    const items = m.pages
-      .filter((p) => p.menu && (!p.permission || has(p.permission)))
-      .map((p) => ({
-        to: joinPath(m.basePath, p.path),
-        label: p.menu!.label,
-        ns: m.id,
-        key: pageKey(p.path),
-        icon: p.menu!.icon,
-        end: p.path === "",
-      }));
+    const items = menuItems(m, has);
     if (items.length) groups.push({ title: m.title, ns: m.id, basePath: m.basePath, items });
   }
   return groups;
+}
+
+function menuItems(m: ConsoleModule, has: (permission: string) => boolean, pick: (p: ModulePage) => boolean = () => true): NavItem[] {
+  return m.pages
+    .filter((p) => p.menu && (!p.permission || has(p.permission)) && pick(p))
+    .map((p) => ({
+      to: joinPath(m.basePath, p.path),
+      label: p.menu!.label,
+      ns: m.id,
+      key: pageKey(p.path),
+      icon: p.menu!.icon,
+      end: p.path === "",
+    }));
+}
+
+// topbarItems are the pages declared topbar: true that the user may open.
+export function topbarItems(modules: ConsoleModule[], has: (permission: string) => boolean): NavItem[] {
+  return modules.flatMap((m) => menuItems(m, has, (p) => !!p.topbar));
 }
 
 // activeGroupTitle is the group holding the current page: the module it is

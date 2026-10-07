@@ -17,7 +17,7 @@ import { usePermissions } from "@/shell/permissions";
 import { ChangePasswordDialog } from "@/shell/ChangePasswordDialog";
 import { PreferencesPanel } from "@/shell/PreferencesPanel";
 import { useLayout } from "@/shell/preferences";
-import { activeGroupTitle, navGroups, type ConsoleModule, type NavGroup, type NavItem } from "@/shell/module";
+import { activeGroupTitle, navGroups, topbarItems, type ConsoleModule, type NavGroup, type NavItem } from "@/shell/module";
 import { LOCALES, navLabel, useLocale, useT } from "@/shell/i18n";
 
 // The console shell in Rise Global's layouts, picked in the preferences panel.
@@ -38,6 +38,7 @@ export function Layout({ modules, children }: { modules: ConsoleModule[]; childr
   const [collapsed, setCollapsed] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const groups = navGroups(modules, has);
+  const links = topbarItems(modules, has);
   const toggle = () => setCollapsed((c) => !c);
   const page = <main className="relative min-h-0 min-w-0 flex-1 overflow-auto bg-surface-page">{children}</main>;
 
@@ -50,13 +51,13 @@ export function Layout({ modules, children }: { modules: ConsoleModule[]; childr
           </nav>
         </aside>
         <div className="m-2 ml-0 flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.1),0_1px_2px_-1px_rgb(0_0_0/0.1)]">
-          <TopBar tone="light" collapse={{ collapsed, toggle }} onPreferences={() => setPrefsOpen(true)} />
+          <TopBar tone="light" links={links} collapse={{ collapsed, toggle }} onPreferences={() => setPrefsOpen(true)} />
           {page}
         </div>
       </div>
     ) : (
       <div className={`flex h-screen flex-col ${layout === "classic" ? "bg-[var(--shell-classic-canvas)]" : "bg-background"}`}>
-        <TopBar tone="dark" onPreferences={() => setPrefsOpen(true)} />
+        <TopBar tone="dark" links={links} onPreferences={() => setPrefsOpen(true)} />
         <div className="flex min-h-0 flex-1">
           <aside
             className={`flex shrink-0 flex-col bg-[var(--shell-sidebar)] transition-[width] duration-300 ${collapsed ? "w-16" : "w-64"} ${
@@ -113,10 +114,12 @@ const TONE = {
 
 function TopBar({
   tone,
+  links,
   collapse,
   onPreferences,
 }: {
   tone: "light" | "dark";
+  links: NavItem[];
   collapse?: { collapsed: boolean; toggle: () => void };
   onPreferences: () => void;
 }) {
@@ -144,6 +147,15 @@ function TopBar({
       </NavLink>
 
       <div className="ml-auto flex items-center gap-1">
+        {links.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink key={item.to} to={item.to} className={`flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] transition-colors ${t.icon}`}>
+              <Icon className="h-4 w-4" />
+              {navLabel(tr, item.ns, "menu", item.key, item.label)}
+            </NavLink>
+          );
+        })}
         <LocaleMenu iconClass={t.icon} />
         <button
           type="button"
