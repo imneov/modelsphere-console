@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Gauge, Route, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Gauge, Route, Settings2, ShieldCheck, TriangleAlert } from "lucide-react";
 import {
   api,
   type Condition,
@@ -13,16 +13,23 @@ import {
   type SLOObjective,
 } from "@swiss/lib/api";
 import { Badge } from "@swiss/components/ui/badge";
+import { HoverHint } from "@swiss/components/ui/hint";
+import { Button } from "@swiss/components/ui/button";
 import { Card } from "@swiss/components/ui/card";
 import { ErrorState } from "@swiss/components/States";
 import { cn, timeAgo } from "@swiss/lib/utils";
 
-export function useReleaseObjects(namespace: string, release: string) {
+// Unpolled, it loads once per visit and then moves only when the page's own
+// loop or an SLO write refetches it. The staleTime keeps a second reader
+// mounting moments later from fetching it again.
+export function useReleaseObjects(namespace: string, release: string, poll = true) {
   return useQuery({
     queryKey: ["objects", namespace, release],
     queryFn: () => api.objects(namespace, release),
-    refetchInterval: 15_000,
     retry: false,
+    ...(poll
+      ? { refetchInterval: 15_000 }
+      : { staleTime: 10_000, refetchOnWindowFocus: false, refetchOnReconnect: false }),
   });
 }
 
@@ -43,11 +50,13 @@ export function pick<Spec, Status>(
 export function ReleaseObjects({
   namespace,
   release,
+  onConfigureSLO,
 }: {
   namespace: string;
   release: string;
+  onConfigureSLO?: () => void;
 }) {
-  const q = useReleaseObjects(namespace, release);
+  const q = useReleaseObjects(namespace, release, false);
   if (q.error)
     return <ErrorState what="the cluster resources" error={q.error} />;
   const objects = q.data?.objects;
@@ -55,18 +64,20 @@ export function ReleaseObjects({
 
   return (
     <section className="space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold">Cluster resources</h2>
-        <p className="text-xs text-muted-foreground">
-          Read live from the objects this release rendered
-          {q.dataUpdatedAt > 0 &&
-            ` · refreshed ${timeAgo(new Date(q.dataUpdatedAt).toISOString())}`}
-        </p>
-      </div>
+      <h2 className="text-base font-semibold">
+        <HoverHint
+          text={
+            "Read live from the objects this release rendered" +
+            (q.dataUpdatedAt > 0 ? ` · refreshed ${timeAgo(new Date(q.dataUpdatedAt).toISOString())}` : "")
+          }
+        >
+          Cluster resources
+        </HoverHint>
+      </h2>
       <div className="grid gap-4 lg:grid-cols-3">
         <RoutePanel objects={objects} loading={q.isPending} />
         <ScalerPanel objects={objects} loading={q.isPending} />
-        <SLOPanel objects={objects} loading={q.isPending} />
+        <SLOPanel objects={objects} loading={q.isPending} onConfigure={onConfigureSLO} />
       </div>
     </section>
   );
@@ -348,9 +359,11 @@ function ScalerPanel({
 function SLOPanel({
   objects,
   loading,
+  onConfigure,
 }: {
   objects?: ObjectResult[];
   loading: boolean;
+  onConfigure?: () => void;
 }) {
   const { result, spec } = pick<LLMSLORequirementSpec, unknown>(
     objects,
@@ -369,15 +382,19 @@ function SLOPanel({
       result={result}
       loading={loading}
       absent="No LLMSLORequirement: the decision service has no targets for this model."
-      state={
-        spec &&
-        (suspended ? (
-          <Badge variant="warning">suspended</Badge>
-        ) : priority > 0 ? (
-          <Badge variant="success">priority {priority}</Badge>
-        ) : (
-          <Badge variant="muted">best effort</Badge>
-        ))
+      action={
+        onConfigure && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="size-8 px-0 text-primary"
+            aria-label="Configure SLO"
+            title="Configure SLO"
+            onClick={onConfigure}
+          >
+            <Settings2 className="size-4" />
+          </Button>
+        )
       }
     >
       {spec && (
@@ -391,6 +408,15 @@ function SLOPanel({
           </Stats>
 
           <Facts>
+            <Fact label="Class">
+              {suspended ? (
+                <Badge variant="warning">suspended</Badge>
+              ) : priority > 0 ? (
+                <Badge variant="success">priority {priority}</Badge>
+              ) : (
+                <Badge variant="muted">best effort</Badge>
+              )}
+            </Fact>
             <Fact label="Service id">
               <Mono>{spec.serviceId}</Mono>
             </Fact>
@@ -569,6 +595,7 @@ function ObjectCard({
   loading,
   absent,
   state,
+  action,
   children,
 }: {
   icon: React.ReactNode;
@@ -578,6 +605,7 @@ function ObjectCard({
   loading: boolean;
   absent: string;
   state?: React.ReactNode;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -590,15 +618,23 @@ function ObjectCard({
           <div className="min-w-0">
             <div className="text-sm font-semibold">{title}</div>
             <div
-              className="truncate font-mono text-xs text-muted-foreground"
+              className="font-mono text-xs break-words text-muted-foreground"
               title={result?.ref.apiVersion}
             >
               {kind}
-              {result && ` · ${result.ref.name}`}
+              {result && (
+                <>
+                  {" · "}
+                  <span className="inline-block max-w-full break-words">{result.ref.name}</span>
+                </>
+              )}
             </div>
           </div>
         </div>
-        <div className="shrink-0">{state}</div>
+        <div className="flex shrink-0 items-center gap-2">
+          {state}
+          {action}
+        </div>
       </div>
       <div className="flex flex-1 flex-col gap-4 p-4">
         {loading ? (

@@ -3,7 +3,7 @@ import { Button, Card, Dialog, DialogContent, DialogDescription, DialogHeader, D
 import { Columns2, Eraser, Plus, SlidersHorizontal, X } from "lucide-react";
 import { buildPayload } from "@/modules/playground/api";
 import { Composer } from "@/modules/playground/components/Composer";
-import { ModelSelect, NoModels, useModels } from "@/modules/playground/components/ModelSelect";
+import { ModelSelect, NoModels, useModels, useTarget } from "@/modules/playground/components/ModelSelect";
 import { ParamsPanel } from "@/modules/playground/components/ParamsPanel";
 import { Transcript } from "@/modules/playground/components/Transcript";
 import { ViewCode } from "@/modules/playground/components/ViewCode";
@@ -40,6 +40,7 @@ const GRID: Record<number, string> = {
 export function Compare() {
   const t = useT();
   const models = useModels();
+  const ready = (models.data ?? []).filter((m) => m.ready);
   const [slots, setSlots] = useState<Slot[]>(() => Array.from({ length: MIN_PANELS }, () => ({ id: newId(), model: "" })));
   const [form, setForm] = useState<ParamsForm>(DEFAULT_FORM);
   const [paramsOpen, setParamsOpen] = useState(false);
@@ -49,7 +50,7 @@ export function Compare() {
   // Fill empty columns with models not yet shown, so the page compares something
   // on first load.
   useEffect(() => {
-    const ids = (models.data ?? []).map((m) => m.id);
+    const ids = (models.data ?? []).filter((m) => m.ready).map((m) => m.id);
     if (!ids.length) return;
     setSlots((prev) => {
       if (prev.every((s) => s.model)) return prev;
@@ -87,7 +88,7 @@ export function Compare() {
               onClick={() =>
                 setSlots((prev) => [
                   ...prev,
-                  { id: newId(), model: models.data?.find((m) => !prev.some((s) => s.model === m.id))?.id ?? models.data?.[0]?.id ?? "" },
+                  { id: newId(), model: ready.find((m) => !prev.some((s) => s.model === m.id))?.id ?? ready[0]?.id ?? "" },
                 ])
               }
             >
@@ -170,20 +171,21 @@ interface PanelProps {
 
 function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, ref }: PanelProps) {
   const t = useT();
-  const params = useMemo(() => toChatParams(slot.model, form), [slot.model, form]);
+  const target = useTarget(slot.model);
+  const params = useMemo(() => toChatParams(target?.model ?? "", form, target?.id), [target?.model, target?.id, form]);
   const chat = useChat(params);
 
   useImperativeHandle(
     ref,
     () => ({
       send: (text, role) => {
-        if (slot.model) chat.send(text, role);
+        if (target) chat.send(text, role);
       },
       add: (role, text) => chat.add(role, text),
       stop: chat.stop,
       clear: chat.clear,
     }),
-    [chat, slot.model],
+    [chat, target],
   );
 
   const lastRole = chat.turns.at(-1)?.role;
@@ -203,7 +205,7 @@ function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, r
             onModel(model);
           }}
         />
-        <ViewCode compact payload={() => buildPayload(historyOf(chat.turns), params)} disabled={!slot.model} />
+        <ViewCode compact payload={() => buildPayload(historyOf(chat.turns), params)} disabled={!target} />
         <Button variant="ghost" size="icon-sm" title={t("compare.clear")} onClick={chat.clear} disabled={chat.streaming || !chat.turns.length}>
           <Eraser className="h-3.5 w-3.5" />
         </Button>
@@ -216,7 +218,7 @@ function ComparePanel({ slot, index, form, height, onModel, onRemove, onState, r
       <Transcript
         chat={chat}
         className="min-h-0 flex-1"
-        empty={<p className="py-10 text-center text-sm text-muted-foreground">{slot.model ? t("compare.emptyReady") : t("compare.emptyPick")}</p>}
+        empty={<p className="py-10 text-center text-sm text-muted-foreground">{target ? t("compare.emptyReady") : t("compare.emptyPick")}</p>}
       />
     </Card>
   );
