@@ -66,7 +66,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- $gw := .Values.playground.gateway -}}
 {{- if $gw.profile -}}
 {{- $gw.profile -}}
-{{- else if and (not $gw.configMap) (not .Values.demo.enabled) -}}
+{{- else if not $gw.configMap -}}
 {{- if .Values.swiss.enabled -}}
 {{- include "swiss.effectiveProfileRef" (include "console.swiss" . | fromJson) -}}
 {{- else -}}
@@ -80,21 +80,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if or (include "console.gateway.profile" .) .Values.playground.gateway.configMap -}}true{{- end -}}
 {{- end -}}
 
-{{- /* The router needs somewhere to send /v1: a gateway, or the demo model. */ -}}
+{{- /* The router needs somewhere to send /v1: a gateway. */ -}}
 {{- define "console.router.enabled" -}}
-{{- if and .Values.router.enabled (or (include "console.gateway" .) .Values.demo.enabled) -}}true{{- end -}}
+{{- if and .Values.router.enabled (include "console.gateway" .) -}}true{{- end -}}
 {{- end -}}
 
 {{- define "console.router.secret" -}}
 {{ include "console.fullname" . }}-api-keys
 {{- end -}}
 
-{{- /* Pods of a bundled component (the demo model). Their own name keeps them
-       out of console's selectors, which match name+instance only and cannot
-       change on an existing release. */ -}}
-{{- define "console.componentSelectorLabels" -}}
-{{- $ctx := index . 0 -}}
-app.kubernetes.io/name: {{ include "console.name" $ctx }}-{{ index . 1 }}
-app.kubernetes.io/instance: {{ $ctx.Release.Name }}
-app.kubernetes.io/component: {{ index . 1 }}
-{{- end -}}
