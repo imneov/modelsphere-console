@@ -36,8 +36,7 @@ pick a model -> deploy an inference service -> wait until ready -> try it in the
 
 | Group | Menus | Purpose |
 |---|---|---|
-| Model Deployment | Deployments, Model Catalog, Nodes, Activity, Site Profile | Swiss's original UI; same functions as Model Serving |
-| Model Serving | Inference Services, Model Library, Nodes, Activity, Site Profile | Deploy and manage inference services (recommended) |
+| Model Serving | Inference Services, Model Library, Nodes, Activity, Site Profile | Deploy and manage inference services |
 | Playground | Chat, Compare models | Talk to models in the browser |
 | Router | API Keys | Keys that programs use to call `/v1` |
 | Access Control | Users, Login History, Roles | Accounts and permissions |

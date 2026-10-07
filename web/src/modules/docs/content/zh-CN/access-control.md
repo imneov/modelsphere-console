@@ -22,7 +22,7 @@
 
 | 页面权限 | 对应菜单 |
 |---|---|
-| `swiss.view` | 模型部署、模型服务 |
+| `swiss.view` | 模型服务 |
 | `playground.use` | Playground |
 | `apikeys.view` | 路由 → API 密钥 |
 | `users.view` | 访问控制 → 用户 |

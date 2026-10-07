@@ -39,7 +39,7 @@ kubectl -n modelsphere port-forward svc/console-console 8080:8080
 |---|---|---|---|
 | 只装 Console | 先看界面、管用户 | 无 | 登录、用户和角色；没有模型，Playground 和 `/v1` 不可用 |
 | 演示模型 | 集群里没有推理网关 | `--set demo.enabled=true` | 加一个 llama.cpp 跑的 Qwen2.5-0.5B（CPU），Playground 和 `/v1` 可用 |
-| 接入已有 Swiss | 集群已运行 Swiss 和 OpenResty 推理网关 | `--values console-values.yaml`，见[接入已有 Swiss](#接入已有-swiss) | 模型部署页面，以及网关上的全部模型 |
+| 接入已有 Swiss | 集群已运行 Swiss 和 OpenResty 推理网关 | `--values console-values.yaml`，见[接入已有 Swiss](#接入已有-swiss) | 模型服务页面，以及网关上的全部模型 |
 
 接入 Swiss 时不要再开 `demo.enabled`：开了之后 Playground 和 `/v1` 只连演示模型，Swiss 网关上的模型不会出现。
 
