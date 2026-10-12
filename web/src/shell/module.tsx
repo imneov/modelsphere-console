@@ -7,6 +7,10 @@ import { pageKey } from "@/shell/i18n";
 // guards, the query client and the session on every request.
 //
 // Plugging a module in or out is one line in src/modules/index.ts.
+export interface ModuleOverviewProps {
+  session?: ReactNode;
+}
+
 export interface ConsoleModule {
   // Stable id: used as the React key and in logs. Lowercase, no spaces.
   id: string;
@@ -20,7 +24,7 @@ export interface ConsoleModule {
   // edge, then their own p-4 body. Default "padded": the shell insets the page.
   frame?: "padded" | "flush";
   // Optional card(s) shown on the console home page.
-  overview?: ComponentType;
+  overview?: ComponentType<ModuleOverviewProps>;
 }
 
 export interface ModulePage {
@@ -33,8 +37,8 @@ export interface ModulePage {
   // Present means the page gets a sidebar entry. label is Chinese; other
   // languages: "{module id}:menu.{pageKey(path)}".
   menu?: { label: string; icon: LucideIcon };
-  // Also link the page from the top bar, with its menu label and icon.
-  topbar?: boolean;
+  // Also link the page from the top bar; an object overrides its menu label.
+  topbar?: boolean | { label: string };
 }
 
 const ModuleContext = createContext<ConsoleModule | null>(null);
@@ -114,22 +118,25 @@ export function navGroups(modules: ConsoleModule[], has: (permission: string) =>
   return groups;
 }
 
-function menuItems(m: ConsoleModule, has: (permission: string) => boolean, pick: (p: ModulePage) => boolean = () => true): NavItem[] {
+function menuItems(m: ConsoleModule, has: (permission: string) => boolean, pick: (p: ModulePage) => boolean = () => true, placement: "menu" | "topbar" = "menu"): NavItem[] {
   return m.pages
     .filter((p) => p.menu && (!p.permission || has(p.permission)) && pick(p))
-    .map((p) => ({
-      to: joinPath(m.basePath, p.path),
-      label: p.menu!.label,
-      ns: m.id,
-      key: pageKey(p.path),
-      icon: p.menu!.icon,
-      end: p.path === "",
-    }));
+    .map((p) => {
+      const topbar = placement === "topbar" && typeof p.topbar === "object" ? p.topbar : undefined;
+      return {
+        to: joinPath(m.basePath, p.path),
+        label: topbar?.label ?? p.menu!.label,
+        ns: m.id,
+        key: pageKey(p.path) + (topbar ? "Topbar" : ""),
+        icon: p.menu!.icon,
+        end: p.path === "",
+      };
+    });
 }
 
 // topbarItems are the pages declared topbar: true that the user may open.
 export function topbarItems(modules: ConsoleModule[], has: (permission: string) => boolean): NavItem[] {
-  return modules.flatMap((m) => menuItems(m, has, (p) => !!p.topbar));
+  return modules.flatMap((m) => menuItems(m, has, (p) => !!p.topbar, "topbar"));
 }
 
 // activeGroupTitle is the group holding the current page: the module it is
