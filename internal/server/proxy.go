@@ -56,12 +56,22 @@ var unresolved = &backendTarget{url: url.URL{Scheme: "http", Host: "backend-with
 // is skipped and logged rather than taking the server down.
 func (s *Server) mountBackends(mux *http.ServeMux) {
 	targets := s.backendTargets()
+	catalogMounted := false
 	for _, b := range s.cfg.Backends {
 		resolve, ok := targets[b.Name]
 		if !ok {
 			continue
 		}
 		proxy := s.backendProxy(b)
+		prefix := strings.TrimSuffix(b.Prefix, "/")
+		catalogMounted = catalogMounted || prefix == "/api/llm"
+		catalogResolve := resolve
+		if b.Gateway != nil {
+			catalogResolve = gatewayResolver(gateway.NewResolver(b, s.kube, s.log).ResolveCatalog)
+		}
+		mux.HandleFunc(prefix+"/route-options", func(w http.ResponseWriter, r *http.Request) {
+			s.handleRouteOptions(w, r, b, catalogResolve)
+		})
 		mux.HandleFunc(strings.TrimSuffix(b.Prefix, "/")+"/", func(w http.ResponseWriter, r *http.Request) {
 			if !s.authorize(w, r, backendVerb(r.Method), backendResource, b.Name) {
 				return
@@ -80,6 +90,16 @@ func (s *Server) mountBackends(mux *http.ServeMux) {
 				}
 			}
 			proxy.ServeHTTP(w, r.WithContext(withTarget(r.Context(), target)))
+		})
+	}
+	if !catalogMounted {
+		mux.HandleFunc("/api/llm/route-options", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				w.Header().Set("Allow", "GET")
+				writeError(w, http.StatusMethodNotAllowed, "GET required")
+				return
+			}
+			writeError(w, http.StatusNotFound, "no gateway backend configured")
 		})
 	}
 }
@@ -110,7 +130,7 @@ func (s *Server) targetFunc(b config.Backend) (targetResolver, error) {
 		if s.kube == nil {
 			return nil, fmt.Errorf("gateway %+v needs cluster access, and this console has none", *b.Gateway)
 		}
-		return gatewayResolver(gateway.NewResolver(b, s.kube, s.log)), nil
+		return gatewayResolver(gateway.NewResolver(b, s.kube, s.log).Resolve), nil
 	}
 
 	target, err := url.Parse(b.URL)
@@ -128,9 +148,9 @@ func (s *Server) targetFunc(b config.Backend) (targetResolver, error) {
 	return func(context.Context) (*backendTarget, error) { return fixed, nil }, nil
 }
 
-func gatewayResolver(r *gateway.Resolver) targetResolver {
+func gatewayResolver(resolve func(context.Context) (*gateway.Entry, error)) targetResolver {
 	return func(ctx context.Context) (*backendTarget, error) {
-		entry, err := r.Resolve(ctx)
+		entry, err := resolve(ctx)
 		if err != nil {
 			return nil, err
 		}
