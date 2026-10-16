@@ -24,19 +24,21 @@ import {
   useAnchorNav,
   useDirty,
 } from "@modelsphere/ui";
-import { ArrowRight, TriangleAlert } from "lucide-react";
+import { ArrowRight, FlaskConical, TriangleAlert } from "lucide-react";
 import { useModulePath } from "@/shell";
-import { api, deployApi, type ApplyResult, type DiffResult, type IndexModel, type Plan } from "@swiss/lib/api";
+import { api, deployApi, type ApplyResult, type ApplyWith, type CatalogModel, type DiffResult, type Plan } from "@swiss/lib/api";
 import { EMPTY, formFromPlan, imageOf, planRequest, type Form } from "@swiss/components/DeploySettings";
 import { releaseCatalog } from "@swiss/components/CatalogChoice";
 import { Provenance } from "@swiss/components/Provenance";
 import { DiffView } from "@swiss/components/DiffView";
 import { gpuShort } from "@swiss/lib/gpu";
 import { isChartRange, movableCatalogs } from "@swiss/lib/upgrade";
+import { installMethod, llmsvcBlock } from "@swiss/lib/applyWith";
 import { useT } from "@/modules/inferences/i18n";
 import { detailPath } from "@/modules/inferences/lib";
 import { SECTIONS, chartChoice, defaultServiceId, gpuOptions, pipelineState, serviceIdError, whatMoves, type Section } from "@/modules/inferences/deploy-lib";
 import { DeployForm } from "@/modules/inferences/components/DeployForm";
+import { ExperimentalBadge } from "@/modules/inferences/components/InstallMethodLabel";
 import { readRouteOptions } from "@/modules/inferences/api";
 
 export type DeployTarget =
@@ -76,25 +78,35 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const [variant, setVariant] = useState(upgrade ? "" : (target.variant ?? ""));
   const [moveTo, setMoveTo] = useState("");
   const [chartVersion, setChartVersion] = useState("");
+  const [picked, setPicked] = useState<ApplyWith>();
   const catalogName = moveTo || ownCatalog;
 
   const indexes = useQueries({
     queries: catalogs.map((c) => ({ queryKey: ["catalog", c.name], queryFn: () => api.catalog(c.name), enabled: upgrade || c.name === ownCatalog })),
   });
-  const modelIn = (name?: string): IndexModel | undefined =>
-    indexes[catalogs.findIndex((c) => c.name === name)]?.data?.index.models.find((m) => m.name === modelName);
+  const modelIn = (name?: string): CatalogModel | undefined =>
+    indexes[catalogs.findIndex((c) => c.name === name)]?.data?.models.find((m) => m.name === modelName);
   const { movable } = upgrade ? movableCatalogs(catalogs, recorded ?? {}, ownCatalog, (c) => modelIn(c)?.source.hf) : { movable: [] as string[] };
   const im = modelIn(catalogName);
-  const versions = im?.versions.map((v) => v.version) ?? [];
-  const listed = im?.versions.find((v) => v.version === (version || (upgrade ? recorded?.version : undefined) || im.latest))?.variants ?? [];
-  const keptVariant = variant || (upgrade ? recorded?.variant : listed.find((v) => v.default)?.id ?? listed[0]?.id) || "";
+  // The variants as listed now; a version is the chosen variant's, from its
+  // history: on v2 versions are per variant, on v1 the model's.
+  const listed = im?.variants ?? [];
+  const keptVariant = variant || (upgrade ? recorded?.variant : im?.defaultVariant ?? listed[0]?.id) || "";
+  const latest = listed.find((x) => x.id === keptVariant)?.version;
+  const history = useQuery({
+    queryKey: ["history", catalogName, modelName, keptVariant],
+    queryFn: () => api.history(modelName!, { catalog: catalogName, variant: keptVariant }),
+    enabled: !!modelName && !!catalogName && !!latest,
+    retry: false,
+  });
+  const versions = history.data?.revisions.map((r) => r.version) ?? (latest ? [latest] : []);
 
   const entry = useQuery({
-    queryKey: ["model", modelName, version, catalogName],
-    queryFn: () => api.model(modelName!, version || undefined, catalogName),
+    queryKey: ["model", catalogName, modelName, keptVariant, version],
+    queryFn: () => api.model(modelName!, { catalog: catalogName, variant: keptVariant || undefined, version: version || undefined }),
     enabled: !!modelName && !!catalogName,
   });
-  const v = entry.data?.entry.variants.find((x) => x.id === keptVariant) ?? entry.data?.entry.variants[0];
+  const v = entry.data?.variant;
   const chartRange = !!v && isChartRange(v.chart.version);
   const chartList = useQuery({
     queryKey: ["chart-versions", catalogName, modelName, version, keptVariant],
@@ -103,6 +115,9 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
     retry: false,
   });
   const chart = chartChoice(chartList, chartVersion, upgrade ? current.data?.chart : undefined);
+  const llm = cluster.data?.llmservice;
+  const block = llmsvcBlock(llm, entry.data?.schema);
+  const method = installMethod(picked, llm, entry.data?.schema);
 
   const initial = useMemo<Form>(() => (upgrade ? (current.data ? formFromPlan(current.data) : EMPTY) : { ...EMPTY, serviceId: defaultServiceId(target.model) }), [upgrade, current.data, target]);
   const [form, setForm] = useState<Form>(initial);
@@ -152,7 +167,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const dryRun = useMutation({ mutationFn: (pl: Plan) => deployApi.diff({ planHash: pl.hash }), onSuccess: setDiff });
   const state = pipelineState({ diff, exists: live.data?.exists, applied: !!applied });
   const apply = useMutation({
-    mutationFn: () => (state.action === "install" ? deployApi.install(plan!.hash, note.trim()) : deployApi.apply(plan!.hash, diff?.revision, note.trim(), force)),
+    mutationFn: () => (state.action === "install" ? deployApi.install(plan!.hash, note.trim(), method) : deployApi.apply(plan!.hash, diff?.revision, note.trim(), force)),
     onSuccess: (r) => {
       setApplied(r);
       for (const key of REFRESH) qc.invalidateQueries({ queryKey: key });
@@ -195,32 +210,45 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
       )}
       {!upgrade && (
         <FloatingField label={t("deploy.fields.model")} disabled>
-          <FieldInput value={entry.data?.entry.displayName || target.model} readOnly disabled />
+          <FieldInput value={entry.data?.model.displayName || target.model} readOnly disabled />
         </FloatingField>
       )}
       <div className="grid grid-cols-2 gap-3">
-        <FloatingField label={t("deploy.fields.version")}>
-          <FieldSelect
-            value={version || (upgrade ? KEEP : im?.latest ?? "")}
-            onValueChange={(x) => {
-              setVersion(x === KEEP || (!upgrade && x === im?.latest) ? "" : x);
-              setVariant("");
-              setChartVersion("");
-            }}
-            options={[...(upgrade ? [keepOption(t("deploy.fields.keep", { v: recorded?.version ?? "-" }))] : []), ...versions.map((x) => ({ value: x, label: x === im?.latest ? `${x} (${t("model.latest")})` : x }))]}
-          />
-        </FloatingField>
         <FloatingField label={t("deploy.fields.variant")}>
           <FieldSelect
             value={variant || (upgrade ? KEEP : keptVariant)}
             onValueChange={(x) => {
               setVariant(x === KEEP ? "" : x);
+              // On v2 another variant has versions of its own.
+              setVersion("");
               setChartVersion("");
             }}
             options={[
               ...(upgrade ? [keepOption(t("deploy.fields.keep", { v: recorded?.variant ?? "-" }))] : []),
               ...listed.map((x) => ({ value: x.id, label: x.id, description: `${x.engine} · ${gpuShort(x.requires)}` })),
             ]}
+          />
+        </FloatingField>
+        {/* Empty is the variant's latest, on an upgrade as on a deploy. */}
+        <FloatingField
+          label={t(entry.data?.schema === "v2" ? "deploy.fields.variantVersion" : "deploy.fields.version")}
+          hint={history.error ? t("deploy.fields.versionError", { error: history.error.message }) : undefined}
+        >
+          <FieldSelect
+            value={version || latest || ""}
+            onValueChange={(x) => {
+              setVersion(x === latest ? "" : x);
+              setChartVersion("");
+            }}
+            options={versions.map((x) => ({
+              value: x,
+              label:
+                x === latest
+                  ? `${x} (${t("model.latest")})`
+                  : upgrade && x === recorded?.version && keptVariant === recorded?.variant
+                    ? `${x} (${t("deploy.fields.deployed")})`
+                    : x,
+            }))}
           />
         </FloatingField>
       </div>
@@ -250,6 +278,39 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
             />
           )}
         </FloatingField>
+      )}
+      {!upgrade && (
+        <FloatingField label={t("deploy.fields.applyWith")} hint={block ? t(`deploy.fields.applyWithBlocked.${block}`) : t("deploy.fields.applyWithHint")}>
+          <FieldSelect
+            value={method}
+            onValueChange={(x) => x && setPicked(x as ApplyWith)}
+            options={(["helm", "llmsvc"] as const).map((m) => {
+              const isDefault = m === installMethod(undefined, llm, "v2");
+              return {
+                value: m,
+                label: t(`deploy.fields.applyWithMethod.${m}`),
+                description: t(`deploy.fields.applyWithDesc.${m}`),
+                badge:
+                  m === "llmsvc" ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <ExperimentalBadge />
+                      {isDefault && t("deploy.fields.applyWithDefault")}
+                    </span>
+                  ) : isDefault ? (
+                    t("deploy.fields.applyWithDefault")
+                  ) : undefined,
+                disabled: m === "llmsvc" && !!block,
+              };
+            })}
+          />
+        </FloatingField>
+      )}
+      {/* The select shows only the label once closed, so the mark is repeated here. */}
+      {!upgrade && method === "llmsvc" && (
+        <p className="-mt-1 flex items-center gap-1.5 text-xs text-warning">
+          <FlaskConical className="size-3.5 shrink-0" />
+          {t("deploy.fields.applyWithExperimentalNote")}
+        </p>
       )}
     </>
   );
@@ -326,6 +387,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
               onNote={setNote}
               force={force}
               onForce={setForce}
+              method={state.action === "install" ? method : live.data?.backend}
             />
           )
         )}
@@ -369,6 +431,7 @@ export function Review({
   onNote,
   force,
   onForce,
+  method,
 }: {
   upgrade: boolean;
   rollback?: boolean;
@@ -383,6 +446,8 @@ export function Review({
   onNote: (v: string) => void;
   force: boolean;
   onForce: (v: boolean) => void;
+  // The install method: the one picked on an install, the release's own otherwise.
+  method?: ApplyWith;
 }) {
   const t = useT();
   const moves = current && (upgrade || rollback) ? whatMoves(current, plan, currentCatalog) : null;
@@ -428,6 +493,12 @@ export function Review({
         <SectionCard title={t("deploy.review.plan")} collapsible defaultExpanded={false}>
           <Provenance plan={plan} />
         </SectionCard>
+      )}
+      {method && (
+        <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+          {t(state.action === "install" ? "deploy.review.applyWith" : "deploy.review.applyWithKept", { method: t(`deploy.fields.applyWithMethod.${method}`) })}
+          {method === "llmsvc" && <ExperimentalBadge />}
+        </p>
       )}
       <FloatingField label={t("deploy.review.note")} hint={t("deploy.review.noteHint")} multiline>
         <FieldTextarea value={note} onChange={(e) => onNote(e.target.value)} rows={3} />

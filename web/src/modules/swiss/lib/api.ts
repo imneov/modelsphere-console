@@ -25,6 +25,22 @@ export interface ClusterInfo {
   // The other swissd instances this site knows about, from its profile.
   sites?: Site[];
   warnings?: string[];
+  // Absent from a swissd that predates the LLMService backend.
+  llmservice?: LLMServiceInfo;
+}
+
+// How a release is stored: helm keeps the plan in a ConfigMap beside a release
+// swissd installs; llmsvc is an LLMService that llm-operator installs.
+export type ApplyWith = "helm" | "llmsvc";
+
+export interface LLMServiceInfo {
+  // The CRD is served (discovery, not operator readiness).
+  served: boolean;
+  // An install may name llmsvc: served, and swissd is not known to lack the grant.
+  available?: boolean;
+  // The site profile's applyWith, and what an install naming none gets.
+  applyWith: ApplyWith;
+  newInstalls: ApplyWith;
 }
 
 // One selectable catalog. source is its location as a plan records it, which
@@ -37,6 +53,9 @@ export interface CatalogInfo {
   ref?: string;
   // The catalog a page opens in when none is named.
   default?: boolean;
+  // The index's schema, else the profile's schemaVersion. Absent when neither
+  // says, and from a swissd that predates it.
+  schema?: CatalogSchema;
 }
 
 // One other swissd, by name and address. The url is where a browser goes; no
@@ -65,6 +84,9 @@ export interface Deployment {
   // The path the entrypoint publishes this release on. Absent when the plan
   // names no route.
   route?: string;
+  backend?: ApplyWith;
+  // An LLMService swiss did not write.
+  external?: boolean;
 }
 
 export interface DeploymentsResponse {
@@ -95,43 +117,40 @@ export interface Requires {
   rdma?: boolean;
 }
 
-export interface IndexVariant {
+// v1 is the legacy schema: read-only, and still what a catalog with no
+// schemaVersion reads. v2 is the one new catalogs publish.
+export type CatalogSchema = "v1" | "v2";
+
+// One variant as its catalog lists it now, at its pin: on v2 each variant file
+// has its own version and digest, on v1 every variant shares its entry's.
+export interface ModelVariant {
   id: string;
+  version: string;
+  digest: string;
   engine: string;
   default?: boolean;
   description?: string;
   link?: string;
   chart: Chart;
   requires: Requires;
-}
-
-export interface IndexVersion {
-  version: string;
-  path: string;
-  digest: string;
-  variants: IndexVariant[];
-}
-
-export interface IndexModel {
-  name: string;
-  displayName?: string;
-  description?: string;
-  family?: string;
-  tags?: string[];
-  // true, or the reason as a string. Existing deploys still resolve it.
+  // v2 only.
+  servedName?: string;
   deprecated?: boolean | string;
-  tuning?: Tuning[];
-  source: { hf: string; revision?: string; sizeGiB?: number };
-  latest: string;
-  versions: IndexVersion[];
+  replaces?: string;
 }
 
-// A measured result from metadata.yaml: a tuned variant against a baseline, in
-// one version. Display only, and not checked by swissd -- ids may dangle.
+// A variant at a version. Version is absent when the catalog recorded none.
+export interface VariantRef {
+  id: string;
+  version?: string;
+}
+
+// A measured result from metadata.yaml: a tuned variant against a baseline,
+// each at the version it was measured at. Display only, and not checked by
+// swissd -- ids may dangle.
 export interface Tuning {
-  version: string;
-  baseline: string;
-  optimized: string;
+  baseline: VariantRef;
+  optimized: VariantRef;
   // The headline: percent gained on the tuning benchmark, 44 meaning +44%.
   uplift?: number;
   // Every workload the benchmark ran, when it ran more than one.
@@ -140,32 +159,70 @@ export interface Tuning {
   report?: string;
 }
 
+// A model as its index lists it now, the same for either schema.
+export interface CatalogModel {
+  name: string;
+  displayName?: string;
+  description?: string;
+  family?: string;
+  tags?: string[];
+  // true, or the reason as a string. Existing deploys still resolve it.
+  deprecated?: boolean | string;
+  source: { hf: string; revision?: string; sizeGiB?: number };
+  defaultVariant: string;
+  variants: ModelVariant[];
+  tuning?: Tuning[];
+}
+
 export interface CatalogResponse {
   name: string;
   ref: string;
   source: string;
-  // site is where the catalog's own site is published, perf reports included.
-  index: { apiVersion: string; site?: string; count: number; models: IndexModel[] };
+  schema: CatalogSchema;
+  // Where the catalog's own site is published, perf reports included.
+  site?: string;
+  models: CatalogModel[];
 }
 
-export interface Variant extends IndexVariant {
+// A variant as a deploy composes it, values and image included, at the pin it
+// is composed at.
+export interface Variant extends Omit<ModelVariant, "servedName" | "deprecated" | "replaces"> {
+  servedName: string;
   image?: { repository: string; tag: string; digest?: string };
   values?: Record<string, unknown>;
 }
 
-export interface Entry {
-  apiVersion: string;
-  name: string;
+export interface ModelResponse {
+  ref: string;
+  schema: CatalogSchema;
+  model: CatalogModel;
+  variant: Variant;
+  // What the site's template resolves to for this model, so a form can show
+  // the real default rather than describe the template.
+  localPath?: string;
+  pathTemplate?: string;
+  // Each variant's image after the site's mirror rewrite, by variant id, so the
+  // form can offer that rewrite as a choice.
+  imageRepository?: Record<string, string>;
+}
+
+// One published version of a variant. Commit, releaseDate and subject are v2's.
+export interface CatalogRevision {
   version: string;
-  digest?: string;
-  servedName?: string;
-  displayName?: string;
-  description?: string;
-  family?: string;
-  license?: string;
-  tags?: string[];
-  source: { hf: string; revision?: string; sizeGiB?: number };
-  variants: Variant[];
+  digest: string;
+  releaseDate?: string;
+  commit?: string;
+  subject?: string;
+  // The one the index lists now.
+  current?: boolean;
+}
+
+export interface HistoryResponse {
+  ref: string;
+  schema: CatalogSchema;
+  model: string;
+  variant: string;
+  revisions: CatalogRevision[];
 }
 
 export interface Run {
@@ -221,7 +278,8 @@ export interface SiteProfile {
   namespace?: string;
   // The catalogs this site deploys from. Set here they win over swissd's config
   // file; empty falls back to it.
-  catalogs?: { name: string; url: string; default?: boolean }[];
+  // schemaVersion unset reads v1.
+  catalogs?: { name: string; url: string; schemaVersion?: CatalogSchema; default?: boolean }[];
   // The single-catalog spelling from before the list, read as one catalog
   // named "default". The form rewrites it as catalogs.
   catalog?: string;
@@ -249,7 +307,12 @@ export interface SiteProfile {
     auth?: RouteAuth;
   };
   schedule?: { priorityClassName?: string; schedulerName?: string };
-  nodes?: { gpusPerNode?: number };
+  nodes?: {
+    gpusPerNode?: number;
+    // Catalog GPU product -> node label selectors ("key=value[,key=value]"),
+    // for nodes a vendor install does not label with the catalog's name.
+    gpuProductAliases?: Record<string, string[]>;
+  };
   sites?: Site[];
   extra?: Record<string, unknown>;
 }
@@ -357,9 +420,13 @@ export interface Session {
   authenticated: boolean;
   user?: string;
   expiresAt?: string;
-  // Absent until authenticated: whether the site profile has been written yet.
-  // A fresh install has none, and the first login lands on the setup page.
+  // Absent until authenticated: whether the site profile is stored and parses,
+  // so swissd can compose against it.
   initialized?: boolean;
+  // Whether setup has run: a profile is stored, parsing or not. False only when
+  // swissd found none, which is the one state the setup page is for. Absent
+  // from a swissd older than the field.
+  setUp?: boolean;
   // This swissd runs with no login at all.
   authDisabled?: boolean;
 }
@@ -381,18 +448,13 @@ export const api = {
   // may be left out.
   catalog: (catalog?: string) =>
     get<CatalogResponse>("/api/catalog" + (catalog ? `?catalog=${encodeURIComponent(catalog)}` : "")),
-  model: (name: string, version?: string, catalog?: string) =>
-    // localPath is what the site's template resolves to for this model, so a
-    // form can show the real default rather than describe the template.
-    // imageRepository is each variant's image after the site's mirror rewrite,
-    // by variant id, so the form can offer that rewrite as a choice.
-    get<{
-      ref: string;
-      entry: Entry;
-      localPath?: string;
-      pathTemplate?: string;
-      imageRepository?: Record<string, string>;
-    }>(`/api/catalog/${encodeURIComponent(name)}` + query({ version, catalog })),
+  // A model and one variant of it resolved: the default unless one is named,
+  // at its current version unless one is named.
+  model: (name: string, opts: { catalog?: string; variant?: string; version?: string } = {}) =>
+    get<ModelResponse>(`/api/catalog/${encodeURIComponent(name)}` + query(opts)),
+  // A variant's published versions, newest first; the default's unless one is named.
+  history: (name: string, opts: { catalog?: string; variant?: string } = {}) =>
+    get<HistoryResponse>(`/api/catalog/${encodeURIComponent(name)}/history` + query(opts)),
   // The chart versions a variant's chart.version allows, newest first. A pinned
   // variant has its one; a range lists the chart repository, which can fail.
   chartVersions: (name: string, opts: { catalog?: string; version?: string; variant?: string }) =>
@@ -470,6 +532,9 @@ export interface Plan {
     version?: string;
     digest?: string;
     variant: string;
+    // "v2" when composed from a v2 catalog, whose version and digest pin one
+    // variant file. Absent on v1.
+    schema?: CatalogSchema;
   };
   chart: { name: string; version: string; repo?: string; path?: string };
   engine: string;
@@ -482,6 +547,8 @@ export interface Plan {
   layers: Record<string, Record<string, unknown>>;
   helmfile?: string;
   hash: string;
+  // What compose accepted but a person should see, such as a forced GPU product.
+  warnings?: string[];
 }
 
 export interface DiffResult {
@@ -514,6 +581,9 @@ export interface PlanRequest {
   serviceId?: string;
   localPath?: string;
   gpuProducts?: string[];
+  // Accepts gpuProducts the variant does not list, provided each is on this
+  // cluster under the variant's vendor. The plan then carries a warning.
+  forceGpuProducts?: boolean;
   overrides?: Record<string, unknown>;
   overridesYAML?: string;
   editsYAML?: string;
@@ -573,6 +643,8 @@ export interface ReleaseStatus {
   // Written beside the release on every apply. The only thing that can say an
   // apply was started and never finished -- helm reports the last one that did.
   planStatus?: PlanStatus;
+  // Set when swiss manages the release; it never changes after install.
+  backend?: ApplyWith;
 }
 
 export interface ObjectRef {
@@ -837,8 +909,8 @@ export const deployApi = {
   // decision about this one upgrade rather than about the release.
   apply: (planHash: string, expectRevision?: number, note?: string, forceConflicts?: boolean) =>
     post<ApplyResult>("/api/apply", { planHash, expectRevision, note, forceConflicts }),
-  install: (planHash: string, note?: string) =>
-    post<ApplyResult>("/api/install", { planHash, note }),
+  install: (planHash: string, note?: string, applyWith?: ApplyWith) =>
+    post<ApplyResult>("/api/install", { planHash, note, applyWith }),
   probe: (ns: string, release: string, auth: EntrypointAuth = {}) =>
     post<ProbeResult>(
       `/api/releases/${encodeURIComponent(ns)}/${encodeURIComponent(release)}/probe`,
