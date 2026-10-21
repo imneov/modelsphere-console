@@ -349,6 +349,19 @@ DeploySheet -> GET /api/llm/route-options[?route=<existing>]
 | Re-enable | Change the one flag and rebuild; the existing controls, translations and request handling remain |
 | Ownership | Console adapter applies public defaults; copied Swiss UI is unchanged |
 
+### Adaptive concurrency form
+
+The master switch and every `needsAdaptive` field share one section (console #75); the floor fraction has its own label.
+
+| Concern | Decision |
+|---|---|
+| Groups | Gateway `needsAdaptive` metadata decides membership; known `adaptive_cc_*` keys are recognized without a live catalog |
+| Off | Hide dependent common/advanced inputs, clear their entered values, and prevent adding adaptive custom keys while off |
+| Capacity | `default_max` remains in Capacity & failover; it governs limits even with adaptive control off |
+| Upgrade removal | Swiss `fromRelease` recursively retains omitted map keys. Compose normally first for its model-move/chart validation; if stale adaptive form keys survive, recompose the full validated form with those keys removed, pinned to the just-resolved model/version/chart |
+| Integrity | Preserve unrelated form values and explicit advanced YAML; reject source/chart identity or other layer changes between the two compositions |
+| Application | Only the cleaned plan enters the existing diff/revision/apply flow; composition performs no workload write |
+
 ### Workload reads (`/api/k8s/...`)
 
 Events and logs are Kubernetes data, not swiss's, so console serves them itself
