@@ -42,6 +42,8 @@ import { ExperimentalBadge } from "@/modules/inferences/components/InstallMethod
 import { readRouteOptions } from "@/modules/inferences/api";
 import { RecoveryFields } from "./RecoveryFields";
 import { mergeValues, planValues, recoveryError, recoverySettings, withRecovery } from "../recovery";
+import { assertUpgradeRevision, readUpgradeValues } from "../upgrade-values-api";
+import { UpgradeValuesError, upgradeEditsYAML } from "../upgrade-values";
 
 export type DeployTarget =
   | { kind: "deploy"; model: string; catalog: string; version?: string; variant?: string }
@@ -73,6 +75,16 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
     queryFn: () => api.releasePlan((target as { namespace: string }).namespace, (target as { release: string }).release),
     enabled: upgrade,
     retry: false,
+  });
+  const upgradeNamespace = target.kind === "upgrade" ? target.namespace : "";
+  const upgradeRelease = target.kind === "upgrade" ? target.release : "";
+  const currentValues = useQuery({
+    queryKey: ["upgradeValues", upgradeNamespace, upgradeRelease],
+    queryFn: () => readUpgradeValues(upgradeNamespace, upgradeRelease),
+    enabled: upgrade,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
   });
   const catalogs = cluster.data?.catalogs ?? [];
   const recorded = current.data?.source;
@@ -124,7 +136,11 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const block = llmsvcBlock(llm, entry.data?.schema);
   const method = installMethod(picked, llm, entry.data?.schema);
 
-  const initial = useMemo<Form>(() => (upgrade ? (current.data ? formFromPlan(current.data) : EMPTY) : { ...EMPTY, serviceId: defaultServiceId(target.model) }), [upgrade, current.data, target]);
+  const initial = useMemo<Form>(() => {
+    if (!upgrade) return { ...EMPTY, serviceId: defaultServiceId(target.model) };
+    const saved = current.data ? formFromPlan(current.data) : EMPTY;
+    return { ...saved, edits: currentValues.data?.all ?? saved.edits };
+  }, [upgrade, current.data, currentValues.data, target]);
   const initialRecovery = useMemo(() => recoverySettings(
     upgrade && current.data ? planValues(current.data) : mergeValues(entry.data?.variant.values, profile.data?.profile?.extra),
   ), [upgrade, current.data, entry.data, profile.data]);
@@ -182,9 +198,15 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
       if (recovery.enabled && recovery.idleTimeout.trim() && (!Number.isFinite(Number(recovery.idleTimeout)) || Number(recovery.idleTimeout) <= 0)) {
         throw new Error(t("deploy.recovery.errors.timeout"));
       }
+      let edits = form.edits;
+      if (upgrade) {
+        if (!currentValues.data) throw new UpgradeValuesError("unavailable");
+        await assertUpgradeRevision(target.namespace, target.release, currentValues.data.revision);
+        edits = upgradeEditsYAML(currentValues.data.all, form.edits, current.data?.layers?.edit);
+      }
       const proposed = await deployApi.plan(withRecovery(
         planRequest(
-          { ...form, serviceId: form.serviceId || (upgrade ? form.serviceId : defaultServiceId(target.model)) },
+          { ...form, edits, serviceId: form.serviceId || (upgrade ? form.serviceId : defaultServiceId(target.model)) },
           upgrade
             ? { model: recorded!.model, version: version || undefined, variant: variant || undefined, catalog: moveTo || undefined, chartVersion: chartVersion || undefined, fromRelease: target.release }
             : { model: target.model, version, variant: keptVariant, catalog: target.catalog, chartVersion: chartVersion || undefined },
@@ -226,8 +248,9 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   };
 
   const readOnly = cluster.data && !cluster.data.allowDeploy;
-  const loading = cluster.isPending || (upgrade ? current.isPending : profile.isPending) || entry.isPending;
-  const error = cluster.error ?? current.error ?? entry.error;
+  const loading = cluster.isPending || (upgrade ? current.isPending || currentValues.isPending || currentValues.isFetching : profile.isPending) || entry.isPending;
+  const error = cluster.error ?? current.error ?? entry.error ?? (upgrade ? currentValues.error : null);
+  const errorMessage = (error: Error | null | undefined) => error instanceof UpgradeValuesError ? t(`deploy.upgradeValues.errors.${error.code}`) : error?.message;
   const keepOption = (label: string) => ({ value: KEEP, label });
 
   const targetFields = (
@@ -384,14 +407,15 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
         {(error || compose.error || apply.error) && (
           <Alert variant="destructive">
             <TriangleAlert />
-            <AlertDescription>{(error ?? compose.error ?? apply.error)?.message}</AlertDescription>
+            <AlertDescription>{errorMessage(error ?? compose.error ?? apply.error)}</AlertDescription>
           </Alert>
         )}
+        {upgrade && currentValues.error && <Button variant="outline" onClick={() => void currentValues.refetch()}>{t("deploy.upgradeValues.retry")}</Button>}
         {loading ? (
           <div className="flex justify-center py-16">
             <Spinner size="lg" />
           </div>
-        ) : step === "form" ? (
+        ) : step === "form" && (!upgrade || !currentValues.error) ? (
           <>
             <DeployForm
               form={form}
@@ -436,7 +460,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
         {step === "form" ? (
           <>
             <SheetCancelButton />
-            <Button onClick={submit} disabled={!!readOnly || loading || compose.isPending}>
+            <Button onClick={submit} disabled={!!readOnly || loading || !!error || compose.isPending}>
               {compose.isPending ? t("deploy.review.composing") : t("deploy.review.compose")}
             </Button>
           </>
