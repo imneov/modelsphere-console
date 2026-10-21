@@ -26,6 +26,7 @@ import { effective, type Form, type Toleration } from "@swiss/components/DeployS
 import { MAX_VALUES, rejectKey } from "@swiss/lib/routeDirectives";
 import { FALLBACK_ROUTE_OPTIONS, routeDirectives, runtimeValue, type RouteDirective, type RouteOptions } from "@/modules/inferences/routeOptions";
 import { useT } from "@/modules/inferences/i18n";
+import { ENABLE_MONITOR } from "../features";
 import { NAMED_VALUES, extraValue, fracOutOfRange, serviceIdError, type Section } from "@/modules/inferences/deploy-lib";
 
 const EFFECTS = ["", "NoSchedule", "PreferNoSchedule", "NoExecute"];
@@ -219,7 +220,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
           >
             <Switch aria-label={f("adaptiveCc")} checked={form.adaptiveCc} onCheckedChange={(v) => onChange(v ? { adaptiveCc: true } : { adaptiveCc: false, adaptiveCcMinFrac: "" })} />
           </FloatingField>
-          <FloatingField
+          {ENABLE_MONITOR && <FloatingField
             layout="inline"
             label={f("monitor")}
             hint={f("monitorHint")}
@@ -232,7 +233,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
             }
           >
             {sw("monitor", f("monitor"))}
-          </FloatingField>
+          </FloatingField>}
           <FloatingField layout="inline" label={f("serviceMonitor")} hint={f("serviceMonitorHint")}>
             {sw("serviceMonitor", f("serviceMonitor"))}
           </FloatingField>

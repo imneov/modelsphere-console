@@ -357,6 +357,18 @@ Helm Secret -> Console preview -> existing Swiss plan API -> operator confirms
 | Concurrency | Recheck revision, Secret UID/resourceVersion and plan hash; external Helm changes must pause during import |
 | Upgrade | Existing diff and apply flow; review the first diff because catalog/site defaults may differ |
 
+### Unpublished Monitor integration
+
+`modules/inferences/features.ts` holds the single compile-time `ENABLE_MONITOR` flag, false until the Monitor backend is public (console #76).
+
+| Concern | Decision |
+|---|---|
+| Deploy / upgrade | Hide Monitor and its model/GPU inputs; public defaults and form requests explicitly disable it |
+| Profile | Hide the Monitor ConfigMap form field and summary; retain stored profile data |
+| ServiceMonitor | Independent Prometheus Operator integration; visible and configurable as before |
+| Re-enable | Change the one flag and rebuild; the existing controls, translations and request handling remain |
+| Ownership | Console adapter applies public defaults; copied Swiss UI is unchanged |
+
 ### Workload reads (`/api/k8s/...`)
 
 Events and logs are Kubernetes data, not swiss's, so console serves them itself
