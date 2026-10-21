@@ -40,6 +40,7 @@ import { detailPath } from "@/modules/inferences/lib";
 import { SECTIONS, chartChoice, defaultServiceId, gpuOptions, pipelineState, serviceIdError, whatMoves, type Section } from "@/modules/inferences/deploy-lib";
 import { DeployForm } from "@/modules/inferences/components/DeployForm";
 import { ExperimentalBadge } from "@/modules/inferences/components/InstallMethodLabel";
+import { AdaptivePlanChangedError, composeAdaptivePlan } from "../adaptive-concurrency";
 import { readRouteOptions } from "@/modules/inferences/api";
 import { RecoveryFields } from "./RecoveryFields";
 import { mergeValues, planValues, recoveryError, recoverySettings, withRecovery } from "../recovery";
@@ -196,27 +197,30 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const change = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
   const compose = useMutation({
     mutationFn: async () => {
-      if (recovery.enabled && recovery.idleTimeout.trim() && (!Number.isFinite(Number(recovery.idleTimeout)) || Number(recovery.idleTimeout) <= 0)) {
-        throw new Error(t("deploy.recovery.errors.timeout"));
-      }
-      let edits = form.edits;
-      if (upgrade) {
-        if (!currentValues.data) throw new UpgradeValuesError("unavailable");
-        await assertUpgradeRevision(target.namespace, target.release, currentValues.data.revision);
-        edits = upgradeEditsYAML(currentValues.data.all, form.edits, current.data?.layers?.edit);
-      }
-      const proposed = await deployApi.plan(withRecovery(
-        planRequest(
+      try {
+        if (recovery.enabled && recovery.idleTimeout.trim() && (!Number.isFinite(Number(recovery.idleTimeout)) || Number(recovery.idleTimeout) <= 0)) {
+          throw new Error(t("deploy.recovery.errors.timeout"));
+        }
+        let edits = form.edits;
+        if (upgrade) {
+          if (!currentValues.data) throw new UpgradeValuesError("unavailable");
+          await assertUpgradeRevision(target.namespace, target.release, currentValues.data.revision);
+          edits = upgradeEditsYAML(currentValues.data.all, form.edits, current.data?.layers?.edit);
+        }
+        const request = withRecovery(planRequest(
           { ...form, edits, serviceId: form.serviceId || (upgrade ? form.serviceId : defaultServiceId(target.model)) },
           upgrade
             ? { model: recorded!.model, version: version || undefined, variant: variant || undefined, catalog: moveTo || undefined, chartVersion: chartVersion || undefined, fromRelease: target.release }
             : { model: target.model, version, variant: keptVariant, catalog: target.catalog, chartVersion: chartVersion || undefined },
-        ),
-        recovery,
-      ));
-      const invalid = recoveryError(proposed);
-      if (invalid) throw new Error(t(`deploy.recovery.errors.${invalid}`));
-      return proposed;
+        ), recovery);
+        const proposed = await composeAdaptivePlan(request, form, routeOptions.data, deployApi.plan, catalogName);
+        const invalid = recoveryError(proposed);
+        if (invalid) throw new Error(t(`deploy.recovery.errors.${invalid}`));
+        return proposed;
+      } catch (error) {
+        if (error instanceof AdaptivePlanChangedError) throw new Error(t("deploy.fields.adaptiveChanged"));
+        throw error;
+      }
     },
     onSuccess: (pl) => {
       setPlan(pl);

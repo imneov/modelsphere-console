@@ -18,7 +18,6 @@ import {
   FormSection,
   Input,
   Switch,
-  cn,
 } from "@modelsphere/ui";
 import { Plus, X } from "lucide-react";
 import type { ClusterInfo } from "@swiss/lib/api";
@@ -27,6 +26,7 @@ import { MAX_VALUES, rejectKey } from "@swiss/lib/routeDirectives";
 import { FALLBACK_ROUTE_OPTIONS, routeDirectives, runtimeValue, type RouteDirective, type RouteOptions } from "@/modules/inferences/routeOptions";
 import { useT } from "@/modules/inferences/i18n";
 import { ENABLE_MONITOR } from "../features";
+import { isAdaptiveOption, toggleAdaptive } from "../adaptive-concurrency";
 import { NAMED_VALUES, extraValue, fracOutOfRange, serviceIdError, type Section } from "@/modules/inferences/deploy-lib";
 
 const EFFECTS = ["", "NoSchedule", "PreferNoSchedule", "NoExecute"];
@@ -184,7 +184,24 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
             {sw("cart", f("cart"))}
           </FloatingField>
           {recovery}
-          <RouteExtras form={form} onChange={onChange} options={routeOptions} showRuntime={showRuntime} />
+          <FloatingField
+            layout="inline"
+            label={label("adaptive_cc", "adaptiveCc")}
+            hint={hint("adaptive_cc", "adaptiveCcHint")}
+            expanded={form.adaptiveCc}
+            expandedContent={
+              <div className="space-y-3 pb-3">
+                <p className="text-xs text-muted-foreground">{f("adaptiveCapacityHint")}</p>
+                <FloatingField layout={byKey.get("adaptive_cc_min_frac")?.fallback ? "block" : "float"} label={t("deploy.routeOptions.options.adaptive_cc_min_frac.label")} hint={hint("adaptive_cc_min_frac", "adaptiveCcMinFracHint")} error={fracOutOfRange(form.adaptiveCcMinFrac) ? f("fracRange") : undefined}>
+                  <FieldInput value={form.adaptiveCcMinFrac} onChange={(e) => onChange({ adaptiveCcMinFrac: e.target.value })} inputMode="decimal" placeholder={byKey.get("adaptive_cc_min_frac")?.fallback || undefined} aria-label={f("adaptiveCcMinFrac")} aria-invalid={fracOutOfRange(form.adaptiveCcMinFrac)} disabled={!!extraValue(form, "adaptive_cc_min")} />
+                </FloatingField>
+                <RouteExtras form={form} onChange={onChange} options={routeOptions} showRuntime={showRuntime} mode="adaptive" />
+              </div>
+            }
+          >
+            <Switch aria-label={f("adaptiveCc")} checked={form.adaptiveCc} onCheckedChange={(value) => onChange(toggleAdaptive(form, value, routeOptions))} />
+          </FloatingField>
+          <RouteExtras form={form} onChange={onChange} options={routeOptions} showRuntime={showRuntime} mode="other" />
           <FloatingField layout="inline" label={f("slo")} hint={f("sloHint")}>
             {sw("slo", f("slo"))}
           </FloatingField>
@@ -196,30 +213,6 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
               <FieldInput {...text("tpsLimitTps")} inputMode="numeric" placeholder={byKey.get("tps_limit_tps")?.fallback || undefined} />
             </FloatingField>
           </div>
-          <FloatingField
-            layout="inline"
-            label={label("adaptive_cc", "adaptiveCc")}
-            hint={hint("adaptive_cc", "adaptiveCcHint")}
-            expanded={form.adaptiveCc}
-            expandedContent={
-              <div className="space-y-1 pb-3">
-                <Input
-                  value={form.adaptiveCcMinFrac}
-                  onChange={(e) => onChange({ adaptiveCcMinFrac: e.target.value })}
-                  inputMode="decimal"
-                  placeholder={byKey.get("adaptive_cc_min_frac")?.fallback || undefined}
-                  aria-label={f("adaptiveCcMinFrac")}
-                  aria-invalid={fracOutOfRange(form.adaptiveCcMinFrac)}
-                  disabled={!!extraValue(form, "adaptive_cc_min")}
-                />
-                <p className={cn("text-xs", fracOutOfRange(form.adaptiveCcMinFrac) ? "text-destructive" : "text-muted-foreground")}>
-                  {fracOutOfRange(form.adaptiveCcMinFrac) ? f("fracRange") : hint("adaptive_cc_min_frac", "adaptiveCcMinFracHint")}
-                </p>
-              </div>
-            }
-          >
-            <Switch aria-label={f("adaptiveCc")} checked={form.adaptiveCc} onCheckedChange={(v) => onChange(v ? { adaptiveCc: true } : { adaptiveCc: false, adaptiveCcMinFrac: "" })} />
-          </FloatingField>
           {ENABLE_MONITOR && <FloatingField
             layout="inline"
             label={f("monitor")}
@@ -282,17 +275,19 @@ function runtimeText(t: ReturnType<typeof useT>, d: RouteDirective): string {
   return t("deploy.routeOptions.current", { value: runtimeValue(d.value), source: t(d.set ? "deploy.routeOptions.configured" : "deploy.routeOptions.inherited") });
 }
 
-export function RouteExtras({ form, onChange, options, showRuntime = false }: { form: Form; onChange: (patch: Partial<Form>) => void; options?: RouteOptions | null; showRuntime?: boolean }) {
+export function RouteExtras({ form, onChange, options, showRuntime = false, mode = "other" }: { form: Form; onChange: (patch: Partial<Form>) => void; options?: RouteOptions | null; showRuntime?: boolean; mode?: "adaptive" | "other" }) {
   const t = useT();
   const f = (k: string, v?: Record<string, string | number>) => t(`deploy.fields.${k}`, v);
   const [custom, setCustom] = useState("");
   const controlsId = useId();
   const catalog = options === null ? FALLBACK_ROUTE_OPTIONS : options ?? { route: "", directives: [], advanced: [] };
   const byKey = new Map(routeDirectives(catalog).map((d) => [d.key, d]));
+  const includes = (key: string) => (mode === "adaptive") === (key === "adaptive_cc" || isAdaptiveOption(key, options));
+  const advanced = catalog.advanced.filter((directive) => includes(directive.key));
   const taken = [...NAMED_VALUES, ...form.nginxExtras.map((r) => r.key)];
-  const used = NAMED_VALUES.size + form.nginxExtras.length;
+  const used = NAMED_VALUES.size + form.nginxExtras.filter((row) => form.adaptiveCc || !isAdaptiveOption(row.key, options)).length;
   const full = used >= MAX_VALUES;
-  const customError = custom.trim() ? rejectKey(custom, taken) : "";
+  const customError = custom.trim() ? rejectKey(custom, taken) || (!form.adaptiveCc && isAdaptiveOption(custom.trim(), options) ? f("adaptiveOff") : "") : "";
   const add = (key: string) => {
     onChange({ nginxExtras: [...form.nginxExtras, { key, value: "" }] });
     setCustom("");
@@ -305,14 +300,12 @@ export function RouteExtras({ form, onChange, options, showRuntime = false }: { 
   const remove = (key: string) => onChange({ nginxExtras: form.nginxExtras.filter((r) => r.key !== key) });
   const row = (key: string, d?: RouteDirective) => {
     const value = form.nginxExtras.find((r) => r.key === key)?.value ?? "";
-    const idle = !!d?.needsAdaptive && !form.adaptiveCc;
     const label = directiveText(t, d, "label") || key;
     const fraction = key.endsWith("_frac") && fracOutOfRange(value);
     return (
-      <div key={key} className={cn("grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-start gap-2", idle && "opacity-60")}>
+      <div key={key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-start gap-2">
         <div className="min-w-0" title={directiveText(t, d, "detail")}>
           <div className="flex items-center gap-1.5 text-sm"><label htmlFor={`${controlsId}-${key}`} className="break-words">{label}</label>{d && <FieldHint>{directiveText(t, d, "detail")}</FieldHint>}</div>
-          {idle && <div className="text-xs text-muted-foreground">{f("idle")}</div>}
           {showRuntime && d?.set !== undefined && <div className="break-words text-xs text-muted-foreground">{runtimeText(t, d)}</div>}
         </div>
         <div className="min-w-0">
@@ -328,26 +321,26 @@ export function RouteExtras({ form, onChange, options, showRuntime = false }: { 
       </div>
     );
   };
-  const primary = catalog.directives.filter((d) => !NAMED_VALUES.has(d.key));
+  const primary = catalog.directives.filter((d) => !NAMED_VALUES.has(d.key) && includes(d.key));
   const primaryKeys = new Set(primary.map((d) => d.key));
   return (
     <div className="flex flex-col gap-4">
       {[...new Set(primary.map((d) => d.group))].map((group) => (
         <div key={group} className="flex flex-col gap-2">
-          <div className="text-sm font-medium">{t(`deploy.routeOptions.groups.${group}`, { defaultValue: group })}</div>
+          {mode === "other" && <div className="text-sm font-medium">{t(`deploy.routeOptions.groups.${group}`, { defaultValue: group })}</div>}
           {primary.filter((d) => d.group === group).map((d) => row(d.key, d))}
         </div>
       ))}
       {showRuntime && <div className="grid gap-1 text-xs text-muted-foreground">
-        {catalog.directives.filter((d) => NAMED_VALUES.has(d.key)).map((d) => <div key={d.key} className="break-words">{directiveText(t, d, "label")}: {runtimeText(t, d)}</div>)}
+        {catalog.directives.filter((d) => NAMED_VALUES.has(d.key) && includes(d.key)).map((d) => <div key={d.key} className="break-words">{directiveText(t, d, "label")}: {runtimeText(t, d)}</div>)}
       </div>}
-      {form.nginxExtras.filter((r) => !primaryKeys.has(r.key)).map((r) => row(r.key, byKey.get(r.key)))}
+      {form.nginxExtras.filter((r) => !primaryKeys.has(r.key) && includes(r.key)).map((r) => row(r.key, byKey.get(r.key)))}
       <div className="flex flex-wrap items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="sm" disabled={full} />}><Plus className="size-3.5" /> {t("deploy.routeOptions.advanced")}</DropdownMenuTrigger>
+        {advanced.length > 0 && <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="sm" disabled={full} />}><Plus className="size-3.5" /> {t(mode === "adaptive" ? "deploy.routeOptions.advancedAdaptive" : "deploy.routeOptions.advanced")}</DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="max-h-[min(24rem,var(--available-height))] w-96 max-w-[calc(100vw-2rem)] overflow-auto">
-            {[...new Set(catalog.advanced.map((d) => d.group))].map((group) => {
-              const rows = catalog.advanced.filter((d) => d.group === group && !taken.includes(d.key));
+            {[...new Set(advanced.map((d) => d.group))].map((group) => {
+              const rows = advanced.filter((d) => d.group === group && !taken.includes(d.key));
               if (!rows.length) return null;
               return <DropdownMenuGroup key={group}>
                 <DropdownMenuLabel>{t(`deploy.routeOptions.groups.${group}`, { defaultValue: group })}</DropdownMenuLabel>
@@ -359,10 +352,12 @@ export function RouteExtras({ form, onChange, options, showRuntime = false }: { 
               </DropdownMenuGroup>;
             })}
           </DropdownMenuContent>
-        </DropdownMenu>
-        <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder={f("extrasCustom")} aria-label={f("extrasCustom")} className="h-8 w-48" disabled={full} />
-        <Button variant="outline" size="sm" disabled={full || !custom.trim() || !!customError} onClick={() => add(custom.trim())}><Plus className="size-3.5" />{t("common:actions.add")}</Button>
-        <Badge variant="outline" className="ms-auto font-normal">{full ? f("extrasFull", { max: MAX_VALUES }) : f("extrasUsed", { used, max: MAX_VALUES })}</Badge>
+        </DropdownMenu>}
+        {mode === "other" && <>
+          <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder={f("extrasCustom")} aria-label={f("extrasCustom")} className="h-8 w-48" disabled={full} />
+          <Button variant="outline" size="sm" disabled={full || !custom.trim() || !!customError} onClick={() => add(custom.trim())}><Plus className="size-3.5" />{t("common:actions.add")}</Button>
+          <Badge variant="outline" className="ms-auto font-normal">{full ? f("extrasFull", { max: MAX_VALUES }) : f("extrasUsed", { used, max: MAX_VALUES })}</Badge>
+        </>}
       </div>
       {customError && <p className="text-xs text-warning">{customError}</p>}
     </div>

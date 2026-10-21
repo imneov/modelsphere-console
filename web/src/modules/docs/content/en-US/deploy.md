@@ -32,6 +32,8 @@ Open the [Model Library](/inferences/catalog):
 
 Most fields can stay empty and take the site profile's and chart's defaults.
 
+**Adaptive concurrency** groups the master switch, floor fraction, absolute floor, start point, idle hold, and TTFT decisions together; its internal knobs are available under **Advanced adaptive options**. Turning the switch off hides and clears the group's entered values; turning it back on does not restore them. **Default peer maximum** stays in **Capacity & failover** and still applies when adaptive concurrency is off; it also influences the static maximum used for adaptive bounds. Review the diff before confirming an upgrade.
+
 ## Generation recovery
 
 Enable **Routing → Generation recovery** in the deploy or upgrade form. Enter the **Actual model** whose weights are deployed, such as `kimi-k3` or `glm-5.3`. This selects the continuation strategy; it is not the client-facing served name.
