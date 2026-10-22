@@ -324,6 +324,52 @@
     "deprecated": "Deprecated: {reason}",
     "noVariants": "This version has no variants"
   },
+  "localTemplates": {
+    "add": "New model template",
+    "addExternal": "Add to this catalog",
+    "createTitle": "New model template",
+    "createDescription": "Save a reusable deployment template, then deploy it from the model library.",
+    "reference": "Reference deployment recipe (optional)",
+    "referenceHint": "Choose an existing recipe to prefill its engine, image, GPUs and values.",
+    "noReference": "Start from scratch",
+    "loadingReference": "Reading reference recipe…",
+    "check": "Check", "checking": "Checking…", "checked": "The template passed validation and can be saved.",
+    "save": "Save template", "saving": "Saving…",
+    "disabled": "Custom template storage is not enabled in this Console. An administrator must upgrade or configure Console.",
+    "defaultView": "Default and custom", "custom": "Custom", "pendingLabel": "Catalog connection pending",
+    "pending": "Some custom templates are saved but cannot be read by the deployment backend yet. Connect the catalog before deploying them.",
+    "saved": "Model template {name} was saved and added to this model library.",
+    "savedPending": "Model template {name} was saved. Retry the catalog connection from the list before deploying.",
+    "connected": "The custom catalog is connected and its templates can enter the deployment flow.",
+    "retryRead": "Retry reading", "retryPublish": "Retry catalog connection", "connecting": "Connecting…",
+    "topologyDefault": "No topology constraint", "singleNode": "Single node", "multiNode": "Multi-node LeaderWorkerSet",
+    "sections": { "model": "Model information", "recipe": "Deployment recipe", "hardware": "Hardware requirements", "values": "Engine and runtime values" },
+    "fields": {
+      "name": "Model identifier", "displayName": "Display name", "description": "Description", "hf": "Weights source",
+      "family": "Model family", "tags": "Tags", "version": "Template version", "servedName": "Served model name",
+      "variantId": "Recipe ID", "engine": "Inference engine", "chartVersion": "Chart version",
+      "imageRepository": "Image repository", "imageTag": "Image tag", "imageDigest": "Image digest (optional)",
+      "gpus": "GPUs per node", "nodes": "Nodes (optional)", "minGpuMemoryGiB": "Minimum GPU memory (GiB, optional)", "vendor": "Accelerator vendor", "gpuProducts": "GPU products (optional)",
+      "topology": "Topology constraint", "rdma": "Requires RDMA", "valuesYAML": "Runtime values YAML"
+    },
+    "hints": {
+      "name": "Lowercase letters, digits, dots, underscores and hyphens, starting with a letter or digit; at most 63 characters.",
+      "hf": "Weights source in org/model format, used to resolve the model path at this site.",
+      "servedName": "The model name clients call. Empty uses the model identifier.",
+      "tags": "Separate multiple values with commas.",
+      "engine": "Review the image, chart and engine arguments after changing engines.",
+      "chartVersion": "An available exact version, for example 0.7.1. Replace a reference recipe's version range with a specific version.",
+      "imageDigest": "Optional sha256 digest to pin the image. Changing repository or tag clears the previous digest.",
+      "topology": "Multi-node recipes need matching node count and values.lws.size.",
+      "values": "Engine arguments, resources and other values. Deployment services read these recipes; use Secret references for sensitive data."
+    },
+    "errors": {
+      "required": "Fill in the model identifier, weights source, version, recipe, chart and image.",
+      "name": "Invalid model identifier or recipe ID; at most 63 characters. Recipe IDs use lowercase letters, digits and hyphens.",
+      "hardware": "GPU and node counts must be positive whole numbers; minimum memory must be nonnegative.",
+      "values": "Runtime values must be a valid YAML mapping without duplicate keys, YAML aliases, non-finite numbers or oversized content."
+    }
+  },
   "newModel": {
     "action": "New model",
     "title": "New model in {catalog}",

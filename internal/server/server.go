@@ -40,8 +40,9 @@ type Server struct {
 	registry *prometheus.Registry
 	models   *modelIndex
 
-	targetsOnce sync.Once
-	targets     map[string]targetResolver
+	targetsOnce         sync.Once
+	targets             map[string]targetResolver
+	templatePublishGate chan struct{}
 
 	draining atomic.Bool
 }
@@ -49,7 +50,7 @@ type Server struct {
 func New(cfg *config.Config, kube *cluster.Kube, log *slog.Logger, version string) *Server {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	return &Server{cfg: cfg, kube: kube, log: log, version: version, registry: reg, models: newModelIndex(log)}
+	return &Server{cfg: cfg, kube: kube, log: log, version: version, registry: reg, models: newModelIndex(log), templatePublishGate: make(chan struct{}, 1)}
 }
 
 // SetWeb installs the SPA filesystem. Without one, console is API only.
@@ -92,6 +93,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /readyz", s.handleReadyz)
+	mux.HandleFunc("/catalog/console", http.NotFound)
+	mux.HandleFunc("/catalog/console/", http.NotFound)
 
 	if s.authn != nil {
 		mux.HandleFunc("POST /oauth/token", s.handleToken)
@@ -119,6 +122,7 @@ func (s *Server) Handler() http.Handler {
 		// hence inside this block.
 		s.mountBackends(mux)
 		s.mountWorkload(mux)
+		s.mountModelTemplates(mux)
 
 		if s.router != nil {
 			s.mountRouter(mux)
@@ -140,7 +144,8 @@ func (s *Server) Run(ctx context.Context) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	errc := make(chan error, 2)
+	defer srv.Close()
+	errc := make(chan error, 3)
 	go func() {
 		s.log.Info("console listening", "addr", s.cfg.Server.Addr, "version", s.version)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -156,6 +161,16 @@ func (s *Server) Run(ctx context.Context) error {
 			}
 		}()
 		defer metrics.Close()
+	}
+	if addr := s.cfg.CatalogListenAddr(); addr != "off" {
+		catalog := &http.Server{Addr: addr, Handler: s.TemplateCatalogHandler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
+		go func() {
+			s.log.Info("catalog listening", "addr", addr)
+			if err := catalog.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				errc <- err
+			}
+		}()
+		defer catalog.Close()
 	}
 	select {
 	case err := <-errc:
@@ -216,6 +231,8 @@ type statusRecorder struct {
 	http.ResponseWriter
 	status int
 }
+
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code

@@ -9,6 +9,8 @@ server:
   addr: ":8080"
   # Prometheus metrics, on a port of their own. "off" disables them.
   metricsAddr: ":9090"
+  # Separate internal reader, defaults to :8081 only with modelTemplates enabled.
+  # catalogAddr: ":8081"
   auth:
     # HS256 signing key. In a cluster this comes from a Secret via env; never
     # commit a real one. Shared with Rise Global on upgrade.
@@ -41,6 +43,17 @@ backends:
     prefix: /api/llm
     gateway:
       profile: llm/site-profile
+
+# Bare configuration keeps templates disabled; the Helm chart enables them when
+# Swiss is connected and supplies these fixed storage/publication defaults.
+# Publish only nonsecret recipes; Swiss reads this subtree without credentials.
+modelTemplates:
+  enabled: false
+  namespace: console
+  configMap: console-model-templates
+  publishURL: http://console-catalog.console.svc:8081/catalog/console
+  backend: swiss
+  catalogName: console-local
 
 # The router: programs call models at <console>/v1 with API keys admins issue on
 # the router's API keys page. console keeps their hashes in this Secret (creating

@@ -89,3 +89,30 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{ include "console.fullname" . }}-api-keys
 {{- end -}}
 
+{{- define "console.modelTemplates.enabled" -}}
+{{- if .Values.modelTemplates.enabled -}}
+{{- $backend := .Values.modelTemplates.backend | default "swiss" -}}
+{{- $found := and (eq $backend "swiss") (not (empty (include "console.swiss.backend" .))) -}}
+{{- range .Values.backends -}}
+{{- if and (eq .name $backend) (eq .prefix "/api/deploy") .url (not .gateway) -}}{{- $found = true -}}{{- end -}}
+{{- end -}}
+{{- if $found -}}true{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "console.modelTemplates.namespace" -}}
+{{- .Values.modelTemplates.namespace | default .Release.Namespace -}}
+{{- end -}}
+
+{{- define "console.modelTemplates.configMap" -}}
+{{- .Values.modelTemplates.configMap | default (printf "%s-model-templates" (include "console.fullname" .)) -}}
+{{- end -}}
+
+{{- define "console.modelTemplates.service" -}}
+{{- printf "%s-catalog" (include "console.fullname" . | trunc 55 | trimSuffix "-") -}}
+{{- end -}}
+
+{{- define "console.modelTemplates.publishURL" -}}
+{{- .Values.modelTemplates.publishURL | default (printf "http://%s.%s.svc:%d/catalog/console" (include "console.modelTemplates.service" .) .Release.Namespace (int .Values.modelTemplates.port)) -}}
+{{- end -}}
+

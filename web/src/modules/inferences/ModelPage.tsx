@@ -24,7 +24,8 @@ import {
 } from "@modelsphere/ui";
 import { MoreHorizontal, TriangleAlert } from "lucide-react";
 import { useModulePath } from "@/shell";
-import { api, type ModelVariant, type Node } from "@swiss/lib/api";
+import type { ModelVariant, Node } from "@swiss/lib/api";
+import { api } from "./catalog-api";
 import { comparison, formatUplift, httpLink, reportLink, sharedVersion, variantKind, workloadSummary, type Kind } from "@swiss/lib/catalog";
 import { gpuModels, vendorLabel } from "@swiss/lib/gpu";
 import { useCatalogChoice } from "@swiss/components/CatalogChoice";

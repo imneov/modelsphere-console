@@ -337,6 +337,26 @@ DeploySheet -> GET /api/llm/route-options[?route=<existing>]
 | Text | Per-key locale translations where present; new options retain engine text |
 | Ownership | Inferences adapts the Swiss metadata without editing the copied upstream module |
 
+### Console-managed model templates
+
+Native template creation covers static/read-only catalog installations (console #64; [design](architecture/local-model-templates.md), #84). The writable external catalog editor remains available separately.
+
+```text
+Model Library -> authenticated template API -> runtime ConfigMap CAS
+              -> internal-only snapshot catalog -> existing Swiss profile registration
+              -> original + custom cards -> existing Helm plan/diff/deploy
+```
+
+| Boundary | Decision |
+|---|---|
+| Ownership | Console owns persistence, publication and UI; other projects' code and original catalog files stay untouched |
+| Storage | Fixed namespace/ConfigMap, bounded state, immutable model names/recipes and generation snapshots; Helm does not replace runtime data |
+| Publication | Anonymous GET/HEAD on a dedicated ClusterIP-only catalog listener; web/NodePort returns 404 for catalog paths |
+| Registration | Existing Swiss profile API, preserving upstream catalogs, implicit single-catalog default and other YAML; generation URL avoids stale index cache |
+| Partial success | 201 means saved and readable; 202 means saved/pending with a retry action and disabled deployment |
+| Compatibility | Console adapter handles old index/entry envelopes and v1 history as well as current wire forms; mirrored Swiss UI unchanged |
+| Verification | Existing Swiss CLI can read published index/recipe bytes and compose a real plan without applying workloads |
+
 ### Workload reads (`/api/k8s/...`)
 
 Events and logs are Kubernetes data, not swiss's, so console serves them itself

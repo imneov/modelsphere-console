@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
   AlertDescription,
@@ -23,8 +23,9 @@ import {
   cn,
 } from "@modelsphere/ui";
 import { Boxes, Library, MoreHorizontal, TriangleAlert } from "lucide-react";
-import { useModulePath } from "@/shell";
-import { api, type CatalogInfo } from "@swiss/lib/api";
+import { useModulePath, usePermissions } from "@/shell";
+import type { CatalogInfo } from "@swiss/lib/api";
+import { api } from "./catalog-api";
 import { facetsOf, formatUplift, sorters, type Facets } from "@swiss/lib/catalog";
 import { useCatalogChoice } from "@swiss/components/CatalogChoice";
 import { useT } from "@/modules/inferences/i18n";
@@ -32,6 +33,9 @@ import { DeploySheet, type DeployTarget } from "@/modules/inferences/components/
 import { writableCatalogs } from "@/modules/inferences/catalog-write-lib";
 import { SETTINGS_FILE } from "@/modules/inferences/catalog-write-api";
 import { NewModelSheet } from "@/modules/inferences/components/NewModelSheet";
+import { NewTemplateSheet } from "@/modules/inferences/components/NewTemplateSheet";
+import { readLocalTemplates, publishTemplates, templateReady, type TemplateResult } from "./local-templates-api";
+import { libraryModels } from "./local-templates-lib";
 import { FileSheet } from "@/modules/inferences/components/FileSheet";
 import { SetupSheet } from "@/modules/inferences/components/SetupSheet";
 import { useCatalogWrite } from "@/modules/inferences/components/useCatalogWrite";
@@ -44,12 +48,16 @@ export function CatalogPage() {
   const p = useModulePath();
   const [params, setParams] = useSearchParams();
   const choice = useCatalogChoice();
+  const { has } = usePermissions();
+  const local = useQuery({ queryKey: ["local-model-templates"], queryFn: readLocalTemplates, enabled: has("modeltemplates.view") || has("modeltemplates.create"), retry: false });
+  const selectedLocal = local.data?.enabled && choice.selected === local.data.catalogName;
   const catalog = useQuery({
     queryKey: ["catalog", choice.selected],
     queryFn: () => api.catalog(choice.selected),
-    enabled: !!choice.selected,
+    enabled: !!choice.selected && !selectedLocal,
   });
-  const all = useMemo(() => catalog.data?.models.map(facetsOf) ?? [], [catalog.data]);
+  const entries = useMemo(() => libraryModels(catalog.data, local.data, choice.selected, choice.named), [catalog.data, local.data, choice.selected, choice.named]);
+  const all = useMemo(() => entries.map((entry) => ({ ...facetsOf(entry.model), catalog: entry.catalog, custom: entry.custom, ready: entry.ready })), [entries]);
   const options = useMemo(() => facetOptions(all), [all]);
   const f = filtersFrom(params);
   const set = (patch: Partial<CatalogFilters>) => setParams((prev) => withFilters(prev, patch), { replace: true });
@@ -62,9 +70,20 @@ export function CatalogPage() {
   const profile = useQuery({ queryKey: ["profile"], queryFn: api.profile, retry: false });
   const writable = writableCatalogs(profile.data?.profile);
   const w = useCatalogWrite(choice.selected);
-  const [sheet, setSheet] = useState<"model" | "settings" | "setup" | null>(null);
+  const [sheet, setSheet] = useState<"model" | "settings" | "setup" | "template" | null>(null);
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [notice, setNotice] = useState("");
+  const refresh = () => { for (const key of [["local-model-templates"], ["cluster"], ["profile"], ["catalog"]]) void qc.invalidateQueries({ queryKey: key }); };
+  const publish = useMutation({ mutationFn: publishTemplates, onSuccess: (result) => { setNotice(t(result.ready ? "localTemplates.connected" : "localTemplates.pending")); refresh(); } });
+  const saved = (result: TemplateResult) => {
+    setSheet(null);
+    setNotice(t(result.ready ? "localTemplates.saved" : "localTemplates.savedPending", { name: result.model ?? "" }));
+    setParams((previous) => { const next = withoutFilters(previous); next.delete("catalog"); return next; });
+    refresh();
+  };
+  const pending = local.data?.enabled && local.data.catalog.models.some((model) => !templateReady(local.data!, model.name));
+  const sourceError = choice.error ?? (!selectedLocal ? catalog.error : null) ?? local.error;
   const copyFrom = catalog.data?.models.find((m) => m.variants.length);
   const onDeploy = cluster.data?.allowDeploy ? (model: string, catalog: string) => setDeploying({ kind: "deploy", model, catalog }) : undefined;
 
@@ -79,25 +98,26 @@ export function CatalogPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <PageBanner title={t("catalog.title")} description={t("catalog.description")} icon={<Library className="size-5" />} />
+      <PageBanner title={t("catalog.title")} description={t("catalog.description")} icon={<Library className="size-5" />} actions={has("modeltemplates.create") && <Button onClick={() => setSheet("template")} disabled={!local.data?.enabled} title={!local.data?.enabled ? t("localTemplates.disabled") : undefined}>{t("localTemplates.add")}</Button>} />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
           <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
             <SearchBox key={clears} q={f.q} set={set} placeholder={t("catalog.search")} />
             {choice.several && (
               <FilterSelect
-                title={t("catalog.catalog")}
-                options={choice.catalogs.map((c) => ({
-                  value: c.name,
-                  label: c.name,
-                  description: c.schema === "v1" ? t("catalog.legacy") : undefined,
-                  badge: writable.includes(c.name) ? <WritableBadge /> : undefined,
-                }))}
-                value={choice.selected}
-                onValueChange={(v) => v && choice.choose(v)}
+                title={local.data?.enabled && !choice.named ? t("localTemplates.defaultView") : t("catalog.catalog")}
+                options={[
+                  ...(local.data?.enabled ? [{ value: "__default", label: t("localTemplates.defaultView") }] : []),
+                  ...choice.catalogs.map((c) => ({ value: c.name, label: c.name, description: c.schema === "v1" ? t("catalog.legacy") : undefined, badge: writable.includes(c.name) ? <WritableBadge /> : undefined })),
+                ]}
+                value={local.data?.enabled ? choice.named : choice.selected}
+                onValueChange={(value) => {
+                  if (local.data?.enabled && (value === "__default" || !value)) setParams((previous) => { const next = new URLSearchParams(previous); next.delete("catalog"); return next; });
+                  else if (value) choice.choose(value);
+                }}
               />
             )}
-            {catalog.data?.schema === "v1" && (
+            {catalog.data?.schema === "v1" && !selectedLocal && (!local.data?.enabled || !!choice.named) && (
               <Badge variant="warning" title={t("catalog.legacyHint")}>
                 {t("catalog.legacy")}
               </Badge>
@@ -137,7 +157,7 @@ export function CatalogPage() {
                     {t("catalogWrite.settings")}
                   </Button>
                   <Button size="sm" onClick={() => setSheet("model")}>
-                    {t("newModel.action")}
+                    {t(local.data?.enabled ? "localTemplates.addExternal" : "newModel.action")}
                   </Button>
                 </>
               )}
@@ -162,28 +182,21 @@ export function CatalogPage() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-auto p-4">
-            {choice.isPending || catalog.isPending && !!choice.selected ? (
-              <div className="flex justify-center py-16">
-                <Spinner size="lg" />
-              </div>
-            ) : choice.error || catalog.error ? (
-              <Alert variant="destructive">
-                <TriangleAlert />
-                <AlertDescription>{String((choice.error ?? catalog.error)?.message)}</AlertDescription>
-              </Alert>
-            ) : !choice.selected ? (
+          <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4">
+            {notice && <Alert><AlertDescription>{notice}</AlertDescription></Alert>}
+            {sourceError && <Alert variant="destructive"><TriangleAlert /><AlertDescription>{sourceError.message} <Button size="sm" variant="outline" onClick={() => { void catalog.refetch(); void local.refetch(); void cluster.refetch(); }}>{t("localTemplates.retryRead")}</Button></AlertDescription></Alert>}
+            {pending && <Alert variant="warning"><TriangleAlert /><AlertDescription>{t("localTemplates.pending")} {has("modeltemplates.create") && <Button size="sm" variant="outline" disabled={publish.isPending} onClick={() => publish.mutate()}>{t(publish.isPending ? "localTemplates.connecting" : "localTemplates.retryPublish")}</Button>}</AlertDescription></Alert>}
+            {publish.error && <Alert variant="destructive"><TriangleAlert /><AlertDescription>{publish.error.message}</AlertDescription></Alert>}
+            {(choice.isPending || !selectedLocal && catalog.isPending && !!choice.selected) && !all.length ? (
+              <div className="flex justify-center py-16"><Spinner size="lg" /></div>
+            ) : sourceError && !all.length ? null : !choice.selected && !all.length ? (
               <NoCatalog catalogs={choice.catalogs} writable={writable} choose={choice.choose} />
             ) : shown.length === 0 ? (
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>{t(filtered ? "catalog.noMatch" : "catalog.empty")}</EmptyTitle>
-                </EmptyHeader>
-              </Empty>
+              <Empty><EmptyHeader><EmptyTitle>{t(filtered ? "catalog.noMatch" : "catalog.empty")}</EmptyTitle></EmptyHeader></Empty>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {shown.map((x) => (
-                  <ModelCard key={x.model.name} x={x} catalog={choice.selected} onDeploy={onDeploy} to={p(modelPath(x.model.name, choice.selected))} />
+                  <ModelCard key={`${x.catalog}/${x.model.name}`} x={x} catalog={x.catalog} custom={x.custom} pending={!x.ready} onDeploy={x.ready ? onDeploy : undefined} to={p(modelPath(x.model.name, x.catalog))} />
                 ))}
               </div>
             )}
@@ -191,6 +204,7 @@ export function CatalogPage() {
         </div>
       </div>
       <DeploySheet target={deploying} onClose={() => setDeploying(null)} />
+      {sheet === "template" && <NewTemplateSheet references={entries.filter((entry) => entry.ready)} onClose={() => setSheet(null)} onSaved={saved} />}
       {sheet === "model" && (
         <NewModelSheet
           catalog={choice.selected}
@@ -258,20 +272,21 @@ function SearchBox({ q, set, placeholder }: { q: string; set: (patch: Partial<Ca
   return <Input value={text} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-64" />;
 }
 
-function ModelCard({ x, catalog, to, onDeploy }: { x: Facets; catalog: string; to: string; onDeploy?: (model: string, catalog: string) => void }) {
+function ModelCard({ x, catalog, to, onDeploy, custom = false, pending = false }: { x: Facets; catalog: string; to: string; onDeploy?: (model: string, catalog: string) => void; custom?: boolean; pending?: boolean }) {
   const t = useT();
   const navigate = useNavigate();
   const m = x.model;
-  const open = () => navigate(to);
+  const open = () => { if (!pending) navigate(to); };
   return (
     <div
-      role="link"
-      tabIndex={0}
+      role={pending ? undefined : "link"}
+      tabIndex={pending ? -1 : 0}
       onClick={open}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), open())}
       className={cn(
         "group flex cursor-pointer flex-col gap-3 rounded-lg border bg-card p-4 transition-colors hover:border-primary/40 focus-visible:outline-2 focus-visible:outline-ring",
         x.deprecated && "opacity-70",
+        pending && "cursor-default hover:border-border",
       )}
     >
       <div className="flex items-start gap-3">
@@ -279,12 +294,12 @@ function ModelCard({ x, catalog, to, onDeploy }: { x: Facets; catalog: string; t
           <Boxes className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <Link to={to} onClick={(e) => e.stopPropagation()} className="block font-medium break-words hover:underline">
-            {m.displayName || m.name}
-          </Link>
+          {pending ? <span className="block font-medium break-words">{m.displayName || m.name}</span> : <Link to={to} onClick={(e) => e.stopPropagation()} className="block font-medium break-words hover:underline">{m.displayName || m.name}</Link>}
           {m.family && <div className="text-xs text-muted-foreground">{m.family}</div>}
+          {custom && <Badge variant="secondary">{t("localTemplates.custom")}</Badge>}
+          {pending && <Badge variant="warning">{t("localTemplates.pendingLabel")}</Badge>}
         </div>
-        <DropdownMenu>
+        {!pending && <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="size-7" aria-label={t("common:table.actions")} />} onClick={(e) => e.stopPropagation()}>
             <MoreHorizontal className="size-4" />
           </DropdownMenuTrigger>
@@ -292,7 +307,7 @@ function ModelCard({ x, catalog, to, onDeploy }: { x: Facets; catalog: string; t
             <DropdownMenuItem onClick={open}>{t("actions.detail")}</DropdownMenuItem>
             {onDeploy && <DropdownMenuItem onClick={() => onDeploy(m.name, catalog)}>{t("model.deploy")}</DropdownMenuItem>}
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu>}
       </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">

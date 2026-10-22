@@ -1,5 +1,6 @@
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
-import { api, type ClusterInfo } from "@swiss/lib/api";
+import type { ClusterInfo } from "@swiss/lib/api";
+import { api } from "./catalog-api";
 import { supportedTotals } from "@/modules/inferences/dashboard-lib";
 
 export function useSupportedTotals(cluster: UseQueryResult<ClusterInfo>) {

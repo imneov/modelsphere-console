@@ -9,6 +9,7 @@ data:
     server:
       addr: ":8080"
       metricsAddr: {{ printf ":%d" (int .Values.metrics.port) | quote }}
+      catalogAddr: {{ if include "console.modelTemplates.enabled" . }}{{ printf ":%d" (int .Values.modelTemplates.port) | quote }}{{ else }}"off"{{ end }}
       auth:
         {{- if .Values.auth.disabled }}
         disabled: true
@@ -16,6 +17,13 @@ data:
         issuer: {{ .Values.auth.issuer | quote }}
         tokenTTL: {{ .Values.auth.tokenTTL | quote }}
         # jwtSecret is injected from the Secret via env, not rendered here.
+    modelTemplates:
+      enabled: {{ if include "console.modelTemplates.enabled" . }}true{{ else }}false{{ end }}
+      namespace: {{ include "console.modelTemplates.namespace" . | quote }}
+      configMap: {{ include "console.modelTemplates.configMap" . | quote }}
+      publishURL: {{ include "console.modelTemplates.publishURL" . | quote }}
+      backend: {{ .Values.modelTemplates.backend | quote }}
+      catalogName: {{ .Values.modelTemplates.catalogName | quote }}
     backends:
       {{- range .Values.backends }}
       - name: {{ .name | quote }}

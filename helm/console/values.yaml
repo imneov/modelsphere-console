@@ -71,6 +71,22 @@ admin:
 # swissd (model deployment) is not listed here: see swiss and externalSwiss.
 backends: []
 
+# Console owns immutable custom model templates and publishes a v1 catalog.
+# Effective only when backend names a configured static /api/deploy service;
+# Console-only installations stay valid without Swiss. No external catalog-server
+# or write token is needed. Runtime data is retained across chart upgrades.
+modelTemplates:
+  enabled: true
+  backend: swiss
+  catalogName: console-local
+  # Dedicated internal listener; never added to the public UI Service.
+  port: 8081
+  # Empty values use this release namespace, <fullname>-model-templates and the
+  # separate <fullname>-catalog ClusterIP Service's /catalog/console URL.
+  namespace: ""
+  configMap: ""
+  publishURL: ""
+
 # swissd, the model deployment backend. Pick one:
 #
 #   swiss.enabled: true   install it with this release, from the swiss chart
