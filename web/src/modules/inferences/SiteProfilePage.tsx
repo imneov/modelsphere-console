@@ -28,6 +28,7 @@ import { FEATURES, featureOn } from "@swiss/lib/profile";
 import { useT } from "@/modules/inferences/i18n";
 import { ProfileEditorBody, SaveButton, useProfileEditor } from "@/modules/inferences/components/ProfileEditor";
 import { catalogTokenKey, listSecrets } from "@/modules/inferences/catalog-write-api";
+import { ENABLE_MONITOR } from "./features";
 import { markedWritable } from "@/modules/inferences/catalog-write-lib";
 
 export function SiteProfilePage() {
@@ -160,7 +161,7 @@ function ProfileView({ p }: { p: SiteProfile }) {
         { label: f("nginxService"), value: mono(p.route?.nginxService) },
         { label: f("nginxSelector"), value: mono(p.route?.nginxSelector) },
         { label: f("nginxPort"), value: v(p.route?.nginxPort) },
-        { label: f("monitorConfigMap"), value: mono(p.route?.monitorConfigMap) },
+        ...(ENABLE_MONITOR ? [{ label: f("monitorConfigMap"), value: mono(p.route?.monitorConfigMap) }] : []),
       ])}
       {card("auth", [
         { label: f("secretRef"), value: mono(p.route?.auth?.secretRef) },

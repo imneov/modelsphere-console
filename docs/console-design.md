@@ -337,6 +337,18 @@ DeploySheet -> GET /api/llm/route-options[?route=<existing>]
 | Text | Per-key locale translations where present; new options retain engine text |
 | Ownership | Inferences adapts the Swiss metadata without editing the copied upstream module |
 
+### Unpublished Monitor integration
+
+`modules/inferences/features.ts` holds the single compile-time `ENABLE_MONITOR` flag, false until the Monitor backend is public (console #76).
+
+| Concern | Decision |
+|---|---|
+| Deploy / upgrade | Hide Monitor and its model/GPU inputs; public defaults and form requests explicitly disable it |
+| Profile | Hide the Monitor ConfigMap form field and summary; retain stored profile data |
+| ServiceMonitor | Independent Prometheus Operator integration; visible and configurable as before |
+| Re-enable | Change the one flag and rebuild; the existing controls, translations and request handling remain |
+| Ownership | Console adapter applies public defaults; copied Swiss UI is unchanged |
+
 ### Workload reads (`/api/k8s/...`)
 
 Events and logs are Kubernetes data, not swiss's, so console serves them itself
