@@ -40,6 +40,7 @@ import { detailPath } from "@/modules/inferences/lib";
 import { SECTIONS, chartChoice, defaultServiceId, gpuOptions, pipelineState, serviceIdError, whatMoves, type Section } from "@/modules/inferences/deploy-lib";
 import { DeployForm } from "@/modules/inferences/components/DeployForm";
 import { ExperimentalBadge } from "@/modules/inferences/components/InstallMethodLabel";
+import { AdaptivePlanChangedError, composeAdaptivePlan } from "../adaptive-concurrency";
 import { readRouteOptions } from "@/modules/inferences/api";
 
 export type DeployTarget =
@@ -172,15 +173,19 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
 
   const change = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
   const compose = useMutation({
-    mutationFn: () =>
-      deployApi.plan(
-        planRequest(
+    mutationFn: async () => {
+      try {
+        return await composeAdaptivePlan(planRequest(
           { ...form, serviceId: form.serviceId || (upgrade ? form.serviceId : defaultServiceId(target.model)) },
           upgrade
             ? { model: recorded!.model, version: version || undefined, variant: variant || undefined, catalog: moveTo || undefined, chartVersion: chartVersion || undefined, fromRelease: target.release }
             : { model: target.model, version, variant: keptVariant, catalog: target.catalog, chartVersion: chartVersion || undefined },
-        ),
-      ),
+        ), form, routeOptions.data, deployApi.plan, catalogName);
+      } catch (error) {
+        if (error instanceof AdaptivePlanChangedError) throw new Error(t("deploy.fields.adaptiveChanged"));
+        throw error;
+      }
+    },
     onSuccess: (pl) => {
       setPlan(pl);
       setDiff(null);

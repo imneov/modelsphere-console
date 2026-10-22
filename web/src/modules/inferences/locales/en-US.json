@@ -403,6 +403,7 @@
     },
     "routeOptions": {
       "advanced": "Advanced route options",
+      "advancedAdaptive": "Advanced adaptive options",
       "inherit": "Use engine default",
       "on": "On",
       "off": "Off",
@@ -554,6 +555,9 @@
       "tpsHint": "With SLO on, used only when no tps_metrics is declared; empty omits",
       "adaptiveCc": "Adaptive concurrency",
       "adaptiveCcHint": "AIMD on the effective TPS signal; on by default",
+      "adaptiveCapacityHint": "Default peer maximum stays in Capacity & failover and applies even when adaptive concurrency is off. It also sets the static maximum used by adaptive bounds.",
+      "adaptiveOff": "Enable adaptive concurrency to add this setting.",
+      "adaptiveChanged": "The model source changed or adaptive settings could not be cleared. Compose the plan again before applying.",
       "adaptiveCcMinFrac": "Adaptive floor fraction",
       "adaptiveCcMinFracHint": "Of the static maximum, 0 < value ≤ 1; empty uses the engine default. Unused when the absolute floor is set",
       "fracRange": "Must be over 0 and at most 1, or openresty ignores it",
