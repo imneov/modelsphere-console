@@ -26,7 +26,7 @@ var templateMapsGVR = schema.GroupVersionResource{Version: "v1", Resource: "conf
 const originalTemplateProfile = "# keep operator comment\nname: cluster\nnamespace: models\nmodel:\n  pathTemplate: /models/{{hf}}\nchartRepo: https://charts.example\nextra:\n  marker: preserve\n"
 
 type templateSwiss struct {
-	mu              sync.Mutex
+	mu              sync.Mutex // Guards profile, response controls, counters and hooks during requests.
 	profile         string
 	unavailable     bool
 	puts            int

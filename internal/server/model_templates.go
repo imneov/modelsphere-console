@@ -100,7 +100,9 @@ func (s *Server) handleModelTemplates(w http.ResponseWriter, r *http.Request) {
 	var registered *int64
 	reason := ""
 	if m.Enabled {
-		registered, reason = s.templateRegistration(ctx, r, state)
+		var registrationErr error
+		registered, registrationErr = s.templateRegistration(ctx, r, state)
+		reason = s.reportTemplateFailure(ctx, registrationErr)
 	}
 	generations := map[string]int64{}
 	for _, record := range state.Records {
@@ -137,7 +139,8 @@ func (s *Server) handleCreateModelTemplate(w http.ResponseWriter, r *http.Reques
 		writeTemplateStorageError(w, err)
 		return
 	}
-	registered, reason := s.publishTemplates(ctx, r)
+	registered, registrationErr := s.publishTemplates(ctx, r)
+	reason := s.reportTemplateFailure(ctx, registrationErr)
 	ready := registered != nil && *registered >= state.Generation && reason == ""
 	status := http.StatusAccepted
 	if ready {
@@ -171,7 +174,8 @@ func (s *Server) handlePublishModelTemplates(w http.ResponseWriter, r *http.Requ
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), templateOperationTimeout)
 	defer cancel()
-	registered, reason := s.publishTemplates(ctx, r)
+	registered, registrationErr := s.publishTemplates(ctx, r)
+	reason := s.reportTemplateFailure(ctx, registrationErr)
 	state, err := s.templateStore().Read(ctx)
 	if err != nil {
 		writeTemplateStorageError(w, err)
