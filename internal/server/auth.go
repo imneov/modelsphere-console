@@ -35,7 +35,7 @@ var anonymousAdmin = &iam.Identity{Name: "admin", Groups: []string{"system:maste
 // error envelope rather than the login HTML.
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/deployment-imports" || strings.HasPrefix(r.URL.Path, "/api/deployment-imports/") {
+		if r.URL.Path == "/api/deployment-imports" || strings.HasPrefix(r.URL.Path, "/api/deployment-imports/") || r.URL.Path == "/api/model-templates" || strings.HasPrefix(r.URL.Path, "/api/model-templates/") {
 			w.Header().Set("Cache-Control", "no-store")
 		}
 		if s.cfg.Server.Auth.Disabled {

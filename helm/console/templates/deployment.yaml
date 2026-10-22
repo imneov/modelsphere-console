@@ -69,6 +69,10 @@ spec:
               containerPort: 8080
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
+            {{- if include "console.modelTemplates.enabled" . }}
+            - name: catalog
+              containerPort: {{ .Values.modelTemplates.port }}
+            {{- end }}
           readinessProbe:
             httpGet: { path: /readyz, port: http }
           livenessProbe:

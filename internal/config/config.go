@@ -44,6 +44,7 @@ type Config struct {
 	Backends          []Backend         `yaml:"backends,omitempty"`
 	Router            Router            `yaml:"router,omitempty"`
 	DeploymentImports DeploymentImports `yaml:"deploymentImports,omitempty"`
+	ModelTemplates    ModelTemplates    `yaml:"modelTemplates,omitempty"`
 
 	Origin string `yaml:"-"`
 }
@@ -80,6 +81,7 @@ type Server struct {
 	// MetricsAddr serves Prometheus metrics, apart from Addr so they are not
 	// reachable wherever the UI is. Default ":9090"; "off" disables it.
 	MetricsAddr string `yaml:"metricsAddr,omitempty"`
+	CatalogAddr string `yaml:"catalogAddr,omitempty"`
 	Auth        Auth   `yaml:"auth,omitempty"`
 }
 
@@ -218,6 +220,7 @@ func Find(explicit string) string {
 
 func (c *Config) applyDefaults() {
 	c.DeploymentImports = c.DeploymentImports.WithDefaults()
+	c.ModelTemplates = c.ModelTemplates.WithDefaults()
 	if c.Server.Addr == "" {
 		c.Server.Addr = ":8080"
 	}
@@ -229,6 +232,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Server.MetricsAddr == "" {
 		c.Server.MetricsAddr = DefaultMetricsAddr
+	}
+	if c.Server.CatalogAddr == "" {
+		c.Server.CatalogAddr = c.CatalogListenAddr()
 	}
 	if c.Router.Backend == "" {
 		c.Router.Backend = DefaultRouterBackend
@@ -297,11 +303,11 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("%s: deploymentImports.backend must name a configured static same-cluster Swiss backend with prefix /api/deploy", c.origin())
 		}
 	}
-	return nil
+	return c.validateModelTemplates()
 }
 
 // reservedPrefixes are console's own API; a backend there would shadow them.
-var reservedPrefixes = []string{"/api/iam", "/api/me", "/api/router", "/api/deployment-imports"}
+var reservedPrefixes = []string{"/api/iam", "/api/me", "/api/router", "/api/deployment-imports", "/api/model-templates"}
 
 func validateBackend(b Backend) error {
 	// Only /api/* passes the auth middleware's guard; anything else is served

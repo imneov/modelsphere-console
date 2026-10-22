@@ -11,7 +11,7 @@
 
 ## What it does not do
 
-- **It does not install or modify an existing Swiss or inference gateway.** The default configuration reads their ConfigMaps and Secrets; explicitly enabled deployment imports create Swiss management records without changing workloads.
+- **It does not install or replace an existing Swiss or inference gateway.** The connection reads their ConfigMaps and Secrets; explicitly enabled deployment imports create management records without changing workloads, and local-template publication registers its catalog through Swiss's existing profile API.
 - **It does not need `install.sh`** — that is an optional helper in the source repository (discovers Swiss and the gateway, generates values, runs an end-to-end check after install). It is not in the chart package and this guide does not use it. See `./install.sh --help`.
 
 ## Quick start
@@ -180,6 +180,68 @@ enable explicit namespaces -> enter existing release -> select catalog/model/var
 - Import creates only a Swiss management ConfigMap; Helm revision and workloads stay unchanged. It refuses any existing ConfigMap at that name, regardless of labels, and any existing LLMService.
 - Stop other Helm writers during import. Revision, Secret UID/resourceVersion and plan hash are revalidated; a 409 requires a new preview. Kubernetes cannot make the Secret read and ConfigMap create one transaction.
 - Requests are limited to 16 KiB, upstream plans to 2 MiB, Helm compressed data to 1 MiB and decoded JSON to 8 MiB. Histories over 32 revisions, paginated histories, aggregate encoded histories over 16 MiB, and workspaces over 900 KiB are rejected rather than partially imported. Trim old Helm history through your normal Helm administration before retrying.
+
+## Custom model templates
+
+Swiss-connected chart installations enable Console's local model templates by default. Console stores and publishes the catalog itself; no writable catalog-server or catalog token is needed. Console-only installations keep the feature effectively off until the selected backend is a static `/api/deploy` backend. Set `modelTemplates.enabled=false` to disable it explicitly; bare Console configuration without this section is disabled.
+
+```yaml
+modelTemplates:
+  enabled: true
+  backend: swiss
+  catalogName: console-local
+  port: 8081     # dedicated internal catalog listener and Service
+  namespace: ""  # release namespace
+  configMap: ""  # <fullname>-model-templates
+  publishURL: "" # http://<fullname>-catalog.<release-namespace>.svc:8081/catalog/console
+```
+
+| Boundary | Behavior |
+|---|---|
+| Storage | one runtime-owned ConfigMap, `state.json`, at most 900 KiB; up to 1,000 immutable model names |
+| Kubernetes grants | ConfigMap create in the configured namespace; get/update restricted to the configured resource name |
+| Chart upgrades | do not render, reset, or delete the runtime data ConfigMap |
+| Internal reads | dedicated catalog listener and ClusterIP-only Service; GET/HEAD snapshots and exact recipe paths; no native/write APIs |
+| Web listener | `/catalog/console` and all descendants return 404, including anonymous requests; NodePort/LoadBalancer web Services expose only the web port |
+| Input | at most 192 KiB JSON and 128 KiB recipe YAML; one strict v1 recipe, validated names, exact chart version and GPU requirements |
+| Deployment | normal Swiss Helm plan/diff/deploy after registration; saving a template does not download weights or change workloads |
+
+`requires.gpus` is a positive safe integer per pod; it is not capped at eight. Multi-node recipes retain `nodes`, vendor, topology and RDMA metadata; LWS requires `values.lws.size` to match `requires.nodes`. Optional `image.digest` accepts a SHA-256 pin alongside repository/tag. Chart versions must be exact pins, so a reference recipe using a version range needs a selected version before saving.
+
+With `rbac.create=false`, supply the storage grants through your own namespace-scoped Role. ConfigMap creation cannot be restricted by resourceName in Kubernetes; reads and updates are restricted. The default publication URL uses the separate `<fullname>-catalog` ClusterIP Service, which is never added to the public NodePort/LoadBalancer Service. Swiss's static fetcher cannot send Console credentials, so this internal reader accepts anonymous GET/HEAD. Keep that listener internal and use Secret references instead of plaintext credentials in recipes.
+
+In bare configuration, `server.catalogAddr` defaults to `:8081` only while templates are enabled; otherwise the listener is off. An enabled provider requires a valid dedicated port distinct from web and metrics ports. The chart sets it from `modelTemplates.port`. Custom `publishURL` values must reach the internal listener, rather than the web endpoint.
+
+Console permissions are independent of Kubernetes grants. Bind a platform-scoped IAMRole with the following rules alongside existing model/deployment access:
+
+```yaml
+spec:
+  uiPermissions: [modeltemplates.view, modeltemplates.create]
+  rules:
+    - apiGroups: [iam.theriseunion.io]
+      resources: [modeltemplates]
+      resourceNames: [console-local]
+      verbs: [get, create, update]
+    - apiGroups: [iam.theriseunion.io]
+      resources: [backends]
+      resourceNames: [swiss]
+      verbs: [get, update]
+```
+
+`create` authorizes validation and creation; `update` authorizes retrying catalog publication. Backend get/update is checked before a new template is saved. UI permission alone does not authorize APIs.
+
+```text
+create form -> validate -> save immutable model -> publish generation URL
+                                               -> register through Swiss profile API
+                                               -> verify Swiss reads the snapshot -> deploy form
+```
+
+- The existing default catalog is preserved when the profile previously relied on Swiss's configured fallback. Registration appends or updates only the Console catalog; a foreign catalog using the same name blocks registration.
+- Profile registration uses only name, URL and default fields for the local entry, compatible with legacy Swiss. It preserves the other YAML settings and comments. Swiss must expose a writable ConfigMap-backed profile API; this does not require enabling workload deployment.
+- A saved template returns HTTP 201 only after Swiss reads its generation. HTTP 202 means saved but waiting for connection; the model remains listed, and publication can be retried without creating it again.
+- Every publication URL includes its generation to avoid Swiss's index cache. Old snapshots and exact recipe bytes remain readable. Existing model names cannot be replaced or deleted through these APIs.
+- Registration re-reads profile and storage state with bounded retries. The existing Swiss profile API has no compare-and-swap operation, so this cannot be a transaction with concurrent administrator edits. Avoid simultaneous site-profile changes while registering.
+- This provider publishes schema v1 for the existing Helm deployment path. It does not enable schema v2 LLMService deployment.
 
 ## Check and sign in
 

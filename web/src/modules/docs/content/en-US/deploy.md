@@ -104,6 +104,19 @@ After an administrator enables Console's `deploymentImports`, configures a same-
 If the release or catalog plan changed after preview, or a management record already exists, confirmation refuses the write; read and preview again. The first upgrade still needs its diff reviewed: current catalog and site defaults may differ from the original install. Operations before import are not fabricated as Swiss history.
 
 
+## Add a custom model template
+
+Choose **New model template** in the [Model Library](/inferences/catalog) header. Fill in model identity, weights source and a deployment recipe. An existing recipe can prefill engine, image, GPU and runtime values; enter the new model's identity and weights source separately.
+
+1. Fill in model information, template version and recipe ID.
+2. Select an exact chart version, image and hardware requirements, then review runtime YAML. Use Secret references for sensitive values.
+3. **Check** validates the input; **Save template** persists it in Console's custom catalog and connects it to the deployment backend through the existing site API.
+4. The default view shows the original models together with new **Custom** cards. Open a card and use the existing recipe-selection and diff-review deployment flow.
+
+Console owns persistence and preserves templates across chart upgrades. Existing catalogs and their default selection remain. Created versions cannot be overwritten; duplicate model names conflict. A saved template whose catalog connection is incomplete remains visible as **Catalog connection pending**. **Retry catalog connection** publishes it without creating it again; pending templates cannot deploy.
+
+An administrator must enable Console's storage/internal catalog service and grant template/backend permissions; the existing administrator wildcard works. Publication uses the legacy static catalog format and Helm deployment path. Writable external-catalog editing below is a separate entry point.
+
 ## Edit a catalog's variants
 
 A catalog-server catalog can be edited from a model's page. In the [Site profile](/inferences/site-profile) editor, tick the catalog **Writable** and enter its catalog-server **Write token**; swissd keeps the token in its own Secret. Any later change to the catalog other than **Default** (its URL, its name, unticking **Writable**) removes the token: enter it again with the change. Saving checks the token with the catalog server first, a new catalog's too: if the server does not accept it or cannot be reached, nothing is saved and the editor says why. Each change is one commit to the catalog.
