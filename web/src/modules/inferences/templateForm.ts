@@ -1,6 +1,6 @@
 import { isScalar, parseDocument, stringify, visit } from "yaml";
 import type { Variant } from "@swiss/lib/api";
-import type { TemplateInput } from "./local-templates-api";
+import type { TemplateInput } from "@/modules/inferences/localTemplatesApi";
 
 export interface TemplateForm {
   name: string; displayName: string; description: string; hf: string; family: string; tags: string;

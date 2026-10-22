@@ -1,6 +1,6 @@
-import { ApiError, request } from "@/shell/api";
+import { ApiError, request } from "@/shell";
 import type { CatalogResponse } from "@swiss/lib/api";
-import { normalizeCatalog } from "./catalog-api";
+import { normalizeCatalog } from "@/modules/inferences/catalogApi";
 
 export interface TemplateMetadata {
   name: string;
