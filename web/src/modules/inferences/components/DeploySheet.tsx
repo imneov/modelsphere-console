@@ -36,7 +36,7 @@ import { gpuShort } from "@swiss/lib/gpu";
 import { isChartRange, movableCatalogs } from "@swiss/lib/upgrade";
 import { installMethod, llmsvcBlock } from "@swiss/lib/applyWith";
 import { useT } from "@/modules/inferences/i18n";
-import { detailPath } from "@/modules/inferences/lib";
+import { detailPath, sloEnabled } from "@/modules/inferences/lib";
 import { SECTIONS, chartChoice, defaultServiceId, gpuOptions, pipelineState, serviceIdError, whatMoves, type Section } from "@/modules/inferences/deploy-lib";
 import { DeployForm } from "@/modules/inferences/components/DeployForm";
 import { ExperimentalBadge } from "@/modules/inferences/components/InstallMethodLabel";
@@ -201,7 +201,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
       setApplied(r);
       for (const key of REFRESH) qc.invalidateQueries({ queryKey: key });
       onClose();
-      if (!upgrade) navigate(p(detailPath(plan!.release.name, plan!.release.namespace)));
+      if (!upgrade) navigate(p(detailPath(plan!.release.name, plan!.release.namespace)), { state: { sloSetup: state.action === "install" && sloEnabled(plan!) } });
     },
   });
 
@@ -237,12 +237,12 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
           />
         </FloatingField>
       )}
-      {!upgrade && (
-        <FloatingField label={t("deploy.fields.model")} disabled>
-          <FieldInput value={entry.data?.model.displayName || target.model} readOnly disabled />
-        </FloatingField>
-      )}
-      <div className="grid grid-cols-2 gap-3">
+      <div className={cn("grid gap-3", upgrade ? "grid-cols-2" : "grid-cols-3")}>
+        {!upgrade && (
+          <FloatingField label={t("deploy.fields.model")} disabled>
+            <FieldInput value={entry.data?.model.displayName || target.model} readOnly disabled />
+          </FloatingField>
+        )}
         <FloatingField label={t("deploy.fields.variant")}>
           <FieldSelect
             value={variant || (upgrade ? KEEP : keptVariant)}
@@ -281,32 +281,43 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
           />
         </FloatingField>
       </div>
-      {chartRange && (
-        <FloatingField
-          label={t("deploy.fields.chartVersion")}
-          hint={chart.error ? t("deploy.fields.chartError", { error: chart.error }) : chart.range && t("deploy.fields.chartRange", { range: chart.range })}
-          error={chart.error ? t("deploy.fields.chartError", { error: chart.error }) : undefined}
-        >
-          {chart.error ? (
-            <FieldInput value={chartVersion} onChange={(e) => setChartVersion(e.target.value.trim())} />
+      {v && (
+        <div className="grid grid-cols-2 gap-3">
+          <FloatingField label={t("deploy.fields.chart")} disabled>
+            <FieldInput value={v.chart.name} readOnly disabled />
+          </FloatingField>
+          {chartRange ? (
+            <FloatingField
+              label={t("deploy.fields.chartVersion")}
+              hint={chart.error ? t("deploy.fields.chartError", { error: chart.error }) : chart.range && t("deploy.fields.chartRange", { range: chart.range })}
+              error={chart.error ? t("deploy.fields.chartError", { error: chart.error }) : undefined}
+            >
+              {chart.error ? (
+                <FieldInput value={chartVersion} onChange={(e) => setChartVersion(e.target.value.trim())} />
+              ) : (
+                <FieldSelect
+                  value={chartVersion || KEEP}
+                  onValueChange={(x) => setChartVersion(x === KEEP ? "" : x)}
+                  disabled={chart.loading || chart.pinned}
+                  options={[
+                    keepOption(
+                      chart.loading
+                        ? t("deploy.fields.chartListing")
+                        : !chart.fallback
+                          ? t("deploy.fields.chartNone")
+                          : t(chart.keep ? "deploy.fields.chartKeep" : chart.pinned ? "deploy.fields.chartPinned" : "deploy.fields.chartNewest", { v: chart.fallback }),
+                    ),
+                    ...chart.options.map((x) => ({ value: x, label: x })),
+                  ]}
+                />
+              )}
+            </FloatingField>
           ) : (
-            <FieldSelect
-              value={chartVersion || KEEP}
-              onValueChange={(x) => setChartVersion(x === KEEP ? "" : x)}
-              disabled={chart.loading || chart.pinned}
-              options={[
-                keepOption(
-                  chart.loading
-                    ? t("deploy.fields.chartListing")
-                    : !chart.fallback
-                      ? t("deploy.fields.chartNone")
-                      : t(chart.keep ? "deploy.fields.chartKeep" : chart.pinned ? "deploy.fields.chartPinned" : "deploy.fields.chartNewest", { v: chart.fallback }),
-                ),
-                ...chart.options.map((x) => ({ value: x, label: x })),
-              ]}
-            />
+            <FloatingField label={t("deploy.fields.chartVersion")} disabled>
+              <FieldInput value={v.chart.version} readOnly disabled />
+            </FloatingField>
           )}
-        </FloatingField>
+        </div>
       )}
       {!upgrade && (
         <FloatingField label={t("deploy.fields.applyWith")} hint={block ? t(`deploy.fields.applyWithBlocked.${block}`) : t("deploy.fields.applyWithHint")}>

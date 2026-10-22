@@ -104,12 +104,14 @@ export function SLOCard({
   namespace,
   release,
   canEdit,
+  onSaved,
 }: {
   namespace: string;
   release: string;
   canEdit: boolean;
+  onSaved?: () => void;
 }) {
-  const f = useSLOForm(namespace, release);
+  const f = useSLOForm(namespace, release, onSaved);
   const { slo, form } = f;
 
   if (!form) return slo.error ? <ErrorState what="SLO" error={slo.error} /> : <Loading what="SLO" />;

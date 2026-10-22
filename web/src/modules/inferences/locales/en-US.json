@@ -231,7 +231,9 @@
   },
   "slo": {
     "title": "SLO of {release}",
-    "description": "What the scaler sizes the service by: the latency and throughput to hold, and the replica bounds."
+    "description": "What the scaler sizes the service by: the latency and throughput to hold, and the replica bounds.",
+    "setup": "SLO requirement is on for {release}. Configure it here first: the scaler and openresty take their targets from it.",
+    "waiting": "Waiting for the install to apply. The form opens once the requirement exists."
   },
   "runs": {
     "columns": {
@@ -476,6 +478,7 @@
       "variantVersion": "Variant version",
       "versionError": "Could not list versions: {error}",
       "deployed": "deployed",
+      "chart": "Chart",
       "chartVersion": "Chart version",
       "applyWith": "Install method",
       "applyWithHint": "Fixed at install: upgrades and rollbacks stay on it",
@@ -502,8 +505,8 @@
       "namespaceLocked": "Fixed on an upgrade: another namespace installs a second release",
       "createNamespace": "Create namespace",
       "createNamespaceHint": "Helm creates it during install (helmDefaults.createNamespace in the plan)",
-      "scaler": "Autoscale",
-      "scalerHint": "On by default: an LLMScaler owns the replica count between min and max; empty keeps the chart's bounds",
+      "scaler": "Scale Executor",
+      "scalerHint": "Leave it on. After install the SLO config drives the replica count; min and max are only the outer bounds and should cover the SLO's replica range. Empty keeps the chart's bounds",
       "scalerMin": "Min replicas",
       "scalerMax": "Max replicas",
       "replicas": "Replicas",
@@ -520,7 +523,6 @@
       "anyEffect": "Any",
       "priorityClass": "Priority class",
       "scheduler": "Scheduler",
-      "chartDefault": "the chart's default",
       "localPath": "Model path",
       "localPathHint": "Overrides the site profile's path template",
       "image": "Override image",
@@ -532,7 +534,7 @@
       "exposeRoutedPeer": "Expose routed peer",
       "exposeRoutedPeerHint": "Echoes the chosen backend as X-Routed-Peer; on by default in the chart",
       "backendMaxConcurrency": "Backend concurrency",
-      "backendMaxConcurrencyHint": "Per-backend max concurrency; empty keeps the chart default",
+      "backendMaxConcurrencyHint": "Caps each engine instance; the CART tier's cap is derived from it (this × the number of backends). Empty keeps the chart default",
       "cart": "CART",
       "cartHint": "Cache-aware router",
       "cartMaxLoad": "CART max load per worker",
@@ -555,7 +557,6 @@
       "tpsHint": "With SLO on, used only when no tps_metrics is declared; empty omits",
       "adaptiveCc": "Adaptive concurrency",
       "adaptiveCcHint": "AIMD on the effective TPS signal; on by default",
-      "adaptiveCapacityHint": "Default peer maximum stays in Capacity & failover and applies even when adaptive concurrency is off. It also sets the static maximum used by adaptive bounds.",
       "adaptiveOff": "Enable adaptive concurrency to add this setting.",
       "adaptiveChanged": "The model source changed or adaptive settings could not be cleared. Compose the plan again before applying.",
       "adaptiveCcMinFrac": "Adaptive floor fraction",
@@ -831,7 +832,7 @@
       "serviceMonitorHint": "Prometheus metrics scraped alongside the release",
       "sloRequirement": "SLO requirement",
       "sloRequirementHint": "An LLMSLORequirement for the release",
-      "scaler": "Autoscale",
+      "scaler": "Scale Executor",
       "scalerHint": "An LLMScaler for the release"
     },
     "setup": {

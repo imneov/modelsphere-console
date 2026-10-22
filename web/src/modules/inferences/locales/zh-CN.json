@@ -220,7 +220,9 @@
   },
   "slo": {
     "title": "{release} 的 SLO",
-    "description": "扩缩容器据此决定副本数：要守住的延迟与吞吐，以及副本数的上下限。"
+    "description": "扩缩容器据此决定副本数：要守住的延迟与吞吐，以及副本数的上下限。",
+    "setup": "{release} 已开启 SLO 要求，请先在这里完成配置：扩缩容器和 openresty 都以它为目标。",
+    "waiting": "正在等待安装生效，SLO 要求创建后即可编辑。"
   },
   "runs": {
     "columns": {
@@ -465,6 +467,7 @@
       "variantVersion": "变体版本",
       "versionError": "无法列出版本：{error}",
       "deployed": "已部署",
+      "chart": "Chart",
       "chartVersion": "Chart 版本",
       "applyWith": "安装方式",
       "applyWithHint": "安装时确定：之后的升级和回滚都沿用",
@@ -491,8 +494,8 @@
       "namespaceLocked": "升级时不能改：换命名空间等于另装一个",
       "createNamespace": "自动创建命名空间",
       "createNamespaceHint": "安装时由 helm 创建（计划里的 helmDefaults.createNamespace）",
-      "scaler": "自动伸缩",
-      "scalerHint": "默认开启：由 LLMScaler 在上下限之间管理副本数；留空沿用 chart 的上下限",
+      "scaler": "伸缩执行器",
+      "scalerHint": "保持开启即可。安装后副本数由 SLO 配置驱动；最少/最多副本只是外层边界，应覆盖 SLO 中的副本范围。留空沿用 chart 的上下限",
       "scalerMin": "最少副本",
       "scalerMax": "最多副本",
       "replicas": "副本数",
@@ -509,7 +512,6 @@
       "anyEffect": "任意",
       "priorityClass": "优先级类",
       "scheduler": "调度器",
-      "chartDefault": "chart 默认值",
       "localPath": "模型路径",
       "localPathHint": "覆盖站点配置里的路径模板",
       "image": "覆盖镜像",
@@ -521,7 +523,7 @@
       "exposeRoutedPeer": "暴露路由后端",
       "exposeRoutedPeerHint": "把选中的后端以 X-Routed-Peer 回传，chart 默认开启",
       "backendMaxConcurrency": "后端并发上限",
-      "backendMaxConcurrencyHint": "每个后端的最大并发，留空沿用 chart 默认值",
+      "backendMaxConcurrencyHint": "每个引擎实例的并发上限；CART 层的上限由它推导（此值 × 后端数）。留空沿用 chart 默认值",
       "cart": "CART",
       "cartHint": "缓存感知路由",
       "cartMaxLoad": "CART 单 worker 最大负载",
@@ -544,7 +546,6 @@
       "tpsHint": "SLO 开启时只在没有声明 tps_metrics 时生效；留空不设",
       "adaptiveCc": "自适应并发",
       "adaptiveCcHint": "按有效 TPS 做 AIMD 调整，默认开启",
-      "adaptiveCapacityHint": "默认节点并发上限仍在“容量与故障切换”中，关闭自适应时也生效；它同时决定自适应上下限计算使用的静态最大值。",
       "adaptiveOff": "请先开启自适应并发，再添加此参数。",
       "adaptiveChanged": "模型来源发生变化，或自适应参数未能清除，请重新生成计划后再应用。",
       "adaptiveCcMinFrac": "自适应下限比例",
@@ -820,7 +821,7 @@
       "serviceMonitorHint": "随 release 一起采集 Prometheus 指标",
       "sloRequirement": "SLO 要求",
       "sloRequirementHint": "为 release 创建 LLMSLORequirement",
-      "scaler": "自动伸缩",
+      "scaler": "伸缩执行器",
       "scalerHint": "为 release 创建 LLMScaler"
     },
     "setup": {

@@ -18,6 +18,7 @@ import {
   FormSection,
   Input,
   Switch,
+  cn,
 } from "@modelsphere/ui";
 import { Plus, X } from "lucide-react";
 import type { ClusterInfo } from "@swiss/lib/api";
@@ -64,6 +65,8 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
   const count = (k: "replicaCount" | "scalerMin" | "scalerMax") => ({ value: form[k], inputMode: "numeric" as const, onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange({ [k]: digits(e.target.value) }) });
   const sw = (k: keyof Form, label: string) => <Switch aria-label={label} checked={form[k] as boolean} onCheckedChange={(v) => onChange({ [k]: v })} />;
   const idError = submitted ? serviceIdError(form.serviceId || defaults.serviceId || "") : undefined;
+  // A float label hides the placeholder until it floats; float it whenever there is a default to show.
+  const shown = (value: string, fallback?: string) => value || fallback || "";
   const section = (id: Section, children: ReactNode) => (
     <div id={`${idPrefix}${id}`}>
       <FormSection id={`${idPrefix}${id}-section`} title={t(`deploy.sections.${upgrade && id === "basic" ? "target" : id}`)} expanded={expanded[id]} onExpandedChange={(o) => onExpand(id, o)}>
@@ -78,56 +81,56 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
         "basic",
         <>
           {target}
-          <FloatingField label={f("serviceId")} required hint={upgrade ? f("serviceIdLocked") : f("serviceIdHint")} error={idError && t(`deploy.errors.${idError}`)} disabled={upgrade}>
-            <FieldInput {...text("serviceId")} placeholder={defaults.serviceId} disabled={upgrade} />
+          <FloatingField value={shown(form.serviceId, defaults.serviceId)} label={f("serviceId")} required hint={upgrade ? f("serviceIdLocked") : f("serviceIdHint")} error={idError && t(`deploy.errors.${idError}`)} disabled={upgrade}>
+            <Suggest value={form.serviceId} onChange={(serviceId) => onChange({ serviceId })} suggestion={defaults.serviceId} disabled={upgrade} />
           </FloatingField>
-          <FloatingField label={f("namespace")} hint={upgrade ? f("namespaceLocked") : undefined} disabled={upgrade}>
-            <FieldInput {...text("namespace")} placeholder={cluster?.namespace} disabled={upgrade} />
+          <FloatingField
+            layout="inline"
+            label={f("modelRoute")}
+            hint={f("modelRouteHint")}
+            expanded={on.modelRoute}
+            expandedContent={
+              <div className="pb-3">
+                <Suggest bare value={form.route} onChange={(route) => onChange({ route })} suggestion={form.serviceId || defaults.serviceId} aria-label={f("route")} />
+              </div>
+            }
+          >
+            <Switch aria-label={f("modelRoute")} checked={on.modelRoute} onCheckedChange={(v) => onChange(v ? { modelRoute: true } : { modelRoute: false, route: "" })} />
           </FloatingField>
-          {!upgrade && (
-            <FloatingField layout="inline" label={f("createNamespace")} hint={f("createNamespaceHint")}>
-              {sw("createNamespace", f("createNamespace"))}
+          <div className={cn(!upgrade && "grid grid-cols-2 gap-3")}>
+            <FloatingField value={shown(form.namespace, cluster?.namespace)} label={f("namespace")} hint={upgrade ? f("namespaceLocked") : undefined} disabled={upgrade}>
+              <Suggest value={form.namespace} onChange={(namespace) => onChange({ namespace })} suggestion={cluster?.namespace} disabled={upgrade} />
             </FloatingField>
-          )}
+            {!upgrade && (
+              <FloatingField layout="inline" label={f("createNamespace")} hint={f("createNamespaceHint")}>
+                {sw("createNamespace", f("createNamespace"))}
+              </FloatingField>
+            )}
+          </div>
+          <FloatingField layout="inline" label={f("slo")} hint={f("sloHint")}>
+            {sw("slo", f("slo"))}
+          </FloatingField>
         </>,
       )}
 
       {section(
         "resources",
         <>
-          <FloatingField
-            layout="inline"
-            label={f("scaler")}
-            hint={f("scalerHint")}
-            expanded={form.scaler}
-            expandedContent={
-              <div className="grid grid-cols-2 gap-3 pb-3">
-                <Input {...count("scalerMin")} placeholder={f("scalerMin")} aria-label={f("scalerMin")} />
-                <Input {...count("scalerMax")} placeholder={f("scalerMax")} aria-label={f("scalerMax")} />
-              </div>
-            }
-          >
-            {sw("scaler", f("scaler"))}
-          </FloatingField>
-          {!form.scaler && (
-            <FloatingField label={f("replicas")}>
-              <FieldInput {...count("replicaCount")} />
-            </FloatingField>
-          )}
           <FloatingField label={f("gpuProducts")} hint={f("gpuProductsHint")}>
             <FieldSelect multiple values={form.gpuProducts} onValuesChange={(v) => onChange({ gpuProducts: v })} options={gpuOptions.map((o) => ({ value: o, label: o }))} placeholder={gpuOptions.length ? undefined : f("gpuProductsEmpty")} disabled={!gpuOptions.length} />
           </FloatingField>
           <Tolerations rows={form.tolerations} onChange={(v) => onChange({ tolerations: v })} />
           <div className="grid grid-cols-2 gap-3">
-            <FloatingField label={f("priorityClass")}>
-              <FieldInput {...text("priorityClassName")} placeholder={cluster?.priorityClassName || f("chartDefault")} />
+            <FloatingField value={shown(form.priorityClassName, cluster?.priorityClassName)} label={f("priorityClass")}>
+              <Suggest value={form.priorityClassName} onChange={(priorityClassName) => onChange({ priorityClassName })} suggestion={cluster?.priorityClassName} />
             </FloatingField>
-            <FloatingField label={f("scheduler")}>
-              <FieldInput {...text("schedulerName")} placeholder={cluster?.schedulerName || f("chartDefault")} />
+            <FloatingField value={shown(form.schedulerName, cluster?.schedulerName)} label={f("scheduler")}>
+              <Suggest value={form.schedulerName} onChange={(schedulerName) => onChange({ schedulerName })} suggestion={cluster?.schedulerName} />
             </FloatingField>
           </div>
-          <FloatingField label={f("localPath")} hint={f("localPathHint")}>
-            <FieldInput {...text("localPath")} placeholder={defaults.localPath ?? defaults.localPathTemplate} />
+          {/* The template is only a fallback to show: Tab fills the resolved path, never the template. */}
+          <FloatingField value={shown(form.localPath, defaults.localPath || defaults.localPathTemplate)} label={f("localPath")} hint={f("localPathHint")}>
+            <Suggest value={form.localPath} onChange={(localPath) => onChange({ localPath })} suggestion={defaults.localPath} placeholder={defaults.localPath || defaults.localPathTemplate} />
           </FloatingField>
           {defaults.image && (
             <FloatingField
@@ -144,25 +147,32 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
               <Switch aria-label={f("image")} checked={!!form.image.trim()} onCheckedChange={(v) => onChange({ image: v ? defaults.image!.site : "" })} />
             </FloatingField>
           )}
+          <FloatingField
+            layout="inline"
+            label={f("scaler")}
+            hint={f("scalerHint")}
+            expanded
+            expandedContent={
+              form.scaler ? (
+                <div className="grid grid-cols-2 gap-3 pb-3">
+                  <Input {...count("scalerMin")} placeholder={f("scalerMin")} aria-label={f("scalerMin")} />
+                  <Input {...count("scalerMax")} placeholder={f("scalerMax")} aria-label={f("scalerMax")} />
+                </div>
+              ) : (
+                <div className="pb-3">
+                  <Input {...count("replicaCount")} placeholder={f("replicas")} aria-label={f("replicas")} />
+                </div>
+              )
+            }
+          >
+            {sw("scaler", f("scaler"))}
+          </FloatingField>
         </>,
       )}
 
       {section(
         "routing",
         <>
-          <FloatingField
-            layout="inline"
-            label={f("modelRoute")}
-            hint={f("modelRouteHint")}
-            expanded={on.modelRoute}
-            expandedContent={
-              <div className="pb-3">
-                <Input value={form.route} onChange={(e) => onChange({ route: e.target.value })} placeholder={form.serviceId || defaults.serviceId} aria-label={f("route")} />
-              </div>
-            }
-          >
-            <Switch aria-label={f("modelRoute")} checked={on.modelRoute} onCheckedChange={(v) => onChange(v ? { modelRoute: true } : { modelRoute: false, route: "" })} />
-          </FloatingField>
           <FloatingField layout="inline" label={label("expose_routed_peer", "exposeRoutedPeer")} hint={hint("expose_routed_peer", "exposeRoutedPeerHint")}>
             {sw("exposeRoutedPeer", f("exposeRoutedPeer"))}
           </FloatingField>
@@ -189,7 +199,6 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
             expanded={form.adaptiveCc}
             expandedContent={
               <div className="space-y-3 pb-3">
-                <p className="text-xs text-muted-foreground">{f("adaptiveCapacityHint")}</p>
                 <FloatingField layout={byKey.get("adaptive_cc_min_frac")?.fallback ? "block" : "float"} label={t("deploy.routeOptions.options.adaptive_cc_min_frac.label")} hint={hint("adaptive_cc_min_frac", "adaptiveCcMinFracHint")} error={fracOutOfRange(form.adaptiveCcMinFrac) ? f("fracRange") : undefined}>
                   <FieldInput value={form.adaptiveCcMinFrac} onChange={(e) => onChange({ adaptiveCcMinFrac: e.target.value })} inputMode="decimal" placeholder={byKey.get("adaptive_cc_min_frac")?.fallback || undefined} aria-label={f("adaptiveCcMinFrac")} aria-invalid={fracOutOfRange(form.adaptiveCcMinFrac)} disabled={!!extraValue(form, "adaptive_cc_min")} />
                 </FloatingField>
@@ -200,9 +209,6 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
             <Switch aria-label={f("adaptiveCc")} checked={form.adaptiveCc} onCheckedChange={(value) => onChange(toggleAdaptive(form, value, routeOptions))} />
           </FloatingField>
           <RouteExtras form={form} onChange={onChange} options={routeOptions} showRuntime={showRuntime} mode="other" />
-          <FloatingField layout="inline" label={f("slo")} hint={f("sloHint")}>
-            {sw("slo", f("slo"))}
-          </FloatingField>
           <div className="grid grid-cols-2 gap-3">
             <FloatingField layout={byKey.get("ttft_limit_ms")?.fallback ? "block" : "float"} label={form.slo ? f("ttftFallback") : label("ttft_limit_ms", "ttft")} hint={hint("ttft_limit_ms", "ttftHint")}>
               <FieldInput {...text("ttftLimitMs")} inputMode="numeric" placeholder={byKey.get("ttft_limit_ms")?.fallback || undefined} />
@@ -358,6 +364,35 @@ export function RouteExtras({ form, onChange, options, showRuntime = false, mode
         </>}
       </div>
       {customError && <p className="text-xs text-warning">{customError}</p>}
+    </div>
+  );
+}
+
+// Tab fills an empty field with the default it shows, as swiss's own form does.
+function Suggest({ value, onChange, suggestion, bare, placeholder, className, ...props }: Omit<React.ComponentProps<typeof Input>, "value" | "onChange"> & { value: string; onChange: (v: string) => void; suggestion?: string; bare?: boolean }) {
+  const [focused, setFocused] = useState(false);
+  const offer = !value && !props.disabled ? suggestion : undefined;
+  const hint = !!offer && focused;
+  const Control = bare ? Input : FieldInput;
+  return (
+    <div className="relative h-full w-full min-w-0">
+      <Control
+        {...props}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onKeyDown={(e) => {
+          if (e.key !== "Tab" || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || !offer) return;
+          e.preventDefault();
+          onChange(offer);
+        }}
+        placeholder={placeholder ?? suggestion}
+        className={cn(hint && "pr-12", className)}
+      />
+      {hint && (
+        <kbd className={cn("pointer-events-none absolute right-3 rounded border px-1 py-px text-[10px] leading-none text-muted-foreground", bare ? "top-1/2 -translate-y-1/2" : "top-[27px]")}>tab</kbd>
+      )}
     </div>
   );
 }

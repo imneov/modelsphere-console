@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription, DetailHeader, PanelTabs, SectionCard, Skeleton, Tabs, TabsContent } from "@modelsphere/ui";
 import { ArrowLeft, TriangleAlert } from "lucide-react";
@@ -26,12 +26,15 @@ export function InferenceDetail() {
   const t = useT();
   const p = useModulePath();
   const navigate = useNavigate();
+  const location = useLocation();
   const { release = "" } = useParams();
   const [search, setSearch] = useSearchParams();
   const namespace = search.get("namespace") ?? "";
   const [uninstalling, setUninstalling] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const [editingSLO, setEditingSLO] = useState(false);
+  // Set by the deploy sheet after a first install with SLO on.
+  const [sloSetup, setSloSetup] = useState(() => (location.state as { sloSetup?: boolean } | null)?.sloSetup === true);
 
   // Query keys match swiss's pages, so the two views share one cache.
   const status = useQuery({
@@ -101,6 +104,13 @@ export function InferenceDetail() {
   const model = modelLine(source ?? {}) || s.model;
   const pods = s.pods.map((p) => p.name);
   const blocked = sloBlocked(s, plan.data);
+  const sloOpen = editingSLO || (sloSetup && blocked !== "off" && s.planStatus?.phase !== "failed");
+  const closeSLO = () => {
+    setEditingSLO(false);
+    if (!sloSetup) return;
+    setSloSetup(false);
+    navigate(location, { replace: true, state: null });
+  };
   const counts: Partial<Record<Tab, number>> = { instances: s.pods.length, versions: revisions.data?.revisions.length };
 
   return (
@@ -177,7 +187,7 @@ export function InferenceDetail() {
         )}
       </Tabs>
 
-      <SLOSheet target={editingSLO ? { namespace, release } : null} canEdit={!readOnly} onClose={() => setEditingSLO(false)} />
+      <SLOSheet target={sloOpen ? { namespace, release } : null} canEdit={!readOnly} setup={sloSetup} waiting={blocked === "pending"} onClose={closeSLO} />
       <DeploySheet target={upgrading ? { kind: "upgrade", namespace, release } : null} onClose={() => setUpgrading(false)} />
       <UninstallDialog
         target={uninstalling ? { namespace, release } : null}

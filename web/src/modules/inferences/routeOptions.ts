@@ -36,12 +36,21 @@ const corrections: Record<string, string> = {
   ttft_probe_per_window: "Probe requests allowed through while TTFT limiting is active, per probe window.",
   tps_probe_per_window: "Probe requests allowed through while TPS limiting is active, per probe window.",
 };
+// Reachable only from the advanced menu: modelsphere/console#89.
+const ADVANCED_ONLY = new Set(["default_max"]);
+
+export function demote(options: RouteOptions): RouteOptions {
+  const moved = options.directives.filter((d) => ADVANCED_ONLY.has(d.key));
+  if (!moved.length) return options;
+  return { ...options, directives: options.directives.filter((d) => !ADVANCED_ONLY.has(d.key)), advanced: [...options.advanced, ...moved] };
+}
+
 const bundled = [...DIRECTIVES.map((d) => ({ ...d, fallback: "", detail: corrections[d.key] ?? d.detail })), ...additions];
-export const FALLBACK_ROUTE_OPTIONS: RouteOptions = {
+export const FALLBACK_ROUTE_OPTIONS: RouteOptions = demote({
   route: "",
   directives: bundled.filter((d) => common.has(d.key)),
   advanced: bundled.filter((d) => !common.has(d.key)),
-};
+});
 
 export function routeDirectives(options?: RouteOptions | null): RouteDirective[] {
   const catalog = options === null ? FALLBACK_ROUTE_OPTIONS : options;
