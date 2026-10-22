@@ -27,7 +27,7 @@ import {
 import { ArrowRight, FlaskConical, TriangleAlert } from "lucide-react";
 import { useModulePath } from "@/shell";
 import { deployApi, type ApplyResult, type ApplyWith, type CatalogModel, type DiffResult, type Plan } from "@swiss/lib/api";
-import { api } from "../catalog-api";
+import { api } from "@/modules/inferences/catalogApi";
 import { imageOf, reseed, siteSwitchDefaults, switchDefaults, type Form, type SwitchDefaults } from "@swiss/components/DeploySettings";
 import { EMPTY, formFromPlan, planRequest } from "../deployment-settings";
 import { releaseCatalog } from "@swiss/components/CatalogChoice";

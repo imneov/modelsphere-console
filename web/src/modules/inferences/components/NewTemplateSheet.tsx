@@ -3,10 +3,10 @@ import { useMutation } from "@tanstack/react-query";
 import { Alert, AlertDescription, Button, FieldInput, FieldSelect, FieldTextarea, FloatingField, FormSection, Sheet, SheetBody, SheetCancelButton, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, Switch, useDirty } from "@modelsphere/ui";
 import { CircleCheck, TriangleAlert } from "lucide-react";
 import type { CatalogModel } from "@swiss/lib/api";
-import { api } from "../catalog-api";
-import { useT } from "../i18n";
-import { checkTemplate, createTemplate, type TemplateResult } from "../local-templates-api";
-import { EMPTY_TEMPLATE, fromTemplateVariant, templateInput, TemplateFormError, type TemplateForm } from "../template-form";
+import { api } from "@/modules/inferences/catalogApi";
+import { useT } from "@/modules/inferences/i18n";
+import { checkTemplate, createTemplate, type TemplateResult } from "@/modules/inferences/localTemplatesApi";
+import { EMPTY_TEMPLATE, fromTemplateVariant, templateInput, TemplateFormError, type TemplateForm } from "@/modules/inferences/templateForm";
 
 export interface TemplateReference { catalog: string; model: CatalogModel }
 

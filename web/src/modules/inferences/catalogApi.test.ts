@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { onUnauthorized } from "@swiss/lib/api";
-import { api, normalizeCatalog } from "./catalog-api";
+import { api, normalizeCatalog } from "@/modules/inferences/catalogApi";
 
 const fetchMock = vi.fn();
 const variant = { id: "gpu", engine: "sglang", default: true, chart: { name: "sglang", version: "0.7.1" }, requires: { gpus: 2 } };

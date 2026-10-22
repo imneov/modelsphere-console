@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parse } from "yaml";
 import type { CatalogResponse, Variant } from "@swiss/lib/api";
-import { TemplateFields } from "./components/NewTemplateSheet";
-import { createTemplate, publishTemplates, readLocalTemplates, templateReady } from "./local-templates-api";
-import { libraryModels } from "./local-templates-lib";
-import { EMPTY_TEMPLATE, fromTemplateVariant, templateInput, TemplateFormError } from "./template-form";
+import { TemplateFields } from "@/modules/inferences/components/NewTemplateSheet";
+import { createTemplate, publishTemplates, readLocalTemplates, templateReady } from "@/modules/inferences/localTemplatesApi";
+import { libraryModels, ownsTemplateCatalog } from "@/modules/inferences/localTemplatesLib";
+import { EMPTY_TEMPLATE, fromTemplateVariant, templateInput, TemplateFormError } from "@/modules/inferences/templateForm";
 
 const form = { ...EMPTY_TEMPLATE, name: "private-model", displayName: "Private model", hf: "example/private-model", chartVersion: "0.7.1", imageRepository: "example/engine", imageTag: "v1", gpus: "2", gpuProducts: "H100, H100", tags: "private, fine-tuned", valuesYAML: 'env:\n  FLAG: "false"\nextraArgs:\n  - --custom\n' };
 const input = templateInput(form);
@@ -83,7 +83,28 @@ describe("native model template authoring", () => {
     expect(rows.map((row) => [row.catalog, row.model.name])).toEqual([["default", "private-model"], ["console-local", "private-model"]]);
     expect(remote.models).toHaveLength(1);
     expect(libraryModels(remote, local, "default", "default")).toHaveLength(1);
-    expect(libraryModels(remote, local, "console-local", "console-local")).toEqual([{ catalog: "console-local", model: local.catalog.models[0], custom: true, ready: true }]);
+    expect(libraryModels(remote, local, "console-local", "console-local", { name: local.catalogName, source: local.catalogURL })).toEqual([{ catalog: "console-local", model: local.catalog.models[0], custom: true, ready: true }]);
+  });
+
+  it("keeps a foreign catalog named console-local accessible before native registration", async () => {
+    fetchMock.mockResolvedValue(json(native));
+    const data = await readLocalTemplates();
+    const foreign: CatalogResponse = { ...data.catalog, name: "console-local", source: "https://foreign.example/index.json" };
+    const empty = { ...data, registrationError: "catalog_name_conflict", registeredGeneration: null, catalog: { ...data.catalog, models: [] } };
+    expect(libraryModels(foreign, empty, "console-local", "console-local")).toEqual([{ catalog: "console-local", model: foreign.models[0], custom: false, ready: true }]);
+    expect(libraryModels(foreign, empty, "console-local", "")).toHaveLength(1);
+  });
+
+  it("recognizes owned generations without treating a matching name as ownership", async () => {
+    fetchMock.mockResolvedValue(json({ ...native, generation: 2, catalogURL: native.catalogURL.replace('/g/1/', '/g/2/') }));
+    const data = await readLocalTemplates();
+    expect(ownsTemplateCatalog(data, { name: "console-local", source: native.catalogURL })).toBe(true);
+    for (const source of ["https://foreign.example/index.json", native.catalogURL.replace('/catalog/console/', '/catalog/foreign/'), native.catalogURL + '?other=1', "not-a-url"]) {
+      expect(ownsTemplateCatalog(data, { name: "console-local", source })).toBe(false);
+    }
+    expect(ownsTemplateCatalog({ ...data, registrationError: "catalog_name_conflict" }, { name: "console-local", source: native.catalogURL })).toBe(false);
+    const foreign = { ...data.catalog, source: "https://foreign.example/index.json" };
+    expect(libraryModels(foreign, data, "console-local", "console-local")[0].custom).toBe(false);
   });
 
   it("keeps older published templates deployable while a newer generation is pending", async () => {

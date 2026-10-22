@@ -25,7 +25,7 @@ import {
 import { Boxes, Library, MoreHorizontal, TriangleAlert } from "lucide-react";
 import { useModulePath, usePermissions } from "@/shell";
 import type { CatalogInfo } from "@swiss/lib/api";
-import { api } from "./catalog-api";
+import { api } from "@/modules/inferences/catalogApi";
 import { facetsOf, formatUplift, sorters, type Facets } from "@swiss/lib/catalog";
 import { useCatalogChoice } from "@swiss/components/CatalogChoice";
 import { useT } from "@/modules/inferences/i18n";
@@ -34,8 +34,8 @@ import { writableCatalogs } from "@/modules/inferences/catalog-write-lib";
 import { SETTINGS_FILE } from "@/modules/inferences/catalog-write-api";
 import { NewModelSheet } from "@/modules/inferences/components/NewModelSheet";
 import { NewTemplateSheet } from "@/modules/inferences/components/NewTemplateSheet";
-import { readLocalTemplates, publishTemplates, templateReady, type TemplateResult } from "./local-templates-api";
-import { libraryModels } from "./local-templates-lib";
+import { readLocalTemplates, publishTemplates, templateReady, type TemplateResult } from "@/modules/inferences/localTemplatesApi";
+import { libraryModels, ownsTemplateCatalog } from "@/modules/inferences/localTemplatesLib";
 import { FileSheet } from "@/modules/inferences/components/FileSheet";
 import { SetupSheet } from "@/modules/inferences/components/SetupSheet";
 import { useCatalogWrite } from "@/modules/inferences/components/useCatalogWrite";
@@ -50,13 +50,14 @@ export function CatalogPage() {
   const choice = useCatalogChoice();
   const { has } = usePermissions();
   const local = useQuery({ queryKey: ["local-model-templates"], queryFn: readLocalTemplates, enabled: has("modeltemplates.view") || has("modeltemplates.create"), retry: false });
-  const selectedLocal = local.data?.enabled && choice.selected === local.data.catalogName;
+  const configuredCatalog = choice.catalogs.find((candidate) => candidate.name === choice.selected);
+  const selectedLocal = ownsTemplateCatalog(local.data, configuredCatalog);
   const catalog = useQuery({
     queryKey: ["catalog", choice.selected],
     queryFn: () => api.catalog(choice.selected),
     enabled: !!choice.selected && !selectedLocal,
   });
-  const entries = useMemo(() => libraryModels(catalog.data, local.data, choice.selected, choice.named), [catalog.data, local.data, choice.selected, choice.named]);
+  const entries = useMemo(() => libraryModels(catalog.data, local.data, choice.selected, choice.named, configuredCatalog), [catalog.data, local.data, choice.selected, choice.named, configuredCatalog]);
   const all = useMemo(() => entries.map((entry) => ({ ...facetsOf(entry.model), catalog: entry.catalog, custom: entry.custom, ready: entry.ready })), [entries]);
   const options = useMemo(() => facetOptions(all), [all]);
   const f = filtersFrom(params);
@@ -196,7 +197,7 @@ export function CatalogPage() {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {shown.map((x) => (
-                  <ModelCard key={`${x.catalog}/${x.model.name}`} x={x} catalog={x.catalog} custom={x.custom} pending={!x.ready} onDeploy={x.ready ? onDeploy : undefined} to={p(modelPath(x.model.name, x.catalog))} />
+                  <ModelCard key={`${x.custom ? "custom" : "published"}:${x.catalog}/${x.model.name}`} x={x} catalog={x.catalog} custom={x.custom} pending={!x.ready} onDeploy={x.ready ? onDeploy : undefined} to={p(modelPath(x.model.name, x.catalog))} />
                 ))}
               </div>
             )}
