@@ -3,6 +3,7 @@ import type { Pod, ReleaseStatus } from "@swiss/lib/api";
 import { useT } from "@/modules/inferences/i18n";
 import { age } from "@/modules/inferences/lib";
 import { LoadHint } from "@/modules/inferences/components/LoadHint";
+import { UninstallProgress } from "@/modules/inferences/components/UninstallProgress";
 
 // The release's pods, from the status read the page already polls.
 export function Instances({ status: s, onLogs }: { status: ReleaseStatus; onLogs: (pod: string) => void }) {
@@ -34,6 +35,7 @@ export function Instances({ status: s, onLogs }: { status: ReleaseStatus; onLogs
   const rowActions: ResourceRowAction<Pod>[] = [{ key: "logs", label: t("actions.logs"), onClick: (pod) => onLogs(pod.name) }];
   return (
     <div className="space-y-3">
+      <UninstallProgress status={s} />
       <LoadHint status={s} />
       {s.warning && <p className="text-sm text-warning">{s.warning}</p>}
       <ResourceTable<Pod> showColumnToggle={false} rowActions={rowActions} data={s.pods} columns={columns} rowKey="name" emptyTitle={t("instances.empty")} />

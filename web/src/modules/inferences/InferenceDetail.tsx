@@ -42,7 +42,7 @@ export function InferenceDetail() {
   const status = useQuery({
     queryKey: ["status", namespace, release],
     queryFn: () => api.status(namespace, release),
-    refetchInterval: upgrading ? false : 15_000,
+    refetchInterval: upgrading ? false : (query) => query.state.data && isUninstalling(query.state.data) ? 3_000 : 15_000,
     enabled: !!namespace,
   });
   // A release swiss did not deploy has no plan beside it: untracked, not an error.
@@ -103,7 +103,9 @@ export function InferenceDetail() {
 
   const readOnly = cluster.data ? !cluster.data.allowDeploy : false;
   const removing = isUninstalling(s);
-  const blockedWrite = readOnly ? t("disabled.readOnly") : removing ? t("disabled.uninstalling") : false;
+  const blockedWrite = readOnly ? t("disabled.readOnly") : removing ? t("disabled.uninstalling") : !s.exists ? t("disabled.notInstalled") : false;
+  const remaining = s.llmservice?.deletion?.podsRemaining ?? s.pods.length;
+  const teardownCount = s.warning && remaining === 0 ? t("state.unknown") : t("uninstall.remaining", { n: remaining });
   const source = plan.data?.source;
   const model = modelLine(source ?? {}) || s.model;
   const pods = s.pods.map((p) => p.name);
@@ -124,7 +126,7 @@ export function InferenceDetail() {
           onBack={() => navigate(p(""))}
           backLabel={t("detail.back")}
           title={release}
-          status={statusOf(releaseState(s), t, s.total > 0 ? `${s.ready}/${s.total}` : undefined)}
+          status={statusOf(releaseState(s), t, removing ? teardownCount : s.total > 0 ? `${s.ready}/${s.total}` : undefined)}
           notice={!plan.data && plan.isError ? { tone: "warning", title: t("detail.untracked") } : undefined}
           actions={[
             { key: "check", label: t("actions.check"), onClick: () => setTab("check") },
@@ -152,7 +154,7 @@ export function InferenceDetail() {
             { label: t("detail.fields.namespace"), value: namespace },
             { label: t("detail.fields.model"), value: <span title={model}>{model || "-"}</span> },
             { label: t("detail.fields.chart"), value: plan.data ? `${plan.data.chart.name}-${plan.data.chart.version}` : "-" },
-            { label: t("detail.fields.instances"), value: `${s.ready}/${s.total}` },
+            { label: t("detail.fields.instances"), value: removing ? teardownCount : `${s.ready}/${s.total}` },
           ]}
           metaColumns={4}
         />
@@ -177,7 +179,7 @@ export function InferenceDetail() {
           <Endpoint namespace={namespace} release={release} status={s} access={false} />
         </TabsContent>
         <TabsContent value="versions">
-          <Versions namespace={namespace} release={release} rollbackBlocked={removing ? t("disabled.uninstalling") : readOnly || !plan.data ? t("disabled.readOnly") : false} />
+          <Versions namespace={namespace} release={release} rollbackBlocked={blockedWrite || (!plan.data ? t("disabled.untracked") : false)} />
         </TabsContent>
         <TabsContent value="runs">
           <Runs namespace={namespace} release={release} />
@@ -196,7 +198,6 @@ export function InferenceDetail() {
       <UninstallDialog
         target={uninstalling ? { namespace, release } : null}
         onClose={() => setUninstalling(false)}
-        onDone={() => navigate(p(""))}
       />
     </Page>
   );

@@ -127,6 +127,11 @@ describe("tabs", () => {
     expect(parseTab(null, tabs)).toBe("overview");
     expect(parseTab("versions", tabs)).toBe("versions");
   });
+  it("honors the final SLO value when Advanced YAML overrides the form", () => {
+    const plan = { layers: { form: { sloRequirement: { enabled: true } }, edit: { sloRequirement: { enabled: false } } } } as unknown as Plan;
+    expect(sloBlocked(status({ planStatus: { phase: "applied" } }), plan)).toBe("off");
+    expect(sloBlocked(status({ planStatus: { phase: "applied" } }), { layers: { edit: { sloRequirement: { enabled: true } } } } as unknown as Plan)).toBeUndefined();
+  });
   it("edits SLO only for an applied plan with SLO turned on in the form layer, and says why not", () => {
     const plan = { layers: { form: { sloRequirement: { enabled: true } } } } as unknown as Plan;
     expect(sloBlocked(status({ planStatus: { phase: "applied" } }), plan)).toBeUndefined();

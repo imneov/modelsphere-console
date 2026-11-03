@@ -43,6 +43,10 @@ import { DeployForm } from "@/modules/inferences/components/DeployForm";
 import { ExperimentalBadge } from "@/modules/inferences/components/InstallMethodLabel";
 import { AdaptivePlanChangedError, composeAdaptivePlan } from "../adaptive-concurrency";
 import { readRouteOptions } from "@/modules/inferences/api";
+import { RecoveryFields } from "./RecoveryFields";
+import { mergeValues, planValues, recoveryError, recoverySettings, withRecovery, type RecoverySettings } from "../recovery";
+import { L3CacheFields } from "./L3CacheFields";
+import { l3Error, l3Settings, localOffloadEnabled, withL3, type L3Patch } from "../l3-cache";
 
 export type DeployTarget =
   | { kind: "deploy"; model: string; catalog: string; version?: string; variant?: string }
@@ -137,6 +141,17 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   if (current.data && !seedPlan) setSeedPlan(current.data);
   const deployModel = upgrade ? "" : target.model;
   const initial = useMemo<Form>(() => (upgrade ? (seedPlan ? formFromPlan(seedPlan) : EMPTY) : { ...EMPTY, serviceId: defaultServiceId(deployModel) }), [upgrade, seedPlan, deployModel]);
+  const initialRecovery = useMemo(() => recoverySettings(
+    upgrade ? (seedPlan ? planValues(seedPlan) : {}) : mergeValues(entry.data?.variant.values, profile.data?.profile?.extra),
+  ), [upgrade, seedPlan, entry.data?.variant.values, profile.data?.profile?.extra]);
+  const [recoveryPatch, setRecoveryPatch] = useState<Partial<RecoverySettings>>({});
+  const recovery = { ...initialRecovery, ...recoveryPatch };
+  const initialL3Values = useMemo(() =>
+    upgrade ? (seedPlan ? planValues(seedPlan) : {}) : mergeValues(entry.data?.variant.values, profile.data?.profile?.extra),
+  [upgrade, seedPlan, entry.data?.variant.values, profile.data?.profile?.extra]);
+  const initialL3 = useMemo(() => l3Settings(initialL3Values), [initialL3Values]);
+  const [l3Patch, setL3Patch] = useState<L3Patch>({});
+  const l3 = { ...initialL3, ...l3Patch };
   const [form, setForm] = useState<Form>(initial);
   const catalogRoute = upgrade && current.data ? initial.route || initial.serviceId || target.release : undefined;
   const routeOptions = useQuery({
@@ -148,7 +163,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   });
   useEffect(() => setForm(initial), [initial]);
   const [seed, setSeed] = useState<SwitchDefaults | null>(null);
-  const dirty = useDirty({ form, version, variant, moveTo, chartVersion }, { form: seed ? reseed(initial, {}, seed) : initial, version: upgrade ? "" : (target.version ?? ""), variant: upgrade ? "" : (target.variant ?? ""), moveTo: "", chartVersion: "" });
+  const dirty = useDirty({ form, version, variant, moveTo, chartVersion, recovery, l3 }, { form: seed ? reseed(initial, {}, seed) : initial, version: upgrade ? "" : (target.version ?? ""), variant: upgrade ? "" : (target.variant ?? ""), moveTo: "", chartVersion: "", recovery: initialRecovery, l3: initialL3 });
 
   const [step, setStep] = useState<"form" | "review">("form");
   const [submitted, setSubmitted] = useState(false);
@@ -187,13 +202,18 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const compose = useMutation({
     mutationFn: async () => {
       try {
-        return await composeAdaptivePlan(planRequest(
+        const proposed = await composeAdaptivePlan(withL3(withRecovery(planRequest(
           { ...form, serviceId: form.serviceId || (upgrade ? form.serviceId : defaultServiceId(target.model)) },
           upgrade
             ? { model: recorded!.model, version: version || undefined, variant: variant || undefined, catalog: moveTo || undefined, chartVersion: chartVersion || undefined, fromRelease: target.release, cacheUnsupported: !!cache.unsupported }
             : { model: target.model, version, variant: keptVariant, catalog: target.catalog, chartVersion: chartVersion || undefined, cacheUnsupported: !!cache.unsupported },
           profile.data?.profile,
-        ), form, routeOptions.data, deployApi.plan, catalogName);
+        ), recovery), l3Patch), form, routeOptions.data, deployApi.plan, catalogName);
+        const invalid = recoveryError(proposed);
+        if (invalid) throw new Error(t(`deploy.recovery.errors.${invalid}`));
+        const invalidL3 = l3Error(proposed);
+        if (invalidL3) throw new Error(t(`deploy.l3.errors.${invalidL3}`));
+        return proposed;
       } catch (error) {
         if (error instanceof AdaptivePlanChangedError) throw new Error(t("deploy.fields.adaptiveChanged"));
         throw error;
@@ -428,6 +448,8 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
               onExpand={(s, o) => setExpanded((e) => ({ ...e, [s]: o }))}
               routeOptions={routeOptions.isSuccess ? routeOptions.data : undefined}
               catalogRoute={catalogRoute}
+              recovery={<RecoveryFields settings={recovery} onChange={(patch) => setRecoveryPatch((previous) => ({ ...previous, ...patch }))} />}
+              l3={<L3CacheFields settings={l3} onChange={(patch) => setL3Patch((previous) => ({ ...previous, ...patch }))} chart={{ name: v?.chart.name ?? running?.name, version: chart.resolved ?? v?.chart.version ?? running?.version }} engine={v?.engine ?? seedPlan?.engine} localEnabled={localOffloadEnabled(initialL3Values)} />}
               idPrefix={ID_PREFIX}
             />
             <div style={{ height: nav.tailSpace }} aria-hidden />

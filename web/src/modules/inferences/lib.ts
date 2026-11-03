@@ -14,6 +14,7 @@ import type {
 } from "@swiss/lib/api";
 import { isUninstalling, rowPhase } from "@swiss/lib/phase";
 import { scalerFailing, scalerHold } from "@swiss/lib/scaler";
+import { planValues } from "./recovery";
 
 export type Tone = "success" | "info" | "warning" | "error" | "muted";
 
@@ -66,9 +67,8 @@ export function parseTab(raw: string | null, visible: readonly Tab[]): Tab {
   return visible.find((t) => t === raw) ?? "overview";
 }
 
-// Copied from swiss's DeploymentDetail, where it is not exported.
 export function sloEnabled(plan?: Plan): boolean {
-  const raw = plan?.layers?.form?.sloRequirement;
+  const raw = plan && planValues(plan).sloRequirement;
   if (!raw || typeof raw !== "object") return false;
   return (raw as { enabled?: boolean }).enabled === true;
 }

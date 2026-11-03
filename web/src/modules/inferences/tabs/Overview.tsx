@@ -21,6 +21,7 @@ import { installSteps, modelLine, releaseState, type Step, type StepState } from
 import { StatusDot } from "@/modules/inferences/components/StatusDot";
 import { InstallMethodLabel } from "@/modules/inferences/components/InstallMethodLabel";
 import { LoadHint } from "@/modules/inferences/components/LoadHint";
+import { UninstallProgress } from "@/modules/inferences/components/UninstallProgress";
 import { EventRow, useReleaseEvents } from "@/modules/inferences/tabs/Events";
 
 const RECENT = 5;
@@ -100,15 +101,14 @@ export function Overview({
           />
         </SectionCard>
 
-        <SectionCard title={t("overview.install")}>
+        <SectionCard title={t(isUninstalling(s) ? "uninstall.progress" : "overview.install")}>
           <div className="space-y-3">
-            <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-              {steps.map((step) => (
-                <StepTile key={step.key} step={step} />
-              ))}
-            </ol>
+            {isUninstalling(s) ? <UninstallProgress status={s} onViewInstances={onViewInstances} /> : (
+              <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {steps.map((step) => <StepTile key={step.key} step={step} />)}
+              </ol>
+            )}
             {p?.error && <Callout tone="bad">{p.error}</Callout>}
-            {isUninstalling(s) && <Callout tone="warn">{t("overview.uninstallingHint")}</Callout>}
             {p?.phase === "applying" && <Callout tone="warn">{t("overview.applyingHint")}</Callout>}
             <LoadHint status={s} onViewInstances={onViewInstances} />
             {s.warning && <Callout tone="warn">{s.warning}</Callout>}

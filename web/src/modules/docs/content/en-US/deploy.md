@@ -34,6 +34,42 @@ Most fields can stay empty and take the site profile's and chart's defaults.
 
 **Adaptive concurrency** groups the master switch, floor fraction, absolute floor, start point, idle hold, and TTFT decisions together; its internal knobs are available under **Advanced adaptive options**. Turning the switch off hides and clears the group's entered values; turning it back on does not restore them. **Default peer maximum** stays in **Capacity & failover** and still applies when adaptive concurrency is off; it also influences the static maximum used for adaptive bounds. Review the diff before confirming an upgrade.
 
+## Generation recovery
+
+Enable **Routing → Generation recovery** in the deploy or upgrade form. Enter the **Actual model** whose weights are deployed, such as `kimi-k3` or `glm-5.3`. This selects the continuation strategy; it is not the client-facing served name.
+
+- Requires **CART**, **Publish a route**, and `sglang` chart **0.8.11+** or `vllm` chart **0.8.9+**. Composing the plan checks these conditions.
+- **Stream idle timeout** is the time without a chunk after streaming starts; empty keeps the inherited timeout or chart default.
+- **Resume interrupted responses** is on by default; off detects and logs interruptions without sending a continuation request.
+- **Buffer tool calls** holds arguments until a complete call can be sent together, so interrupted calls can be regenerated.
+- Requests flow through `openresty → continuation gateway → CART → inference instance`. The gateway is deployed with the model release; review and confirm the diff before applying.
+- Unsupported requests, including structured JSON output, pass through. Verify the actual model and engine combination against the [gateway compatibility documentation](https://github.com/modelsphere/continuation_gateway). Quantized or fine-tuned variants use the listed base model name; vLLM with Kimi-K3 requires `--enable-scale-out`.
+- Advanced YAML is validated after composition, so its final values decide whether recovery is enabled and valid.
+- Upgrades carry the configured recovery settings forward. Turn the switch off, compose and confirm to remove the gateway. Advanced YAML takes precedence over the form; inspect the final plan and diff.
+
+## L3 KV cache
+
+Use **Resources and scheduling → L3 KV cache** in deploy or upgrade to spill attention KV through host memory to an existing storage backend.
+
+| Engine / chart | L3 support |
+|---|---|
+| `sglang` **0.9.27+** | `storageKVOffload`, with `backend: hicache`; first released in [sglang-0.9.27](https://github.com/modelsphere/helm-charts/blob/sglang-0.9.27/charts/sglang/values.yaml) |
+| `sglang` through **0.9.26** | No top-level `storageKVOffload`; choose a supported chart version first |
+| `vllm` | Not implemented. The reserved section introduced in **0.8.23** explicitly rejects enabling it; local `mooncakeStore` offload is L2 |
+
+1. Enable L3 and choose a storage backend. The chart schema accepts `mooncake`, `file`, `sim`, `npu_memcache`, `hf3fs`, `nixl`, `aibrix`, `dynamic`, `eic`, `simm`, `mori`, `shm`, `tensorcast`, and `seaweedfs`. `sim` is simulation only. A schema entry does not guarantee that your engine image includes that backend; verify its dependencies and compatible HiCache options.
+2. Leave optional host-memory size, ratio, mode and fraction empty for engine defaults. Explicit size overrides ratio. More HiCache options exposes write policy, I/O backend, memory layout and prefetch settings. Clearing a previously set optional field removes that override; unchanged fields and options outside the form are carried forward.
+3. Enter backend-specific configuration as a JSON object or an `@file` path already mounted in the engine container. Provision the backend, config mounts, credentials and network access separately. For `file`, use your engine version's configuration and a writable volume at its configured path; this form does not create that volume.
+4. For Mooncake, connect to an existing Store using the master and transfer-metadata settings. Set protocol and the actual transfer devices to match the fabric; explicitly select HCAs on multi-rail clusters. Global segment size is passed through, including `0` for a pure client. With `P2PHANDSHAKE`, add `MOONCAKE_LOCAL_HOSTNAME` from `status.podIP` through the existing `env` values in Override YAML. Hugepage settings, if needed, remain under `storageKVOffload.mooncake` in YAML and require the chart's page size, limit and cluster capacity.
+5. Compose, inspect the final plan and diff, then confirm. Advanced YAML remains authoritative, including when it enables or disables L3. Chart version, engine, backend, numeric values and conflicts are checked on the final plan after adaptive-concurrency cleanup.
+
+- `storageKVOffload` subsumes SGLang `localKVOffload`. If local offload is enabled, explicitly set `localKVOffload.enabled: false` in Override YAML and move any desired HiCache knobs to `storageKVOffload.hicache`, or leave L3 off. Console shows the conflict and does not silently turn off local offload.
+- In disaggregated PD, L3 applies to **prefill only**. Colocated PD is rejected. `commandOverride` replaces the generated engine command and cannot be combined with the graphical L3 configuration.
+- Catalog or Override YAML `extraArgs`, and PD `pd.prefill.extraArgs`, are appended last to the engine command. A `--hicache-*` value that differs from the graphical L3 setting blocks review. In Override YAML, preserve the other arguments and remove the duplicate flags, or align their values. For example, a Kimi recipe containing `--hicache-size=150` overrides a graphical size of `32`; leave the graphical size empty to retain that recipe's capacity when only enabling L3.
+- **Compile cache** under Advanced uses `cache` to retain compiled kernels on the node. It is a separate feature from KV offload; enabling L3 preserves it.
+- Upgrade fields start from the current plan's final merged L3 values and are not reset by plan polling. Values in an existing Override YAML still take precedence over graphical changes; edit that YAML when necessary.
+- This configures the model release only, with no independent cache-service manager. A successful plan or render does not verify an actual backend or GPU execution. After deploying with a compatible engine image, verify backend connectivity, successful GPU inference, and reuse/offload of repeated prefixes through engine logs and metrics. No GPU or cache-hit success is implied by enabling the switch.
+
 ## 3. Review and confirm
 
 **Compose plan** opens the review:
@@ -78,6 +114,8 @@ From a row's actions in the list, or the top of the detail page:
 - **Edit SLO**: the latency and throughput targets and the replica bounds the scaler works with. Services deployed without SLO need it switched on in an upgrade first.
 - **Uninstall**: stops the service and deletes its pods; the activity log is kept. Reinstalling loads the weights again.
 - While pods are still terminating the service stays listed as **Uninstalling**; upgrade, roll back, SLO edits and uninstall stay disabled until it disappears.
+- Uninstalling from the detail page keeps it open. **Overview → Uninstall progress** and **Instances** show the remaining pod count; **View instances** opens the pods still shutting down. An LLMService backend that reports deletion progress also supplies its cleanup message.
+- The list and detail refresh every 3 seconds during uninstall. When pods are gone, the page waits for backend cleanup confirmation. A status warning prevents an unreadable pod list from being reported as cleared. This refresh interval does not shorten pod termination grace or actual resource cleanup.
 
 "Behind catalog" in the list means the catalog has a newer version to upgrade to; "Untracked" means the release was not deployed by Swiss and cannot be upgraded here.
 

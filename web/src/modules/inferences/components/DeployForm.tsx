@@ -48,9 +48,11 @@ export interface DeployFormProps {
   idPrefix: string;
   routeOptions?: RouteOptions | null;
   catalogRoute?: string;
+  recovery?: ReactNode;
+  l3?: ReactNode;
 }
 
-export function DeployForm({ form, onChange, upgrade, submitted, target, cluster, defaults, gpuOptions, expanded, onExpand, idPrefix, routeOptions, catalogRoute }: DeployFormProps) {
+export function DeployForm({ form, onChange, upgrade, submitted, target, cluster, defaults, gpuOptions, expanded, onExpand, idPrefix, routeOptions, catalogRoute, recovery, l3 }: DeployFormProps) {
   const t = useT();
   const on = effective(form);
   const f = (k: string) => t(`deploy.fields.${k}`);
@@ -168,6 +170,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
               <Switch aria-label={f("image")} checked={!!form.image.trim()} onCheckedChange={(v) => onChange({ image: v ? defaults.image!.site : "" })} />
             </FloatingField>
           )}
+          {l3}
         </>,
       )}
 
@@ -193,6 +196,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
           >
             {sw("cart", f("cart"))}
           </FloatingField>
+          {recovery}
           <FloatingField
             layout="inline"
             label={label("adaptive_cc", "adaptiveCc")}

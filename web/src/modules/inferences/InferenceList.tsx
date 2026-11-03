@@ -41,7 +41,7 @@ export function InferenceList() {
   const list = useQuery({
     queryKey: ["deployments", "inferences", page, pageSize],
     queryFn: () => api.deployments(page, pageSize),
-    refetchInterval: 15_000,
+    refetchInterval: (query) => query.state.data?.deployments.some(isUninstalling) ? 3_000 : 15_000,
     placeholderData: (prev) => prev,
   });
   const cluster = useQuery({ queryKey: ["cluster"], queryFn: api.cluster });

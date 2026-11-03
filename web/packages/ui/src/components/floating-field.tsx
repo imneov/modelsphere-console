@@ -939,6 +939,7 @@ export function FieldSelect({
   const slot = useFieldSlot(isFilled(props.multiple ? props.values : props.value))
   return (
     <DataSelect
+      id={slot?.fieldId}
       className={cn(
         BARE,
         ROW_FILL,

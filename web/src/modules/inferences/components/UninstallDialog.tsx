@@ -24,7 +24,10 @@ export function UninstallDialog({
   const [planError, setPlanError] = useState("");
   const run = useMutation({
     mutationFn: (x: UninstallTarget) => deployApi.uninstall(x.namespace, x.release),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["deployments"] }),
+    onSuccess: (_result, target) => Promise.all([
+      qc.invalidateQueries({ queryKey: ["deployments"] }),
+      qc.invalidateQueries({ queryKey: ["status", target.namespace, target.release] }),
+    ]),
   });
 
   return (

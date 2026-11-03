@@ -72,7 +72,7 @@ function renderList(rows: Deployment[]) {
   );
 }
 
-function renderDetail(status: ReleaseStatus) {
+function renderDetail(status: ReleaseStatus, tab = "versions") {
   const c = client();
   c.setQueryData(["cluster"], cluster);
   c.setQueryData(["status", "models", "qwen"], status);
@@ -84,7 +84,7 @@ function renderDetail(status: ReleaseStatus) {
   return renderToStaticMarkup(
     <QueryClientProvider client={c}>
       <ModuleProvider module={module}>
-        <MemoryRouter initialEntries={["/inferences/qwen/details?namespace=models&tab=versions"]}>
+        <MemoryRouter initialEntries={[`/inferences/qwen/details?namespace=models&tab=${tab}`]}>
           <Routes>
             <Route path="/inferences/:release/details" element={<InferenceDetail />} />
           </Routes>
@@ -109,6 +109,16 @@ describe("inference list while a deployment is uninstalling", () => {
   });
 });
 
+describe("inference detail uninstall progress", () => {
+  it("replaces installation progress with remaining pods during teardown", () => {
+    const html = renderDetail(release({ exists: false, total: 1, ready: 1, planStatus: { phase: "uninstalling" }, pods: [{ name: "qwen-0", phase: "Running", ready: true, restarts: 0, ageSeconds: 30 }] }), "overview");
+    expect(html).toContain("卸载进度");
+    expect(html).toContain("还剩 1 个 Pod");
+    expect(html).not.toContain("安装进度");
+    expect(html).not.toContain("实例就绪");
+  });
+});
+
 describe("inference detail write actions", () => {
   const cases: { name: string; status: ReleaseStatus; label: string; enabled: boolean }[] = [
     {
@@ -121,6 +131,12 @@ describe("inference detail write actions", () => {
       name: "an LLMService with a deletion timestamp",
       status: release({ ready: 1, total: 1, backend: "llmsvc", llmservice: { phase: "uninstalling" } }),
       label: "卸载中",
+      enabled: false,
+    },
+    {
+      name: "a removed release whose plan is still cached",
+      status: release({ exists: false, total: 0, ready: 0, planStatus: undefined }),
+      label: "未安装",
       enabled: false,
     },
     {
