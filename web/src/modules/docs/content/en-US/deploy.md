@@ -49,7 +49,9 @@ Enable **Routing → Generation recovery** in the deploy or upgrade form. Enter 
 
 ## L3 KV cache
 
-Use **Resources and scheduling → L3 KV cache** in deploy or upgrade to spill attention KV through host memory to an existing storage backend.
+Choose the first-level **L3 KV cache** tab in deploy or upgrade, alongside Basics and Routing. It groups the storage backend, host-cache policy and connection settings, with a GPU → host-memory → storage tier diagram. Switching tabs preserves draft settings.
+
+The independent [L3 KV cache](/inferences/l3-kv-cache) page in Model Serving lists the current page's saved service configuration, backend, capacity and compatibility. **Configure L3** opens that service's upgrade sheet directly on the L3 tab; changes take effect only after plan review and confirmation. Missing or unreadable plans are shown as unconfirmed rather than disabled. Configuration state does not imply observed cache hits.
 
 | Engine / chart | L3 support |
 |---|---|

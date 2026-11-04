@@ -1,11 +1,12 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Activity, Bot, Library, Server, SlidersHorizontal } from "lucide-react";
+import { Activity, Bot, Database, Library, Server, SlidersHorizontal } from "lucide-react";
 import type { ConsoleModule } from "@/shell";
 import { useT } from "@/modules/inferences/i18n";
 import { SwissScope } from "@/modules/inferences/components/SwissScope";
 import { InferencesOverview } from "@/modules/inferences/Dashboard";
 
 const InferenceList = lazy(() => import("@/modules/inferences/InferenceList").then((m) => ({ default: m.InferenceList })));
+const L3CachePage = lazy(() => import("@/modules/inferences/L3CachePage").then((m) => ({ default: m.L3CachePage })));
 const CatalogPage = lazy(() => import("@/modules/inferences/CatalogPage").then((m) => ({ default: m.CatalogPage })));
 const ModelPage = lazy(() => import("@/modules/inferences/ModelPage").then((m) => ({ default: m.ModelPage })));
 const NodesPage = lazy(() => import("@/modules/inferences/NodesPage").then((m) => ({ default: m.NodesPage })));
@@ -35,6 +36,7 @@ export const inferencesModule: ConsoleModule = {
   overview: InferencesOverview,
   pages: [
     { path: "", element: page(<InferenceList />), permission: "swiss.view", menu: { label: "推理服务", icon: Bot } },
+    { path: "l3-kv-cache", element: page(<L3CachePage />), permission: "swiss.view", menu: { label: "L3 KV 缓存", icon: Database } },
     { path: ":release/details", element: page(<InferenceDetail />), permission: "swiss.view" },
     { path: "catalog", element: page(<CatalogPage />), permission: "swiss.view", menu: { label: "模型库", icon: Library }, topbar: { label: "模型广场" } },
     { path: "catalog/:name", element: page(<ModelPage />), permission: "swiss.view" },

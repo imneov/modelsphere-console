@@ -49,10 +49,10 @@ export interface DeployFormProps {
   routeOptions?: RouteOptions | null;
   catalogRoute?: string;
   recovery?: ReactNode;
-  l3?: ReactNode;
+  visibleSection?: Section;
 }
 
-export function DeployForm({ form, onChange, upgrade, submitted, target, cluster, defaults, gpuOptions, expanded, onExpand, idPrefix, routeOptions, catalogRoute, recovery, l3 }: DeployFormProps) {
+export function DeployForm({ form, onChange, upgrade, submitted, target, cluster, defaults, gpuOptions, expanded, onExpand, idPrefix, routeOptions, catalogRoute, recovery, visibleSection }: DeployFormProps) {
   const t = useT();
   const on = effective(form);
   const f = (k: string) => t(`deploy.fields.${k}`);
@@ -72,13 +72,18 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
   const cacheOn = !!cache && !cache.unsupported && form.cache;
   // A float label hides the placeholder until it floats; float it whenever there is a default to show.
   const shown = (value: string, fallback?: string) => value || fallback || "";
-  const section = (id: Section, children: ReactNode) => (
-    <div id={`${idPrefix}${id}`}>
-      <FormSection id={`${idPrefix}${id}-section`} title={t(`deploy.sections.${upgrade && id === "basic" ? "target" : id}`)} expanded={expanded[id]} onExpandedChange={(o) => onExpand(id, o)}>
-        <div className="flex flex-col gap-3">{children}</div>
-      </FormSection>
-    </div>
-  );
+  const section = (id: Section, children: ReactNode) => {
+    if (visibleSection && visibleSection !== id) return null;
+    return (
+      <div id={`${idPrefix}${id}`} className="space-y-3">
+        {visibleSection ? children : (
+          <FormSection id={`${idPrefix}${id}-section`} title={t(`deploy.sections.${upgrade && id === "basic" ? "target" : id}`)} expanded={expanded[id]} onExpandedChange={(o) => onExpand(id, o)}>
+            <div className="flex flex-col gap-3">{children}</div>
+          </FormSection>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -170,7 +175,6 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
               <Switch aria-label={f("image")} checked={!!form.image.trim()} onCheckedChange={(v) => onChange({ image: v ? defaults.image!.site : "" })} />
             </FloatingField>
           )}
-          {l3}
         </>,
       )}
 

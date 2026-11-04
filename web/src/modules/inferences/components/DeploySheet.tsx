@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -20,8 +20,10 @@ import {
   SheetTitle,
   Spinner,
   Switch,
+  PanelTabs,
+  Tabs,
+  TabsContent,
   cn,
-  useAnchorNav,
   useDirty,
 } from "@modelsphere/ui";
 import { ArrowRight, FlaskConical, TriangleAlert } from "lucide-react";
@@ -48,9 +50,13 @@ import { mergeValues, planValues, recoveryError, recoverySettings, withRecovery,
 import { L3CacheFields } from "./L3CacheFields";
 import { l3Error, l3Settings, localOffloadEnabled, withL3, type L3Patch } from "../l3-cache";
 
-export type DeployTarget =
+export type DeployTarget = (
   | { kind: "deploy"; model: string; catalog: string; version?: string; variant?: string }
-  | { kind: "upgrade"; namespace: string; release: string };
+  | { kind: "upgrade"; namespace: string; release: string }
+) & { section?: "l3" };
+
+type DeployTab = Section | "l3";
+const TABS: readonly DeployTab[] = ["basic", "resources", "l3", "routing", "advanced"];
 
 const KEEP = "__keep";
 const ID_PREFIX = "deploy-sec-";
@@ -173,7 +179,12 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const [applied, setApplied] = useState<ApplyResult | null>(null);
   const [note, setNote] = useState("");
   const [force, setForce] = useState(false);
-  const nav = useAnchorNav({ ids: [...SECTIONS], idPrefix: ID_PREFIX, enabled: step === "form", onExpand: (id) => setExpanded((e) => ({ ...e, [id]: true })) });
+  const [activeTab, setActiveTab] = useState<DeployTab>(target.section ?? "basic");
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const chooseTab = (tab: DeployTab) => {
+    setActiveTab(tab);
+    bodyRef.current?.scrollTo({ top: 0 });
+  };
 
   // The form shows only once the entry and profile have loaded, so the first
   // seed lands before any plan; a later one is another variant or version, and
@@ -210,9 +221,15 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
           profile.data?.profile,
         ), recovery), l3Patch), form, routeOptions.data, deployApi.plan, catalogName);
         const invalid = recoveryError(proposed);
-        if (invalid) throw new Error(t(`deploy.recovery.errors.${invalid}`));
+        if (invalid) {
+          chooseTab("routing");
+          throw new Error(t(`deploy.recovery.errors.${invalid}`));
+        }
         const invalidL3 = l3Error(proposed);
-        if (invalidL3) throw new Error(t(`deploy.l3.errors.${invalidL3}`));
+        if (invalidL3) {
+          chooseTab("l3");
+          throw new Error(t(`deploy.l3.errors.${invalidL3}`));
+        }
         return proposed;
       } catch (error) {
         if (error instanceof AdaptivePlanChangedError) throw new Error(t("deploy.fields.adaptiveChanged"));
@@ -249,7 +266,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
     apply.reset();
     if (!upgrade && serviceIdError(form.serviceId || defaultServiceId(target.model))) {
       setExpanded((e) => ({ ...e, basic: true }));
-      nav.go("basic");
+      chooseTab("basic");
       return;
     }
     compose.mutate();
@@ -403,24 +420,22 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
         <SheetDescription>{upgrade ? t("deploy.descriptionUpgrade") : t("deploy.description")}</SheetDescription>
       </SheetHeader>
 
+      <Tabs value={activeTab} onValueChange={(tab) => chooseTab(tab as DeployTab)} className="min-h-0 flex-1 gap-0">
       {step === "form" && !loading && !error && (
-        <div className={cn("flex gap-1 border-b px-5 py-2", nav.scrolled && "shadow-sm")}>
-          {SECTIONS.map((s) => (
-            <Button key={s} variant="ghost" size="sm" className={cn("text-muted-foreground", nav.active === s && "bg-muted text-foreground")} onClick={() => nav.go(s)}>
-              {t(`deploy.sections.${upgrade && s === "basic" ? "target" : s}`)}
-            </Button>
-          ))}
-        </div>
+        <PanelTabs variant="underline" shell="flush" className="px-5" items={TABS.map((tab) => ({
+          value: tab,
+          label: t(`deploy.sections.${upgrade && tab === "basic" ? "target" : tab}`),
+        }))} />
       )}
 
-      <SheetBody ref={step === "form" ? nav.ref : undefined} className="relative min-h-0 flex-1 space-y-4 overflow-auto bg-surface-page px-5 py-4">
+      <SheetBody ref={bodyRef} className="relative min-h-0 flex-1 space-y-4 overflow-auto bg-surface-page px-5 py-4">
         {readOnly && (
           <Alert variant="warning">
             <TriangleAlert />
             <AlertDescription>{t("deploy.review.readOnly")}</AlertDescription>
           </Alert>
         )}
-        {routeOptions.error && (
+        {routeOptions.error && (step === "review" || activeTab === "routing") && (
           <Alert variant="warning"><TriangleAlert /><AlertDescription>{t("deploy.routeOptions.error", { error: routeOptions.error.message })}</AlertDescription></Alert>
         )}
         {(error || compose.error || apply.error) && (
@@ -435,24 +450,37 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
           </div>
         ) : step === "form" ? (
           <>
-            <DeployForm
-              form={form}
-              onChange={change}
-              upgrade={upgrade}
-              submitted={submitted}
-              target={targetFields}
-              cluster={cluster.data}
-              defaults={{ serviceId: upgrade ? undefined : defaultServiceId(target.model), localPath: entry.data?.localPath, localPathTemplate: entry.data?.pathTemplate, image: imageOf(v, entry.data?.imageRepository), cache }}
-              gpuOptions={gpuOptions(v?.requires.gpuProduct, nodes.data?.nodes.map((n) => n.GPUProduct))}
-              expanded={expanded}
-              onExpand={(s, o) => setExpanded((e) => ({ ...e, [s]: o }))}
-              routeOptions={routeOptions.isSuccess ? routeOptions.data : undefined}
-              catalogRoute={catalogRoute}
-              recovery={<RecoveryFields settings={recovery} onChange={(patch) => setRecoveryPatch((previous) => ({ ...previous, ...patch }))} />}
-              l3={<L3CacheFields settings={l3} onChange={(patch) => setL3Patch((previous) => ({ ...previous, ...patch }))} chart={{ name: v?.chart.name ?? running?.name, version: chart.resolved ?? v?.chart.version ?? running?.version }} engine={v?.engine ?? seedPlan?.engine} localEnabled={localOffloadEnabled(initialL3Values)} />}
-              idPrefix={ID_PREFIX}
-            />
-            <div style={{ height: nav.tailSpace }} aria-hidden />
+            {SECTIONS.map((section) => (
+              <TabsContent key={section} value={section} keepMounted className="data-[hidden]:hidden">
+                <DeployForm
+                  form={form}
+                  onChange={change}
+                  upgrade={upgrade}
+                  submitted={submitted}
+                  target={targetFields}
+                  cluster={cluster.data}
+                  defaults={{ serviceId: upgrade ? undefined : defaultServiceId(target.model), localPath: entry.data?.localPath, localPathTemplate: entry.data?.pathTemplate, image: imageOf(v, entry.data?.imageRepository), cache }}
+                  gpuOptions={gpuOptions(v?.requires.gpuProduct, nodes.data?.nodes.map((n) => n.GPUProduct))}
+                  expanded={expanded}
+                  onExpand={(s, o) => setExpanded((e) => ({ ...e, [s]: o }))}
+                  visibleSection={section}
+                  routeOptions={routeOptions.isSuccess ? routeOptions.data : undefined}
+                  catalogRoute={catalogRoute}
+                  recovery={<RecoveryFields settings={recovery} onChange={(patch) => setRecoveryPatch((previous) => ({ ...previous, ...patch }))} />}
+                  idPrefix={ID_PREFIX}
+                />
+              </TabsContent>
+            ))}
+            <TabsContent value="l3" keepMounted className="data-[hidden]:hidden">
+              <L3CacheFields
+                settings={l3}
+                onChange={(patch) => setL3Patch((previous) => ({ ...previous, ...patch }))}
+                chart={{ name: v?.chart.name ?? running?.name, version: chart.resolved ?? v?.chart.version ?? running?.version }}
+                engine={v?.engine ?? seedPlan?.engine}
+                localEnabled={localOffloadEnabled(initialL3Values)}
+                onChooseTarget={() => chooseTab("basic")}
+              />
+            </TabsContent>
           </>
         ) : (
           plan && (
@@ -474,6 +502,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
           )
         )}
       </SheetBody>
+      </Tabs>
 
       <SheetFooter className="flex-row justify-end border-t">
         {step === "form" ? (

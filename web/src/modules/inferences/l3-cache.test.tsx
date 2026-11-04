@@ -164,10 +164,12 @@ describe("L3 KV deployment", () => {
     expect(vllm).toContain("L2");
   });
 
-  it("renders backend and essential inputs only when enabled, with Mooncake-specific endpoints", () => {
+  it("presents the cache workspace before enabling and groups Mooncake connection settings", () => {
     const off = renderToStaticMarkup(fields());
     expect(off).toContain("L3 KV 缓存");
-    expect(off).not.toContain("主机内存池大小");
+    expect(off).toContain("主机内存池大小");
+    expect(off).toMatch(/<fieldset[^>]*disabled/);
+    expect(off).toContain("KV 缓存层级");
     const on = renderToStaticMarkup(fields(mergeValues(enabled, { storageKVOffload: { mooncake: { master: "etcd://store.example.com:2379" } } })));
     expect(on).toContain("存储后端");
     expect(on).toContain("主机内存池大小");
@@ -191,12 +193,16 @@ describe("L3 KV deployment", () => {
     }
   });
 
-  it("keeps L3 under resources and compile-cache controls under Advanced", () => {
+  it("keeps L3 outside general resources and compile-cache controls under Advanced", () => {
     const html = renderToStaticMarkup(<DeployForm form={EMPTY} onChange={() => {}} submitted={false} target={null}
       defaults={{ cache: { defaults: { hostPath: "/cache", historyLimit: 2, maxSlotsPerNode: 8 }, siteOn: false } }} gpuOptions={[]}
-      expanded={{ basic: false, resources: true, routing: false, advanced: true }} onExpand={() => {}} idPrefix="test-" l3={fields()} />);
+      expanded={{ basic: false, resources: true, routing: false, advanced: true }} onExpand={() => {}} idPrefix="test-" />);
     expect(html).toContain("编译缓存");
-    expect(html.indexOf("L3 KV 缓存")).toBeLessThan(html.indexOf('id="test-advanced"'));
+    expect(html).not.toContain("L3 KV 缓存");
     expect(html.indexOf('id="test-advanced"')).toBeLessThan(html.indexOf("编译缓存"));
+    const cache = renderToStaticMarkup(fields(enabled));
+    expect(cache).toContain("存储后端");
+    expect(cache).toContain("主机缓存策略");
+    expect(cache).toContain("后端连接");
   });
 });
