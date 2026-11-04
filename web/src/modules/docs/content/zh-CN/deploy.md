@@ -50,17 +50,15 @@
 
 在部署或升级窗口中，直接选择与「基本信息」「路由」并列的 **L3 KV 缓存** 页签。页内按存储后端、主机缓存策略和后端连接分组，并展示 GPU → 主机内存 → 存储的缓存层级。切换页签会保留正在编辑的设置。
 
-也可以从模型服务导航进入 [L3 KV 缓存](/inferences/l3-kv-cache) 独立列表页，集中查看当前页服务的已保存配置、存储后端、容量和兼容性。点击 **配置 L3** 会打开该服务的升级窗口并直接选中 L3 页签，确认计划后才生效。缺少计划或读取失败时会明确显示未确认状态；列表中的配置状态不代表实际缓存命中率。
-
 | 引擎 / chart | L3 支持情况 |
 |---|---|
 | `sglang` **0.9.27+** | 使用 `storageKVOffload`，`backend: hicache`；首次发布于 [sglang-0.9.27](https://github.com/modelsphere/helm-charts/blob/sglang-0.9.27/charts/sglang/values.yaml) |
 | `sglang` **0.9.26 及更早** | 没有顶层 `storageKVOffload`，需要先选择支持的 chart 版本 |
 | `vllm` | 尚未实现。**0.8.23** 新增的保留配置会显式拒绝开启；已有本地 `mooncakeStore` 卸载属于 L2 |
 
-1. 开启 L3 并选择存储后端。chart schema 接受 `mooncake`、`file`、`sim`、`npu_memcache`、`hf3fs`、`nixl`、`aibrix`、`dynamic`、`eic`、`simm`、`mori`、`shm`、`tensorcast` 和 `seaweedfs`。`sim` 仅用于模拟；schema 接受不代表实际引擎镜像包含该后端，仍需核实依赖及 HiCache 参数兼容性。
+1. 开启 L3，图形界面使用 **Mooncake**，并配置已有 Mooncake Store 的连接信息。当前界面没有适配其他存储后端；chart 中可识别的参数名称不等同于产品已经集成或完成运行验收的客户端。已有 YAML 使用其他后端时，显示原配置并保持只读，通过高级 YAML 维护，不自动切换为 Mooncake。
 2. 可选的内存池大小、比例、模式和占比留空时使用引擎默认值；显式大小优先于比例。「更多 HiCache 参数」包含写入策略、I/O 后端、内存布局和预取配置。清空已设置的可选字段会移除该覆盖值；未修改的字段及表单外的配置会保留。
-3. 后端配置可填写 JSON 对象或引擎容器内已挂载的 `@file` 路径。存储服务、配置挂载、凭据及网络访问需预先准备。`file` 后端需按实际引擎版本配置路径并提供可写存储卷；此表单不创建存储卷。
+3. Mooncake 后端的附加配置可填写 JSON 对象或引擎容器内已挂载的 `@file` 路径。这里的 `@file` 表示配置文件，并非选择另一种存储后端。存储服务、配置挂载、凭据及网络访问需预先准备。
 4. Mooncake 连接已有 Store，按实际部署填写 master、传输元数据服务、协议和传输设备；多轨网络应显式选择 HCA。全局段大小原样下发，纯客户端可设为 `0`。使用 `P2PHANDSHAKE` 时，在覆盖 YAML 的现有 `env` 配置中通过 `status.podIP` 设置 `MOONCAKE_LOCAL_HOSTNAME`。需要大页时，仍在 YAML 的 `storageKVOffload.mooncake` 下配置，提供 chart 要求的页大小、资源限额及集群容量。
 5. 生成计划，检查最终计划和差异后确认。覆盖 YAML 优先，可开启或关闭 L3；chart 版本、引擎、后端、数值及冲突均在自适应并发清理完成后的最终计划上校验。
 

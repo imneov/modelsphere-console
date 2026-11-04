@@ -51,17 +51,15 @@ Enable **Routing → Generation recovery** in the deploy or upgrade form. Enter 
 
 Choose the first-level **L3 KV cache** tab in deploy or upgrade, alongside Basics and Routing. It groups the storage backend, host-cache policy and connection settings, with a GPU → host-memory → storage tier diagram. Switching tabs preserves draft settings.
 
-The independent [L3 KV cache](/inferences/l3-kv-cache) page in Model Serving lists the current page's saved service configuration, backend, capacity and compatibility. **Configure L3** opens that service's upgrade sheet directly on the L3 tab; changes take effect only after plan review and confirmation. Missing or unreadable plans are shown as unconfirmed rather than disabled. Configuration state does not imply observed cache hits.
-
 | Engine / chart | L3 support |
 |---|---|
 | `sglang` **0.9.27+** | `storageKVOffload`, with `backend: hicache`; first released in [sglang-0.9.27](https://github.com/modelsphere/helm-charts/blob/sglang-0.9.27/charts/sglang/values.yaml) |
 | `sglang` through **0.9.26** | No top-level `storageKVOffload`; choose a supported chart version first |
 | `vllm` | Not implemented. The reserved section introduced in **0.8.23** explicitly rejects enabling it; local `mooncakeStore` offload is L2 |
 
-1. Enable L3 and choose a storage backend. The chart schema accepts `mooncake`, `file`, `sim`, `npu_memcache`, `hf3fs`, `nixl`, `aibrix`, `dynamic`, `eic`, `simm`, `mori`, `shm`, `tensorcast`, and `seaweedfs`. `sim` is simulation only. A schema entry does not guarantee that your engine image includes that backend; verify its dependencies and compatible HiCache options.
+1. Enable L3 to configure **Mooncake** and connect to an existing Mooncake Store. Other storage backends are not adapted by this interface. A name accepted by the chart schema is not a product integration or a runtime-validated client. Existing YAML using another backend is shown read-only and preserved; maintain it in Advanced YAML. It is not switched to Mooncake automatically.
 2. Leave optional host-memory size, ratio, mode and fraction empty for engine defaults. Explicit size overrides ratio. More HiCache options exposes write policy, I/O backend, memory layout and prefetch settings. Clearing a previously set optional field removes that override; unchanged fields and options outside the form are carried forward.
-3. Enter backend-specific configuration as a JSON object or an `@file` path already mounted in the engine container. Provision the backend, config mounts, credentials and network access separately. For `file`, use your engine version's configuration and a writable volume at its configured path; this form does not create that volume.
+3. Enter additional Mooncake configuration as a JSON object or an `@file` path already mounted in the engine container. Here `@file` names a configuration file, not another storage backend. Provision the store, config mounts, credentials and network access separately.
 4. For Mooncake, connect to an existing Store using the master and transfer-metadata settings. Set protocol and the actual transfer devices to match the fabric; explicitly select HCAs on multi-rail clusters. Global segment size is passed through, including `0` for a pure client. With `P2PHANDSHAKE`, add `MOONCAKE_LOCAL_HOSTNAME` from `status.podIP` through the existing `env` values in Override YAML. Hugepage settings, if needed, remain under `storageKVOffload.mooncake` in YAML and require the chart's page size, limit and cluster capacity.
 5. Compose, inspect the final plan and diff, then confirm. Advanced YAML remains authoritative, including when it enables or disables L3. Chart version, engine, backend, numeric values and conflicts are checked on the final plan after adaptive-concurrency cleanup.
 

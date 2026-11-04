@@ -50,10 +50,9 @@ import { mergeValues, planValues, recoveryError, recoverySettings, withRecovery,
 import { L3CacheFields } from "./L3CacheFields";
 import { l3Error, l3Settings, localOffloadEnabled, withL3, type L3Patch } from "../l3-cache";
 
-export type DeployTarget = (
+export type DeployTarget =
   | { kind: "deploy"; model: string; catalog: string; version?: string; variant?: string }
-  | { kind: "upgrade"; namespace: string; release: string }
-) & { section?: "l3" };
+  | { kind: "upgrade"; namespace: string; release: string };
 
 type DeployTab = Section | "l3";
 const TABS: readonly DeployTab[] = ["basic", "resources", "l3", "routing", "advanced"];
@@ -179,7 +178,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const [applied, setApplied] = useState<ApplyResult | null>(null);
   const [note, setNote] = useState("");
   const [force, setForce] = useState(false);
-  const [activeTab, setActiveTab] = useState<DeployTab>(target.section ?? "basic");
+  const [activeTab, setActiveTab] = useState<DeployTab>("basic");
   const bodyRef = useRef<HTMLDivElement>(null);
   const chooseTab = (tab: DeployTab) => {
     setActiveTab(tab);
@@ -479,6 +478,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
                 engine={v?.engine ?? seedPlan?.engine}
                 localEnabled={localOffloadEnabled(initialL3Values)}
                 onChooseTarget={() => chooseTab("basic")}
+                onAdvanced={() => chooseTab("advanced")}
               />
             </TabsContent>
           </>

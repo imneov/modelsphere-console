@@ -1,7 +1,7 @@
 import type { Plan, PlanRequest } from "@swiss/lib/api";
 import { mergeValues, planValues } from "./recovery";
 
-export const L3_BACKENDS = ["mooncake", "file", "sim", "npu_memcache", "hf3fs", "nixl", "aibrix", "dynamic", "eic", "simm", "mori", "shm", "tensorcast", "seaweedfs"] as const;
+export const L3_SCHEMA_BACKENDS = ["mooncake", "file", "sim", "npu_memcache", "hf3fs", "nixl", "aibrix", "dynamic", "eic", "simm", "mori", "shm", "tensorcast", "seaweedfs"] as const;
 export const L3_FIELDS = {
   hostMode: { group: "hicache", key: "host-memory-mode", choices: ["cache", "buffer_only"] },
   ratio: { group: "hicache", key: "ratio", number: true },
@@ -83,7 +83,7 @@ export function l3Error(plan: Plan): L3Error | undefined {
   if (plan.chart.name !== "sglang" || !l3Supported(plan.chart, "sglang")) return "chart";
   if (plan.engine !== "sglang") return "engine";
   if (storage.backend !== undefined && storage.backend !== "hicache") return "backend";
-  if (!L3_BACKENDS.includes(storage.storage_backend as typeof L3_BACKENDS[number])) return "storageBackend";
+  if (!L3_SCHEMA_BACKENDS.includes(storage.storage_backend as typeof L3_SCHEMA_BACKENDS[number])) return "storageBackend";
   if (localOffloadEnabled(values)) return "localConflict";
   const pd = object(values.pd);
   if (pd.enabled === true && pd.colocate === true) return "colocate";

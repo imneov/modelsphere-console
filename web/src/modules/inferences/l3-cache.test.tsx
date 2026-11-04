@@ -4,7 +4,7 @@ import type { Plan, PlanRequest } from "@swiss/lib/api";
 import { composeAdaptivePlan } from "./adaptive-concurrency";
 import { EMPTY, formFromPlan, planRequest } from "./deployment-settings";
 import { mergeValues, planValues, recoverySettings, withRecovery } from "./recovery";
-import { L3_BACKENDS, l3Error, l3Settings, l3Supported, withL3 } from "./l3-cache";
+import { L3_SCHEMA_BACKENDS, l3Error, l3Settings, l3Supported, withL3 } from "./l3-cache";
 import { L3CacheFields } from "./components/L3CacheFields";
 import { DeployForm } from "./components/DeployForm";
 
@@ -109,8 +109,8 @@ describe("L3 KV deployment", () => {
   });
 
   it("accepts all and only schema-listed storage backends without claiming engine compatibility", () => {
-    expect(L3_BACKENDS).toEqual(["mooncake", "file", "sim", "npu_memcache", "hf3fs", "nixl", "aibrix", "dynamic", "eic", "simm", "mori", "shm", "tensorcast", "seaweedfs"]);
-    for (const storage_backend of L3_BACKENDS) expect(l3Error(plan({ form: { storageKVOffload: { enabled: true, storage_backend } } }))).toBeUndefined();
+    expect(L3_SCHEMA_BACKENDS).toEqual(["mooncake", "file", "sim", "npu_memcache", "hf3fs", "nixl", "aibrix", "dynamic", "eic", "simm", "mori", "shm", "tensorcast", "seaweedfs"]);
+    for (const storage_backend of L3_SCHEMA_BACKENDS) expect(l3Error(plan({ form: { storageKVOffload: { enabled: true, storage_backend } } }))).toBeUndefined();
     expect(l3Error(plan({ form: enabled }, { name: "sglang", version: "0.9.26" }))).toBe("chart");
     expect(l3Error(plan({ form: enabled }, { name: "vllm", version: "0.8.23" }))).toBe("chart");
     expect(l3Error({ ...plan({ form: enabled }), engine: "vllm" })).toBe("engine");
@@ -177,20 +177,41 @@ describe("L3 KV deployment", () => {
     expect(on).toContain("Mooncake master 地址");
     expect(on).toContain('value="etcd://store.example.com:2379"');
     expect(on).toContain("更多 HiCache 参数");
-    const file = renderToStaticMarkup(fields({ storageKVOffload: { enabled: true, storage_backend: "file" } }));
-    expect(file).toContain("后端配置");
-    expect(file).not.toContain("Mooncake master 地址");
   });
 
-  it("associates storage and memory-mode labels with their dropdown triggers", () => {
+  it("keeps a different stored backend read-only without silently switching providers", () => {
+    const values = { storageKVOffload: { enabled: true, storage_backend: "file", hicache: { size: 96, "storage-backend-extra-config": "@/existing/backend.json" } } };
+    const request = { overrides: values };
+    const html = renderToStaticMarkup(<L3CacheFields settings={l3Settings(values)} onChange={() => {}} chart={chart} engine="sglang" onAdvanced={() => {}} />);
+    expect(html).toContain('value="file"');
+    expect(html).toContain("现有 YAML 配置（只读）");
+    expect(html).toContain("本界面尚未适配");
+    expect(html).toContain("前往高级 YAML");
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain("Mooncake master 地址");
+    expect(withL3(request, {})).toBe(request);
+    expect(request.overrides).toEqual(values);
+  });
+
+  it("offers only the Mooncake adapter in fresh graphical setup", () => {
+    const html = renderToStaticMarkup(fields());
+    expect(html).toContain('value="Mooncake"');
+    for (const backend of ["file", "hf3fs", "nixl", "sim", "npu_memcache"]) expect(html).not.toContain(`value="${backend}"`);
+    expect(html).not.toContain("选择存储后端");
+  });
+
+  it("associates backend and memory-mode labels with their actual controls", () => {
     const html = renderToStaticMarkup(fields(enabled));
     const labels = [...html.matchAll(/<label\b[^>]*for="([^"]+)"[^>]*>([\s\S]*?)<\/label>/g)];
-    for (const name of ["存储后端", "主机内存模式"]) {
-      const label = labels.find((match) => match[2].includes(name));
-      expect(label, name).toBeDefined();
-      const trigger = [...html.matchAll(/<button\b([^>]*)>/g)].find((match) => match[1].includes(`id="${label?.[1]}"`));
-      expect(trigger?.[1], name).toContain('role="combobox"');
-    }
+    const backend = labels.find((match) => match[2].includes("存储后端"));
+    expect(backend).toBeDefined();
+    const input = [...html.matchAll(/<input\b([^>]*)>/g)].find((match) => match[1].includes(`id="${backend?.[1]}"`));
+    expect(input?.[1]).toMatch(/readonly/i);
+    expect(input?.[1]).toContain('value="Mooncake"');
+    const memory = labels.find((match) => match[2].includes("主机内存模式"));
+    expect(memory).toBeDefined();
+    const trigger = [...html.matchAll(/<button\b([^>]*)>/g)].find((match) => match[1].includes(`id="${memory?.[1]}"`));
+    expect(trigger?.[1]).toContain('role="combobox"');
   });
 
   it("keeps L3 outside general resources and compile-cache controls under Advanced", () => {

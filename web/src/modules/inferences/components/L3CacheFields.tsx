@@ -1,19 +1,23 @@
 import { Badge, Button, FieldInput, FieldSelect, FieldTextarea, FloatingField, SectionCard, Switch } from "@modelsphere/ui";
 import { ArrowRight, Cpu, Database, MemoryStick } from "lucide-react";
 import { useT } from "../i18n";
-import { L3_BACKENDS, L3_FIELDS, l3Supported, type L3FieldName, type L3Patch, type L3Settings } from "../l3-cache";
+import { L3_FIELDS, l3Supported, type L3FieldName, type L3Patch, type L3Settings } from "../l3-cache";
 
-export function L3CacheFields({ settings, onChange, chart, engine, localEnabled = false, onChooseTarget }: {
+const UI_BACKEND = "mooncake";
+
+export function L3CacheFields({ settings, onChange, chart, engine, localEnabled = false, onChooseTarget, onAdvanced }: {
   settings: L3Settings;
   onChange: (patch: L3Patch) => void;
   chart: { name?: string; version?: string };
   engine?: string;
   localEnabled?: boolean;
   onChooseTarget?: () => void;
+  onAdvanced?: () => void;
 }) {
   const t = useT();
   const f = (key: string) => t(`deploy.l3.${key}`);
   const supported = l3Supported(chart, engine);
+  const externalBackend = !!settings.storageBackend && settings.storageBackend !== UI_BACKEND;
   const fields = (names: L3FieldName[]) => names.map((name) => {
     const definition = L3_FIELDS[name];
     const choices = "choices" in definition ? definition.choices : undefined;
@@ -27,7 +31,7 @@ export function L3CacheFields({ settings, onChange, chart, engine, localEnabled 
   const tiers = [
     { level: "L1", title: f("gpuTier"), detail: f("gpuTierHint"), icon: Cpu },
     { level: "L2", title: f("hostTier"), detail: settings.size ? t("deploy.l3.capacity", { n: settings.size }) : f("inheritedCapacity"), icon: MemoryStick },
-    { level: "L3", title: f("storageTier"), detail: settings.storageBackend || f("chooseBackend"), icon: Database },
+    { level: "L3", title: f("storageTier"), detail: settings.storageBackend || "Mooncake", icon: Database },
   ];
 
   return (
@@ -39,12 +43,12 @@ export function L3CacheFields({ settings, onChange, chart, engine, localEnabled 
             <div className="min-w-0 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-semibold">{f("title")}</h2>
-                <Badge variant={settings.enabled ? "success" : "outline"}>{f(settings.enabled ? "configuredOn" : "configuredOff")}</Badge>
+                <Badge variant={externalBackend ? "outline" : settings.enabled ? "success" : "outline"}>{f(externalBackend ? "externalConfig" : settings.enabled ? "configuredOn" : "configuredOff")}</Badge>
               </div>
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{f("purpose")}</p>
             </div>
           </div>
-          <Switch aria-label={f("title")} checked={settings.enabled} disabled={!supported && !settings.enabled} onCheckedChange={(enabled) => onChange({ enabled })} />
+          <Switch aria-label={f("title")} checked={settings.enabled} disabled={externalBackend || (!supported && !settings.enabled)} onCheckedChange={(enabled) => onChange(enabled ? { enabled: true, storageBackend: settings.storageBackend || UI_BACKEND } : { enabled: false })} />
         </div>
         <p className="mt-4 border-t border-primary/10 pt-3 text-xs text-muted-foreground">{f("scope")}</p>
       </section>
@@ -67,6 +71,14 @@ export function L3CacheFields({ settings, onChange, chart, engine, localEnabled 
             {onChooseTarget && <Button variant="outline" size="sm" onClick={onChooseTarget}>{f("chooseTarget")}</Button>}
           </div>
         </SectionCard>
+      ) : externalBackend ? (
+        <SectionCard title={f("externalConfig")}>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{t("deploy.l3.externalBackend", { backend: settings.storageBackend })}</p>
+            <FloatingField label={f("storageBackend")}><FieldInput value={settings.storageBackend} readOnly aria-label={f("storageBackend")} /></FloatingField>
+            {onAdvanced && <Button variant="outline" size="sm" onClick={onAdvanced}>{f("editAdvanced")}</Button>}
+          </div>
+        </SectionCard>
       ) : (
         <>
           {!settings.enabled && <p className="text-sm text-muted-foreground">{f("enableToConfigure")}</p>}
@@ -74,9 +86,8 @@ export function L3CacheFields({ settings, onChange, chart, engine, localEnabled 
           <fieldset disabled={!settings.enabled} className="min-w-0 space-y-4 disabled:opacity-60">
             <SectionCard title={f("backendSection")} summary={f("backendSectionHint")}>
               <div className="space-y-3">
-                <FloatingField label={f("storageBackend")} required hint={f("storageBackendHint")}>
-                  <FieldSelect value={settings.storageBackend || "__choose"} onValueChange={(value) => onChange({ storageBackend: value === "__choose" ? "" : value })}
-                    options={[{ value: "__choose", label: f("chooseBackend") }, ...L3_BACKENDS.map((value) => ({ value, label: value === "sim" ? f("simulation") : value }))]} />
+                <FloatingField label={f("storageBackend")} hint={f("storageBackendHint")}>
+                  <FieldInput value="Mooncake" readOnly aria-label={f("storageBackend")} />
                 </FloatingField>
                 {fields(["extraConfig"])}
               </div>
@@ -84,16 +95,14 @@ export function L3CacheFields({ settings, onChange, chart, engine, localEnabled 
             <SectionCard title={f("policySection")} summary={f("policySectionHint")}>
               <div className="grid gap-3 sm:grid-cols-2">{fields(["hostMode", "size", "ratio", "memoryFraction"])}</div>
             </SectionCard>
-            {settings.storageBackend === "mooncake" && (
-              <SectionCard title={f("connectionSection")} summary="Mooncake">
-                <div className="space-y-3">
-                  <p className="text-xs leading-relaxed text-muted-foreground">{f("mooncakeSetup")}</p>
-                  {fields(["master", "metadata"])}
-                  <div className="grid gap-3 sm:grid-cols-2">{fields(["protocol", "device"])}</div>
-                  {fields(["segmentSize"])}
-                </div>
-              </SectionCard>
-            )}
+            <SectionCard title={f("connectionSection")} summary="Mooncake">
+              <div className="space-y-3">
+                <p className="text-xs leading-relaxed text-muted-foreground">{f("mooncakeSetup")}</p>
+                {fields(["master", "metadata"])}
+                <div className="grid gap-3 sm:grid-cols-2">{fields(["protocol", "device"])}</div>
+                {fields(["segmentSize"])}
+              </div>
+            </SectionCard>
             <details className="rounded-lg border bg-card p-4">
               <summary className="cursor-pointer text-sm font-medium">{f("advanced")}</summary>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">{fields(["writePolicy", "ioBackend", "layout", "prefetchPolicy", "retryInterval", "retryAttempts"])}</div>
