@@ -95,7 +95,7 @@ unchanged. Moving either one moves both.
 
 ## Modules
 
-The console is a shell plus compile-time modules. A module is a feature area
+The console is a shell plus built-in and installed runtime modules. A module is a feature area
 (iam, inferences, playground, router, docs, later container management); the shell owns everything
 around it.
 
@@ -132,9 +132,11 @@ Rules:
 - `validateModules` rejects duplicate ids/basePaths, shell-reserved paths and ids (`common`, `shell`: they are i18n namespaces) and pages declared twice at startup.
 - Text goes through `useT()` (see "i18n"); the declaration's `title` and menu labels stay Chinese.
 
-Deliberately not built: runtime loading, micro-frontends, cross-module slots. The
-earlier Cordis design (branch `docs/console-plugin-design`) is parked; revisit it
-when one of those is actually needed.
+Runtime plugins use `@modelsphere/plugin-sdk`, maintained in `web/packages/plugin-sdk`. Configuration declares a trusted resource service and one menu; SDK registration supplies components and internal routes. `/plugins/index.json` returns descriptors, and `/plugins/<id>/*` proxies assets without Console credentials. Registration validates identity and collisions before adding a module. Empty configuration adds no external module.
+
+Development uses the SDK Vite preset, same-origin WebSocket proxy and the host's React Refresh runtime. Deployment uses a built bundle served by a static-resource image. Configuration changes require a backend restart and browser refresh; compatible component edits update through Fast Refresh. This integration adds no menu/page permission policy.
+
+See the [authoring and deployment guide](development/plugins.md) and [design](plans/2026-11-05-global-sdk-design.md).
 
 ### i18n
 
