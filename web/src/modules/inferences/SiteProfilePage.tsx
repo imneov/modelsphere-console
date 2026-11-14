@@ -19,16 +19,24 @@ import {
   SheetHeader,
   SheetTitle,
   Skeleton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@modelsphere/ui";
 import { SlidersHorizontal, TriangleAlert } from "lucide-react";
 import { useModulePath } from "@/shell";
 import { api, type SiteProfile } from "@swiss/lib/api";
 import { toYaml } from "@swiss/lib/yaml";
 import { FEATURES, featureOn } from "@swiss/lib/profile";
+import { GpuTable } from "@/modules/inferences/components/GpuResources";
 import { useT } from "@/modules/inferences/i18n";
 import { ProfileEditorBody, SaveButton, useProfileEditor } from "@/modules/inferences/components/ProfileEditor";
 import { catalogTokenKey, listSecrets } from "@/modules/inferences/catalog-write-api";
 import { markedWritable } from "@/modules/inferences/catalog-write-lib";
+import { answerText } from "@swiss/lib/inputs";
 
 export function SiteProfilePage() {
   const t = useT();
@@ -119,8 +127,11 @@ function ProfileView({ p }: { p: SiteProfile }) {
         { label: f("scheduler"), value: v(p.schedule?.schedulerName) },
         { label: f("priorityClass"), value: v(p.schedule?.priorityClassName) },
         { label: f("gpusPerNode"), value: v(p.nodes?.gpusPerNode) },
-        { label: f("gpuAliases"), value: aliases(p.nodes?.gpuProductAliases) },
+        ...(p.nodes?.gpuProductAliases ? [{ label: f("gpuAliasesIgnoredLabel"), value: aliases(p.nodes.gpuProductAliases) }] : []),
       ])}
+      <SectionCard title={f("gpus")}>
+        <GpuTable gpus={p.nodes?.gpus} />
+      </SectionCard>
       {card("catalog", [
         {
           label: f("catalogs"),
@@ -154,6 +165,28 @@ function ProfileView({ p }: { p: SiteProfile }) {
         { label: f("pathTemplate"), value: mono(p.model?.pathTemplate) },
         { label: f("overrides"), value: kv(p.model?.overrides) },
       ])}
+      <SectionCard title={t("profile.groups.inputs")}>
+        {p.inputs && Object.keys(p.inputs).length ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{f("key")}</TableHead>
+                <TableHead>{f("value")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Object.entries(p.inputs).map(([k, x]) => (
+                <TableRow key={k}>
+                  <TableCell className="font-mono text-xs break-all">{k}</TableCell>
+                  <TableCell className="font-mono text-xs break-all">{answerText(x)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          v(undefined)
+        )}
+      </SectionCard>
       {card("routing", [
         { label: f("routeEnabled"), value: onOff(!!p.route?.enabled) },
         { label: f("gateway"), value: mono(p.route?.gateway) },
@@ -194,6 +227,20 @@ function ProfileView({ p }: { p: SiteProfile }) {
           "sites",
           p.sites.map((s) => ({ label: s.name, value: mono(s.url) })),
         )}
+      {p.presets && Object.keys(p.presets).length > 0 && (
+        <SectionCard title={t("profile.groups.presets")}>
+          <p className="text-sm text-muted-foreground">{t("profile.hints.presets")}</p>
+          {Object.entries(p.presets).map(([name, preset]) => (
+            <div key={name} className="flex flex-col gap-1.5">
+              <div className="text-sm">
+                <span className="font-mono font-medium">{name}</span>
+                {preset.description && <span className="ms-2 text-muted-foreground">{preset.description}</span>}
+              </div>
+              <CodeBlock language="yaml" value={toYaml(preset.values ?? {})} />
+            </div>
+          ))}
+        </SectionCard>
+      )}
       {p.extra && Object.keys(p.extra).length > 0 && (
         <SectionCard title={t("profile.groups.extra")}>
           <CodeBlock language="yaml" value={toYaml(p.extra)} />

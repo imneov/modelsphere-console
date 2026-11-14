@@ -18,8 +18,9 @@ import { HoverHint } from "@swiss/components/ui/hint";
 import { Button } from "@swiss/components/ui/button";
 import { Card } from "@swiss/components/ui/card";
 import { ErrorState } from "@swiss/components/States";
-import { scalerFailing, scalerHold, scalerNeutral } from "@swiss/lib/scaler";
+import { engines, enginesMove, scalerFailing, scalerHold, scalerNeutral } from "@swiss/lib/scaler";
 import { cn, timeAgo } from "@swiss/lib/utils";
+import { jobSLOs } from "@swiss/lib/video";
 
 // Unpolled, it loads once per visit and then moves only when the page's own
 // loop or an SLO write refetches it. The staleTime keeps a second reader
@@ -64,10 +65,13 @@ export function ReleaseObjects({
   namespace,
   release,
   onConfigureSLO,
+  video = false,
 }: {
   namespace: string;
   release: string;
   onConfigureSLO?: () => void;
+  // A video release has a JobSLORequirement per pool instead of an LLMSLORequirement.
+  video?: boolean;
 }) {
   const q = useReleaseObjects(namespace, release, false);
   if (q.error)
@@ -90,7 +94,11 @@ export function ReleaseObjects({
       <div className="grid gap-4 lg:grid-cols-3">
         <RoutePanel objects={objects} loading={q.isPending} />
         <ScalerPanel objects={objects} loading={q.isPending} />
-        <SLOPanel namespace={namespace} release={release} objects={objects} loading={q.isPending} onConfigure={onConfigureSLO} />
+        {video ? (
+          <JobSLOPanel objects={objects} loading={q.isPending} onConfigure={onConfigureSLO} />
+        ) : (
+          <SLOPanel namespace={namespace} release={release} objects={objects} loading={q.isPending} onConfigure={onConfigureSLO} />
+        )}
       </div>
     </section>
   );
@@ -368,6 +376,7 @@ function ScalerPanel({
             conditions={status?.conditions}
             neutral={scalerNeutral(status?.conditions)}
             warn={hold ? ["AbleToScale"] : undefined}
+            inverted={["ScalingLimited"]}
           />
         </>
       )}
@@ -469,6 +478,42 @@ function SLOPanel({
   );
 }
 
+// A video release's SLOs, one per pool: a pool without a maximum is not scaled.
+function JobSLOPanel({ objects, loading, onConfigure }: { objects?: ObjectResult[]; loading: boolean; onConfigure?: () => void }) {
+  const slos = jobSLOs(objects);
+  return (
+    <ObjectCard
+      icon={<ShieldCheck className="size-4" />}
+      title="SLO"
+      kind="JobSLORequirement"
+      result={slos[0]?.result}
+      loading={loading}
+      absent="No JobSLORequirement: the pools are not autoscaled."
+      action={
+        onConfigure && (
+          <Button size="sm" variant="outline" className="size-8 px-0 text-primary" aria-label="Configure SLO" title="Configure SLO" onClick={onConfigure}>
+            <Settings2 className="size-4" />
+          </Button>
+        )
+      }
+    >
+      <Facts>
+        {slos.map((s) => {
+          const min = s.spec?.minimumDeployment?.value ?? 1;
+          const max = s.spec?.maximumDeployment?.value;
+          return (
+            <Fact key={s.serviceId} label={s.pool ?? s.serviceId}>
+              {max === undefined ? <Badge variant="muted">not scaled</Badge> : <span className="tabular-nums">{`${min}–${max} replicas`}</span>}
+              {s.spec?.queue?.maxDepth !== undefined && <span className="ml-2 text-xs text-muted-foreground">queue ≤ {s.spec.queue.maxDepth}</span>}
+              <div><Mono>{s.serviceId}</Mono></div>
+            </Fact>
+          );
+        })}
+      </Facts>
+    </ObjectCard>
+  );
+}
+
 // An LLMSLORequirement has no status of its own; for a PD release the SLO
 // card's is swissd's autoscaler pass.
 function AutoscaleBadge({ st }: { st: AutoscaleState }) {
@@ -495,9 +540,11 @@ function AutoscaleBadge({ st }: { st: AutoscaleState }) {
   }
 }
 
+// Engines are shown only for a pdengine decision, the one that sets shape.pd.
 function PDAutoscale({ st }: { st: AutoscaleState }) {
   const moving = st.want !== undefined && st.want !== st.current;
-  const clamped = st.want !== undefined && st.decision !== undefined && st.want !== st.decision;
+  const move = enginesMove(st);
+  const enginesHint = "Prefill and decode engines per slice";
   return (
     <div className="mt-auto space-y-2 border-t pt-3">
       <div className="text-xs font-medium">PD autoscaling</div>
@@ -508,11 +555,23 @@ function PDAutoscale({ st }: { st: AutoscaleState }) {
             {moving && <> → {st.want}</>}
           </span>
         </Fact>
+        {st.pd?.current && (
+          <Fact label="Engines">
+            <span className="tabular-nums" title={enginesHint}>
+              {move ? `${move.cur} → ${move.want}` : engines(st.pd.current)}
+            </span>
+          </Fact>
+        )}
         <Fact label="Decision">
           {st.decision !== undefined ? (
             <span className="tabular-nums">
               {st.decision}
-              {clamped && <span className="text-muted-foreground"> · clamped to {st.want}</span>}
+              {st.pd?.decision && (
+                <span className="text-muted-foreground" title={enginesHint}>
+                  {" "}
+                  · {engines(st.pd.decision)}
+                </span>
+              )}
             </span>
           ) : (
             <span className="text-muted-foreground">{st.noDecision ? "none from decision-gen" : "—"}</span>
@@ -770,16 +829,20 @@ function Stale({
   );
 }
 
+// inverted lists the types whose True is the problem, as ScalingLimited's is.
 export function Conditions({
   conditions,
   neutral = [],
   warn = [],
+  inverted = [],
 }: {
   conditions?: Condition[];
   neutral?: string[];
   warn?: string[];
+  inverted?: string[];
 }) {
   if (!conditions?.length) return null;
+  const is = (c: Condition, healthy: boolean) => c.status === (healthy !== inverted.includes(c.type) ? "True" : "False");
   return (
     <ul className="mt-auto space-y-1.5 border-t pt-3">
       {conditions.map((c) => (
@@ -792,9 +855,9 @@ export function Conditions({
                   ? "bg-warning"
                   : neutral.includes(c.type)
                     ? "bg-muted-foreground"
-                    : c.status === "True"
+                    : is(c, true)
                       ? "bg-success"
-                      : c.status === "False"
+                      : is(c, false)
                         ? "bg-warning"
                         : "bg-muted-foreground",
               )}

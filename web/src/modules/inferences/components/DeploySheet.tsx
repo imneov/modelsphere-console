@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -27,21 +27,31 @@ import {
 import { ArrowRight, FlaskConical, TriangleAlert } from "lucide-react";
 import { useModulePath } from "@/shell";
 import { api, deployApi, type ApplyResult, type ApplyWith, type CatalogModel, type DiffResult, type Plan } from "@swiss/lib/api";
-import { applyFlags, imageOf, reseed, siteSwitchDefaults, switchDefaults, type Form, type SwitchDefaults } from "@swiss/components/DeploySettings";
+import { applyFlags, imageOf, reseed, siteSwitchDefaults, switchDefaults, videoForm, type Form, type SwitchDefaults } from "@swiss/components/DeploySettings";
+import { videoProblem, videoSeed } from "@swiss/lib/video";
 import { EMPTY, formFromPlan, planRequest } from "../deployment-settings";
 import { releaseCatalog } from "@swiss/components/CatalogChoice";
 import { Provenance } from "@swiss/components/Provenance";
 import { DiffView } from "@swiss/components/DiffView";
-import { gpuShort } from "@swiss/lib/gpu";
+import { deployCapacity, gpuShort, pickableProducts, productChoices, unlistedProducts, vendorResources } from "@swiss/lib/gpu";
 import { isChartRange, movableCatalogs } from "@swiss/lib/upgrade";
+import { CHECK_MS, inputRows, inputsAnswered, siteSaves, type SiteSave } from "@swiss/lib/inputs";
+import { affinityInvalid } from "@swiss/lib/affinity";
+import { saveSiteAnswers } from "@swiss/lib/siteAnswers";
+import { messageOf, useToast } from "@swiss/components/ui/toast";
+import { useDebounced } from "@swiss/lib/useDebounced";
 import { cacheCard } from "@swiss/lib/cache";
 import { installMethod, llmsvcBlock } from "@swiss/lib/applyWith";
 import { useT } from "@/modules/inferences/i18n";
 import { detailPath, sloEnabled } from "@/modules/inferences/lib";
-import { SECTIONS, chartChoice, defaultServiceId, gpuOptions, pipelineState, serviceIdError, whatMoves, type Section } from "@/modules/inferences/deploy-lib";
+import { SECTIONS, VIDEO_SECTIONS, chartChoice, formKind, defaultServiceId, pipelineState, serviceIdError, whatMoves, type Section } from "@/modules/inferences/deploy-lib";
 import { DeployForm } from "@/modules/inferences/components/DeployForm";
+import type { HelmValuesSource } from "@/modules/inferences/components/OverrideYaml";
 import { ExperimentalBadge } from "@/modules/inferences/components/InstallMethodLabel";
-import { AdaptivePlanChangedError, composeAdaptivePlan } from "../adaptive-concurrency";
+import { AdaptivePlanChangedError, composeAdaptivePlan, withAdaptiveConcurrency } from "../adaptive-concurrency";
+import { composeRecoveryPlan, composeRecoveryValuesRequest, RecoveryPlanChangedError } from "../recovery-compose";
+import { RecoveryFields } from "./RecoveryFields";
+import { mergeValues, planValues, recoveryError, recoveryInputError, recoverySettings, withRecovery } from "../recovery";
 import { readRouteOptions } from "@/modules/inferences/api";
 
 export type DeployTarget =
@@ -62,6 +72,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const p = useModulePath();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const toast = useToast();
   const upgrade = target.kind === "upgrade";
 
   const cluster = useQuery({ queryKey: ["cluster"], queryFn: api.cluster });
@@ -113,6 +124,9 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
     enabled: !!modelName && !!catalogName,
   });
   const v = entry.data?.variant;
+  // A video variant (or release) shares the LLM form: it adds the video chart's own fields and drops what only an LLM chart takes.
+  const video = formKind(upgrade, current.data?.engine, v?.engine) === "video";
+  const sections = video ? VIDEO_SECTIONS : SECTIONS;
   const chartRange = !!v && isChartRange(v.chart.version);
   const chartList = useQuery({
     queryKey: ["chart-versions", catalogName, modelName, version, keptVariant],
@@ -136,8 +150,16 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const [seedPlan, setSeedPlan] = useState<Plan>();
   if (current.data && !seedPlan) setSeedPlan(current.data);
   const deployModel = upgrade ? "" : target.model;
+  const variantValues = entry.data?.variant.values;
   const initial = useMemo<Form>(() => (upgrade ? (seedPlan ? formFromPlan(seedPlan) : EMPTY) : { ...EMPTY, serviceId: defaultServiceId(deployModel) }), [upgrade, seedPlan, deployModel]);
+  const initialRecovery = useMemo(() => recoverySettings(
+    upgrade && seedPlan ? planValues(seedPlan) : mergeValues(entry.data?.variant.values, profile.data?.profile?.extra),
+  ), [upgrade, seedPlan, entry.data?.variant.values, profile.data?.profile?.extra]);
+  const [recoveryPatch, setRecoveryPatch] = useState<Partial<ReturnType<typeof recoverySettings>>>({});
+  const recovery = { ...initialRecovery, ...recoveryPatch };
   const [form, setForm] = useState<Form>(initial);
+  const checkedInputs = useDebounced(form.inputs, CHECK_MS);
+  const [remember, setRemember] = useState<Record<string, boolean>>({});
   const catalogRoute = upgrade && current.data ? initial.route || initial.serviceId || target.release : undefined;
   const routeOptions = useQuery({
     queryKey: ["route-options", catalogRoute ?? ""],
@@ -148,7 +170,9 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   });
   useEffect(() => setForm(initial), [initial]);
   const [seed, setSeed] = useState<SwitchDefaults | null>(null);
-  const dirty = useDirty({ form, version, variant, moveTo, chartVersion }, { form: seed ? reseed(initial, {}, seed) : initial, version: upgrade ? "" : (target.version ?? ""), variant: upgrade ? "" : (target.variant ?? ""), moveTo: "", chartVersion: "" });
+  // A fresh video deploy's untouched form is the video seed, not EMPTY.
+  const baseline = !upgrade && video ? videoForm(initial, variantValues) : initial;
+  const dirty = useDirty({ form, version, variant, moveTo, chartVersion, recovery }, { form: seed ? reseed(baseline, {}, seed) : baseline, version: upgrade ? "" : (target.version ?? ""), variant: upgrade ? "" : (target.variant ?? ""), moveTo: "", chartVersion: "", recovery: initialRecovery });
 
   const [step, setStep] = useState<"form" | "review">("form");
   const [submitted, setSubmitted] = useState(false);
@@ -158,14 +182,13 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
   const [applied, setApplied] = useState<ApplyResult | null>(null);
   const [note, setNote] = useState("");
   const [force, setForce] = useState(false);
-  const nav = useAnchorNav({ ids: [...SECTIONS], idPrefix: ID_PREFIX, enabled: step === "form", onExpand: (id) => setExpanded((e) => ({ ...e, [id]: true })) });
+  const nav = useAnchorNav({ ids: [...sections], idPrefix: ID_PREFIX, enabled: step === "form", onExpand: (id) => setExpanded((e) => ({ ...e, [id]: true })) });
 
   // The form shows only once the entry and profile have loaded, so the first
   // seed lands before any plan; a later one is another variant or version, and
   // a plan composed from the old switches goes with it.
   const seedReady = !upgrade && !!entry.data && !profile.isPending;
   const siteDefaults = useMemo(() => siteSwitchDefaults(profile.data), [profile.data]);
-  const variantValues = entry.data?.variant.values;
   useEffect(() => {
     if (!seedReady) return;
     const next = switchDefaults(siteDefaults, variantValues);
@@ -178,25 +201,85 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
       setStep("form");
     }
   }, [seedReady, siteDefaults, variantValues, seed]);
+  // A video variant's own fields start from its values, merged into what is
+  // typed rather than resetting it; leaving a video variant takes them back off,
+  // GPU tolerations included, so an LLM deploy does not inherit them.
+  const seededVideo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!seedReady) return;
+    const { key, action } = videoSeed(seededVideo.current, video, variantValues);
+    seededVideo.current = key;
+    if (action === "seed") setForm((f) => videoForm(f, variantValues));
+    else if (action === "clear") setForm((f) => ({ ...f, video: EMPTY.video, tolerations: EMPTY.tolerations }));
+  }, [seedReady, video, variantValues]);
 
-  const release = upgrade ? target.release : form.serviceId || defaultServiceId(target.model);
+  const typedId = form.serviceId;
+  const release = upgrade ? target.release : typedId || defaultServiceId(target.model);
   const namespace = upgrade ? target.namespace : form.namespace || cluster.data?.namespace || "";
   const live = useQuery({ queryKey: ["status", namespace, release], queryFn: () => api.status(namespace, release), enabled: step === "review" && !!release && !!namespace });
 
+  // A product the variant does not list is one swissd takes only as forced.
+  const forceGpuProducts = unlistedProducts(v?.requires.gpuProduct, form.gpuProducts).length > 0;
   const change = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
+  const inputs = inputRows(v?.inputs, profile.data?.profile, entry.data?.model.source?.hf ?? "", modelName ?? "", v?.values, upgrade ? current.data?.layers?.form : undefined);
+  // A profile swissd did not parse is not written to from here.
+  const canRemember = profile.data?.yaml !== undefined && !profile.data.error && !!cluster.data?.allowDeploy;
+  const saves = canRemember ? siteSaves(inputs, form.inputs, remember) : [];
+  // What a compose of f sends; the Override YAML editor's preview sends the same.
+  const requestFor = (f: Form) => planRequest(
+    { ...f, serviceId: f.serviceId || (upgrade ? f.serviceId : defaultServiceId(target.model)) },
+    upgrade
+      ? { model: recorded!.model, version: version || undefined, variant: variant || undefined, catalog: moveTo || undefined, chartVersion: chartVersion || undefined, fromRelease: target.release, cacheUnsupported: !!cache.unsupported, forceGpuProducts, inputs: v?.inputs, formLayer: seedPlan?.layers?.form, video }
+      : { model: target.model, version, variant: keptVariant, catalog: target.catalog, chartVersion: chartVersion || undefined, cacheUnsupported: !!cache.unsupported, forceGpuProducts, inputs: v?.inputs, video },
+    profile.data?.profile,
+  );
+  // The chart's values and swissd's layers for this form, without the
+  // overrides, which the editor merges itself. Cached per request while the
+  // sheet is open, so saving the overrides and editing them again does not
+  // read the chart again.
+  const compositionError = (error: unknown) => {
+    if (error instanceof RecoveryPlanChangedError) return new Error(t("deploy.recovery.errors.changedPlan"));
+    if (error instanceof AdaptivePlanChangedError) return new Error(t("deploy.fields.adaptiveChanged"));
+    return error;
+  };
+  const valuesForm = { ...form, edits: "" };
+  // A video route has no recovery or adaptive concurrency: its form has no routing section.
+  const valuesRequest = upgrade && !recorded ? undefined : video ? requestFor(valuesForm) : withAdaptiveConcurrency(withRecovery(requestFor(valuesForm), recovery), valuesForm, routeOptions.data);
+  const helmValues = useQuery({
+    queryKey: ["helmValues", JSON.stringify(valuesRequest ?? null)],
+    queryFn: async () => {
+      try {
+        if (video) return await deployApi.helmValues(requestFor(valuesForm));
+        const request = await composeRecoveryValuesRequest(requestFor(valuesForm), recovery, (next) => composeAdaptivePlan(next, valuesForm, routeOptions.data, deployApi.plan, catalogName), catalogName);
+        return await deployApi.helmValues(request);
+      } catch (error) {
+        throw compositionError(error);
+      }
+    },
+    enabled: false,
+    staleTime: Infinity,
+    // Dropped when the sheet closes: they last one install or upgrade.
+    gcTime: 0,
+    retry: false,
+  });
+  const valuesSource: HelmValuesSource = {
+    data: helmValues.data,
+    loading: helmValues.isFetching,
+    error: helmValues.error,
+    load: async () => (valuesRequest ? (await helmValues.refetch()).data : undefined),
+  };
   const compose = useMutation({
     mutationFn: async () => {
+      if (video) return deployApi.plan(requestFor(form));
       try {
-        return await composeAdaptivePlan(planRequest(
-          { ...form, serviceId: form.serviceId || (upgrade ? form.serviceId : defaultServiceId(target.model)) },
-          upgrade
-            ? { model: recorded!.model, version: version || undefined, variant: variant || undefined, catalog: moveTo || undefined, chartVersion: chartVersion || undefined, fromRelease: target.release, cacheUnsupported: !!cache.unsupported }
-            : { model: target.model, version, variant: keptVariant, catalog: target.catalog, chartVersion: chartVersion || undefined, cacheUnsupported: !!cache.unsupported },
-          profile.data?.profile,
-        ), form, routeOptions.data, deployApi.plan, catalogName);
+        const inputError = recoveryInputError(recovery);
+        if (inputError) throw new Error(t(`deploy.recovery.errors.${inputError}`));
+        const proposed = await composeRecoveryPlan(requestFor(form), recovery, (request) => composeAdaptivePlan(request, form, routeOptions.data, deployApi.plan, catalogName), catalogName);
+        const invalid = recoveryError(proposed, recovery);
+        if (invalid) throw new Error(t(`deploy.recovery.errors.${invalid}`));
+        return proposed;
       } catch (error) {
-        if (error instanceof AdaptivePlanChangedError) throw new Error(t("deploy.fields.adaptiveChanged"));
-        throw error;
+        throw compositionError(error);
       }
     },
     onSuccess: (pl) => {
@@ -219,17 +302,31 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
     onSuccess: (r) => {
       setApplied(r);
       for (const key of REFRESH) qc.invalidateQueries({ queryKey: key });
+      // After the deploy, not before: one abandoned at review leaves the profile as it was.
+      if (saves.length)
+        saveSiteAnswers(saves).then(
+          (saved) => {
+            qc.setQueryData(["profile"], saved);
+            toast.success(t("deploy.review.siteSaved", { keys: saves.map((s) => s.key).join(", ") }));
+          },
+          (e) => toast.error(t("deploy.review.siteNotSaved", { error: messageOf(e) })),
+        );
       onClose();
-      if (!upgrade) navigate(p(detailPath(plan!.release.name, plan!.release.namespace)), { state: { sloSetup: state.action === "install" && sloEnabled(plan!) } });
+      if (!upgrade) navigate(p(detailPath(plan!.release.name, plan!.release.namespace)), { state: { sloSetup: !video && state.action === "install" && sloEnabled(plan!) } });
     },
   });
 
   const submit = () => {
     setSubmitted(true);
     apply.reset();
-    if (!upgrade && serviceIdError(form.serviceId || defaultServiceId(target.model))) {
+    if (!upgrade && serviceIdError(typedId || defaultServiceId(target.model))) {
       setExpanded((e) => ({ ...e, basic: true }));
       nav.go("basic");
+      return;
+    }
+    if (video && videoProblem(form.video)) {
+      setExpanded((e) => ({ ...e, resources: true }));
+      nav.go("resources");
       return;
     }
     compose.mutate();
@@ -385,7 +482,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
 
       {step === "form" && !loading && !error && (
         <div className={cn("flex gap-1 border-b px-5 py-2", nav.scrolled && "shadow-sm")}>
-          {SECTIONS.map((s) => (
+          {sections.map((s) => (
             <Button key={s} variant="ghost" size="sm" className={cn("text-muted-foreground", nav.active === s && "bg-muted text-foreground")} onClick={() => nav.go(s)}>
               {t(`deploy.sections.${upgrade && s === "basic" ? "target" : s}`)}
             </Button>
@@ -400,7 +497,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
             <AlertDescription>{t("deploy.review.readOnly")}</AlertDescription>
           </Alert>
         )}
-        {routeOptions.error && (
+        {!video && routeOptions.error && (
           <Alert variant="warning"><TriangleAlert /><AlertDescription>{t("deploy.routeOptions.error", { error: routeOptions.error.message })}</AlertDescription></Alert>
         )}
         {(error || compose.error || apply.error) && (
@@ -420,15 +517,29 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
               onChange={change}
               upgrade={upgrade}
               submitted={submitted}
+              recovery={<RecoveryFields settings={recovery} onChange={(patch) => setRecoveryPatch((previous) => ({ ...previous, ...patch }))} />}
               target={targetFields}
               cluster={cluster.data}
-              defaults={{ serviceId: upgrade ? undefined : defaultServiceId(target.model), localPath: entry.data?.localPath, localPathTemplate: entry.data?.pathTemplate, image: imageOf(v, entry.data?.imageRepository), cache }}
-              gpuOptions={gpuOptions(v?.requires.gpuProduct, nodes.data?.nodes.map((n) => n.GPUProduct))}
+              defaults={{ serviceId: upgrade ? undefined : defaultServiceId(target.model), localPath: entry.data?.localPath, localPathTemplate: entry.data?.pathTemplate, image: video ? undefined : imageOf(v, entry.data?.imageRepository), cache: video ? undefined : cache }}
+              gpuOptions={productChoices(v?.requires.gpuProduct, pickableProducts(nodes.data?.nodes, v?.requires.vendor, profile.data?.profile?.nodes?.gpus, form.gpuResource), form.gpuProducts)}
+              gpuListed={v?.requires.gpuProduct}
+              gpuResources={v?.requires.gpus && profile.data?.profile?.nodes?.gpus ? vendorResources(profile.data.profile.nodes.gpus, v.requires.vendor) : undefined}
+              capacity={
+                v?.requires.gpus
+                  ? { ...deployCapacity(v.requires, form, nodes.data?.nodes, profile.data?.profile?.nodes?.gpus), refreshing: nodes.isFetching, onRefresh: () => nodes.refetch() }
+                  : undefined
+              }
               expanded={expanded}
               onExpand={(s, o) => setExpanded((e) => ({ ...e, [s]: o }))}
               routeOptions={routeOptions.isSuccess ? routeOptions.data : undefined}
               catalogRoute={catalogRoute}
               idPrefix={ID_PREFIX}
+              helmValues={readOnly ? undefined : valuesSource}
+              inputs={inputs}
+              remember={canRemember ? remember : undefined}
+              onRemember={(key, on) => setRemember((r) => ({ ...r, [key]: on }))}
+              presets={upgrade ? undefined : profile.data?.profile?.presets}
+              video={video}
             />
             <div style={{ height: nav.tailSpace }} aria-hidden />
           </>
@@ -448,6 +559,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
               force={force}
               onForce={setForce}
               method={state.action === "install" ? method : live.data?.backend}
+              siteSaves={saves}
             />
           )
         )}
@@ -457,7 +569,7 @@ function DeploySheetBody({ target, onClose }: { target: DeployTarget; onClose: (
         {step === "form" ? (
           <>
             <SheetCancelButton />
-            <Button onClick={submit} disabled={!!readOnly || loading || compose.isPending}>
+            <Button onClick={submit} disabled={!!readOnly || loading || compose.isPending || !inputsAnswered(inputs, checkedInputs) || affinityInvalid(form.affinity)}>
               {compose.isPending ? t("deploy.review.composing") : t("deploy.review.compose")}
             </Button>
           </>
@@ -492,6 +604,7 @@ export function Review({
   force,
   onForce,
   method,
+  siteSaves,
 }: {
   upgrade: boolean;
   rollback?: boolean;
@@ -508,6 +621,8 @@ export function Review({
   onForce: (v: boolean) => void;
   // The install method: the one picked on an install, the release's own otherwise.
   method?: ApplyWith;
+  // Typed answers saved to the site profile once this applies.
+  siteSaves?: SiteSave[];
 }) {
   const t = useT();
   const moves = current && (upgrade || rollback) ? whatMoves(current, plan, currentCatalog) : null;
@@ -531,6 +646,27 @@ export function Review({
               </div>
             ))}
             {current && current.hash === plan.hash && <p className="pt-1 text-muted-foreground">{t("deploy.review.identical")}</p>}
+          </div>
+        </SectionCard>
+      )}
+      {!!siteSaves?.length && (
+        <SectionCard title={t("deploy.review.siteProfile")}>
+          <div className="space-y-2 text-sm">
+            <p className="text-muted-foreground">{t("deploy.review.siteProfileHint")}</p>
+            {siteSaves.map((s) => (
+              <div key={s.key} className="font-mono text-xs">
+                <div className="break-all">{s.key}</div>
+                <div className="flex min-w-0 flex-wrap items-center gap-2 ps-4">
+                  {s.replaces && (
+                    <>
+                      <span className="break-all text-muted-foreground">{s.replaces}</span>
+                      <ArrowRight className="size-3.5 shrink-0 text-primary" />
+                    </>
+                  )}
+                  <span className="break-all font-medium">{s.text}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </SectionCard>
       )}

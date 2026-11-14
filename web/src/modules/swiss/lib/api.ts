@@ -86,6 +86,8 @@ export interface Deployment {
   release: string;
   namespace: string;
   chart?: string;
+  // The plan's engine. Not sent by swissd yet; isVideoDeployment falls back to the chart.
+  engine?: string;
   status?: string;
   // Missing while a helm release is uninstalling: the release record is already gone.
   revision?: number;
@@ -139,6 +141,21 @@ export interface Requires {
   topology?: string;
   gpuProduct?: string[];
   rdma?: boolean;
+}
+
+export interface Input {
+  // The chart value's dotted key: storageKVOffload.mooncake.master.
+  key: string;
+  title: string;
+  description?: string;
+  // Unset is string.
+  type?: "string" | "integer" | "boolean";
+  // Matches a whole string answer.
+  pattern?: string;
+  // The field's placeholder; never a real value.
+  example: string | number | boolean;
+  // swissd's answer when the site profile has none.
+  default?: string | number | boolean;
 }
 
 // v1 is the legacy schema: read-only, and still what a catalog with no
@@ -213,6 +230,8 @@ export interface CatalogResponse {
 export interface Variant extends Omit<ModelVariant, "servedName" | "deprecated" | "replaces"> {
   servedName: string;
   image?: { repository: string; tag: string; digest?: string };
+  // The chart values every deploy must answer.
+  inputs?: Input[];
   values?: Record<string, unknown>;
 }
 
@@ -297,6 +316,37 @@ export interface RouteAuth {
   headers?: Record<string, string>;
 }
 
+// One GPU resource the site's nodes advertise. A vendor's first entry is its
+// default resource.
+export interface GPUSpec {
+  vendor: string;
+  resource: string;
+  // The node label telling products apart under resource.
+  labelKey: string;
+  // Label values that also name a product; the product's own name always does.
+  products?: { product: string; values?: string[] }[];
+}
+
+// Only resource is needed: without labelKey every node with it reads as
+// unlabelled, and vendor plays no part in reading nodes.
+export type GPUScanRequest = Pick<GPUSpec, "resource"> & Partial<Pick<GPUSpec, "labelKey" | "products">>;
+
+// What one nodes.gpus entry, saved or not, reads on the cluster's nodes.
+export interface GPUScan {
+  resource: string;
+  nodes: number;
+  gpus: number;
+  // The entry's own products first, even with no node; names: every label
+  // value naming the product -- itself, then its values -- with its nodes.
+  products: { product: string; nodes: number; gpus: number; names: { name: string; nodes: number; gpus: number }[] }[];
+  unlabelled: { nodes: number; gpus: number };
+}
+
+export interface Preset {
+  description?: string;
+  values?: Record<string, unknown>;
+}
+
 export interface SiteProfile {
   name: string;
   namespace?: string;
@@ -339,10 +389,15 @@ export interface SiteProfile {
   // The site's preferences, beneath the catalog: a variant overrides them.
   // features unset is on (featureOn).
   defaults?: { features?: { cart?: boolean; serviceMonitor?: boolean; sloRequirement?: boolean; scaler?: boolean } };
+  // Answers a variant's inputs by chart path; strings take pathTemplate's placeholders.
+  inputs?: Record<string, string | number | boolean>;
+  // Named values a deploy may pick one of; the console merges it into the form layer.
+  presets?: Record<string, Preset>;
   nodes?: {
     gpusPerNode?: number;
-    // Catalog GPU product -> node label selectors ("key=value[,key=value]"),
-    // for nodes a vendor install does not label with the catalog's name.
+    // Required by swissd; [] is a site without GPUs.
+    gpus?: GPUSpec[];
+    // Ignored by swissd since nodes.gpus, though still served and saved.
     gpuProductAliases?: Record<string, string[]>;
   };
   sites?: Site[];
@@ -492,6 +547,8 @@ export const api = {
   chartVersions: (name: string, opts: { catalog?: string; version?: string; variant?: string }) =>
     get<ChartVersions>(`/api/catalog/${encodeURIComponent(name)}/chart-versions` + query(opts)),
   nodes: () => get<NodesResponse>("/api/nodes"),
+  // Lists every node: call it on request, never on a timer.
+  scanNodeGPUs: (g: GPUScanRequest) => post<GPUScan>("/api/nodes/gpus", g),
   profile: () => get<ProfileResponse>("/api/profile"),
   runs: (f: RunFilter = {}) => {
     const q = new URLSearchParams();
@@ -620,6 +677,8 @@ export interface PlanRequest {
   // Accepts gpuProducts the variant does not list, provided each is on this
   // cluster under the variant's vendor. The plan then carries a warning.
   forceGpuProducts?: boolean;
+  // The resource picked among the vendor's; empty lets swissd pick.
+  gpuResource?: string;
   overrides?: Record<string, unknown>;
   overridesYAML?: string;
   editsYAML?: string;
@@ -752,9 +811,9 @@ export interface AutoscaleState {
   enabled: boolean;
   // DisaggregatedSet slices the loop saw.
   current: number;
-  // decision clamped into [1, 64]. Absent on a hold.
+  // The decision's slices, as given. Absent on a hold.
   want?: number;
-  // decision-gen's count.
+  // decision-gen's slice count.
   decision?: number;
   noDecision?: boolean;
   // Absent until this swissd has evaluated the release.
@@ -763,6 +822,13 @@ export interface AutoscaleState {
   error?: string;
   lastEvaluated?: string;
   lastScaled?: string;
+  // Engines per slice, when decision-gen's row carries shape.pd. want is absent on a hold.
+  pd?: { current?: AutoscaleEngines; want?: AutoscaleEngines; decision?: AutoscaleEngines };
+}
+
+export interface AutoscaleEngines {
+  prefill: number;
+  decode: number;
 }
 
 // routing.modelsphere.dev ModelRoute: autoconfig keeps openresty's peers and
@@ -845,6 +911,21 @@ export interface SLORange {
 export interface SLOObjective {
   default?: { metrics?: SLOMetric[] };
   ranges?: SLORange[];
+}
+
+// A video pool's requirement: its backlog, not latency, is what scales it.
+export interface SLOQueue {
+  maxDepth?: number;
+  promql?: string;
+}
+
+export interface JobSLORequirementSpec {
+  serviceId: string;
+  priority?: number;
+  minimumDeployment?: { type?: string; value?: number };
+  // Absent: the decision server leaves the pool unscaled.
+  maximumDeployment?: { type?: string; value?: number };
+  queue?: SLOQueue;
 }
 
 export interface LLMSLORequirementSpec {
@@ -981,8 +1062,23 @@ async function del<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// What an install hands helm, as YAML: the chart's values.yaml verbatim, and
+// swiss's layers merged over it, a null deleting that default.
+export interface HelmValues {
+  defaults: string;
+  overrides: string;
+}
+
+export function sloPath(ns: string, release: string, serviceId?: string): string {
+  const base = `/api/releases/${encodeURIComponent(ns)}/${encodeURIComponent(release)}/slo`;
+  return serviceId ? `${base}?serviceId=${encodeURIComponent(serviceId)}` : base;
+}
+
 export const deployApi = {
   plan: (req: PlanRequest) => post<Plan>("/api/plans", req),
+  // v2 compose's dry run: nothing is stored.
+  helmValues: (req: PlanRequest) =>
+    post<{ helmValues: HelmValues }>("/api/v2/compose?dryRun=true&dumpHelmValues=true", req).then((r) => r.helmValues),
   diff: (req: (PlanRequest | { planHash: string }) & { applyFlags?: ApplyFlags }) => post<DiffResult>("/api/diff", req),
   // expectRevision is the optimistic lock a diff computed. It is left out when
   // no diff was run, and the server reads a missing revision as asserting
@@ -1028,12 +1124,14 @@ export const deployApi = {
     ),
   uninstall: (ns: string, release: string) =>
     del<UninstallResult>(`/api/releases/${encodeURIComponent(ns)}/${encodeURIComponent(release)}`),
-  slo: (ns: string, release: string) =>
-    get<SLOConfig>(`/api/releases/${encodeURIComponent(ns)}/${encodeURIComponent(release)}/slo`),
-  saveSLO: (ns: string, release: string, body: SLOEdit) =>
-    put<SLOConfig>(`/api/releases/${encodeURIComponent(ns)}/${encodeURIComponent(release)}/slo`, body),
-  resetSLO: (ns: string, release: string) =>
-    del<SLOConfig>(`/api/releases/${encodeURIComponent(ns)}/${encodeURIComponent(release)}/slo`),
+  // serviceId picks one of the release's SLO objects, such as a video pool's
+  // JobSLORequirement; without it swissd takes the release name.
+  slo: (ns: string, release: string, serviceId?: string) =>
+    get<SLOConfig>(sloPath(ns, release, serviceId)),
+  saveSLO: (ns: string, release: string, body: SLOEdit, serviceId?: string) =>
+    put<SLOConfig>(sloPath(ns, release, serviceId), body),
+  resetSLO: (ns: string, release: string, serviceId?: string) =>
+    del<SLOConfig>(sloPath(ns, release, serviceId)),
 };
 
 // One coverage row. TTFT thresholds are seconds; OTPS thresholds are tok/s.
@@ -1067,6 +1165,8 @@ export interface SLOConfig {
   maximumDeployment?: SLOBound;
   ttft?: SLOSection;
   otps?: SLOSection;
+  // A JobSLO's (video pools).
+  queue?: SLOQueue;
 }
 
 // A save merges: fields left out keep their stored value, and only a reset
@@ -1080,4 +1180,5 @@ export interface SLOEdit {
   maximumDeployment?: SLOBound;
   ttft?: SLOSection;
   otps?: SLOSection;
+  queue?: SLOQueue;
 }

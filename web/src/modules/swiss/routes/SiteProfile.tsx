@@ -10,6 +10,8 @@ import { HoverHint } from "@swiss/components/ui/hint";
 import { ErrorState, Loading } from "@swiss/components/States";
 import { Code } from "@swiss/components/ui/code";
 import { toYaml } from "@swiss/lib/yaml";
+import { GpuTable } from "@swiss/components/GpuResources";
+import { answerText } from "@swiss/lib/inputs";
 
 export function SiteProfile() {
   const [editing, setEditing] = useState(false);
@@ -84,9 +86,9 @@ export function SiteProfile() {
           >
             <Row label="Namespace" value={p.namespace} fallback="the chart's default" />
             <Row label="GPUs per node" value={p.nodes?.gpusPerNode} />
-            {Object.entries(p.nodes?.gpuProductAliases ?? {}).map(([product, sels]) => (
-              <Row key={product} label={`${product} (GPU alias)`} value={sels.join(" or ")} mono />
-            ))}
+            {Object.keys(p.nodes?.gpuProductAliases ?? {}).length > 0 && (
+              <Row label="GPU aliases (ignored)" value={Object.keys(p.nodes!.gpuProductAliases!).join(", ")} />
+            )}
             <Row
               label="Scheduler"
               value={p.schedule?.schedulerName}
@@ -98,6 +100,15 @@ export function SiteProfile() {
               fallback="the chart's default"
             />
           </Section>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">GPU resources</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GpuTable gpus={p.nodes?.gpus} />
+            </CardContent>
+          </Card>
 
           <Section
             title="Catalogs"
@@ -139,6 +150,17 @@ export function SiteProfile() {
               ))}
             </Section>
           )}
+
+          <Section
+            title="Variant inputs"
+            hint="Answers to the inputs catalog variants declare, by chart key. Only a variant that declares a key takes its answer, and a deploy can still override it."
+          >
+            {p.inputs && Object.keys(p.inputs).length > 0 ? (
+              Object.entries(p.inputs).map(([k, v]) => <Row key={k} label={k} value={answerText(v)} mono />)
+            ) : (
+              <Row label="Answers" value={undefined} fallback="none: an input takes its default, or the deploy's answer" />
+            )}
+          </Section>
 
           <Section title="Routing">
             <Row
@@ -226,6 +248,28 @@ export function SiteProfile() {
                 <Row key={`${s.name}-${i}`} label={s.name} value={s.url} mono />
               ))}
             </Section>
+          )}
+
+          {p.presets && Object.keys(p.presets).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Presets</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Named values a deploy may pick one of, merged into its form values.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {Object.entries(p.presets).map(([name, preset]) => (
+                  <div key={name} className="space-y-1.5">
+                    <div className="text-sm">
+                      <span className="font-mono font-medium">{name}</span>
+                      {preset.description && <span className="ml-2 text-muted-foreground">{preset.description}</span>}
+                    </div>
+                    <Code lang="yaml">{toYaml(preset.values ?? {})}</Code>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
           )}
 
           {p.extra && Object.keys(p.extra).length > 0 && (
@@ -323,7 +367,7 @@ function Row({
   const unset = value === undefined || value === null || value === "";
   return (
     <>
-      <dt className="text-muted-foreground">{label}</dt>
+      <dt className="break-words text-muted-foreground">{label}</dt>
       <dd
         className={
           (mono && !unset ? "font-mono text-xs " : "") +

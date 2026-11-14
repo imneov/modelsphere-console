@@ -30,11 +30,16 @@ import { ErrorState, Loading } from "@swiss/components/States";
 import { CatalogBadge, SchemaBadge, releaseCatalog as catalogOfRelease } from "@swiss/components/CatalogChoice";
 import { movableCatalogs } from "@swiss/lib/upgrade";
 import { cacheCard } from "@swiss/lib/cache";
+import { CHECK_MS, inputRows, inputsAnswered, siteSaves } from "@swiss/lib/inputs";
+import { affinityInvalid } from "@swiss/lib/affinity";
+import { SiteSaves, useSiteSaver } from "@swiss/components/SiteSaves";
+import { useDebounced } from "@swiss/lib/useDebounced";
 import { chartVersionChoice, Select, TargetRow } from "@swiss/components/ChartVersion";
 import { CatalogModelDiff } from "@swiss/components/CatalogModelDiff";
 import { VariantCard } from "@swiss/components/VariantCard";
 import { Dialog } from "@swiss/components/ui/dialog";
-import { gpuCount, unlistedProducts, vendorProducts } from "@swiss/lib/gpu";
+import { isVideo, videoProblem } from "@swiss/lib/video";
+import { deployCapacity, gpuCount, pickableProducts, unlistedProducts, vendorResources } from "@swiss/lib/gpu";
 import { Button } from "@swiss/components/ui/button";
 import { comparison, formatUplift, reportLink, sharedVersion, variantKind, workloadSummary } from "@swiss/lib/catalog";
 import { isUninstalling } from "@swiss/lib/phase";
@@ -124,6 +129,10 @@ export function Upgrade() {
   });
 
   const [form, setForm] = useState<Form>(EMPTY);
+  const checkedInputs = useDebounced(form.inputs, CHECK_MS);
+  // A video release shares the form, with the video chart's own settings in it.
+  const video = isVideo(current.data?.engine);
+  const siteSaver = useSiteSaver(profile.data);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [diff, setDiff] = useState<DiffResult | null>(null);
   const [applied, setApplied] = useState<ApplyResult | null>(null);
@@ -135,7 +144,8 @@ export function Upgrade() {
   // setting.
   useEffect(() => {
     const from = rollbackTo ? archived.data : current.data;
-    if (from) setForm(formFromPlan(from));
+    if (!from) return;
+    setForm(formFromPlan(from));
   }, [current.data, archived.data, rollbackTo]);
 
   const reset = () => {
@@ -153,18 +163,21 @@ export function Upgrade() {
     mutationFn: () =>
       deployApi.plan(
         planRequest(form, {
-          model: current.data!.source.model,
-          version: version || undefined,
-          variant: variant || undefined,
-          catalog: moving ? targetCatalog : undefined,
-          chartVersion: chartVersion || undefined,
-          forceGpuProducts: unlistedProducts(keptPin?.requires.gpuProduct, form.gpuProducts).length > 0,
-          // The server carries forward anything the form does not cover, so a
-          // value set once from a flag survives the upgrade instead of being
-          // dropped by a form that never knew about it.
-          fromRelease: release,
-          cacheUnsupported: !!cache.unsupported,
-        }),
+              model: current.data!.source.model,
+              version: version || undefined,
+              variant: variant || undefined,
+              catalog: moving ? targetCatalog : undefined,
+              chartVersion: chartVersion || undefined,
+              forceGpuProducts: unlistedProducts(keptPin?.requires.gpuProduct, form.gpuProducts).length > 0,
+              // The server carries forward anything the form does not cover, so a
+              // value set once from a flag survives the upgrade instead of being
+              // dropped by a form that never knew about it.
+              fromRelease: release,
+              cacheUnsupported: !!cache.unsupported,
+              inputs: entry.data?.variant.inputs,
+              formLayer: current.data!.layers?.form,
+              video,
+            })
       ),
     // The previous plan is superseded the moment a recompose starts. Dropping
     // it here rather than on the way back means a failed compose leaves
@@ -235,6 +248,10 @@ export function Upgrade() {
   // What the pipeline acts on: a composed plan on an upgrade, the archive on a
   // rollback. Nothing else about the page differs.
   const target = rollbackTo ? (archived.data ?? null) : plan;
+  const inputs = inputRows(pin?.inputs, profile.data?.profile, entry.data?.model.source?.hf ?? "", current.data?.source.model ?? "", pin?.values, current.data?.layers?.form);
+  // A rollback re-applies an archived plan: nothing typed, nothing to save.
+  const remember = rollbackTo ? undefined : siteSaver.remember;
+  const saves = remember ? siteSaves(inputs, form.inputs, remember) : [];
 
   if (!cluster.data?.allowDeploy) {
     return (
@@ -454,19 +471,29 @@ export function Upgrade() {
           On a rollback it is the same form with nothing editable: the archived
           plan is re-applied as it ran, so a field that could be typed into
           would promise a change the rollback would not make. */}
-      <DeploySettings
-        form={form}
-        onChange={update}
-        cluster={cluster.data}
-        supportedGPUs={keptPin?.requires.gpuProduct}
-        clusterGPUs={vendorProducts(nodes.data?.nodes, keptPin?.requires.vendor)}
-        localPathDefault={entry.data?.localPath}
-        localPathPlaceholder={entry.data?.pathTemplate}
-        image={imageOf(entry.data?.variant, entry.data?.imageRepository)}
-        cache={cache}
-        lockIdentity
-        readOnly={rollbackTo > 0}
-      />
+        <DeploySettings
+          form={form}
+          onChange={update}
+          cluster={cluster.data}
+          supportedGPUs={keptPin?.requires.gpuProduct}
+          clusterGPUs={pickableProducts(nodes.data?.nodes, keptPin?.requires.vendor, profile.data?.profile?.nodes?.gpus, form.gpuResource)}
+          gpuResources={keptPin?.requires.gpus && profile.data?.profile?.nodes?.gpus ? vendorResources(profile.data.profile.nodes.gpus, keptPin.requires.vendor) : undefined}
+          capacity={
+            keptPin?.requires.gpus
+              ? { ...deployCapacity(keptPin.requires, form, nodes.data?.nodes, profile.data?.profile?.nodes?.gpus), refreshing: nodes.isFetching, onRefresh: () => nodes.refetch() }
+              : undefined
+          }
+          localPathDefault={entry.data?.localPath}
+          localPathPlaceholder={entry.data?.pathTemplate}
+          inputs={inputs}
+          remember={remember}
+          onRemember={siteSaver.onRemember}
+          image={imageOf(entry.data?.variant, entry.data?.imageRepository)}
+          cache={cache}
+          lockIdentity
+          readOnly={rollbackTo > 0}
+          video={video}
+        />
 
       <Pipeline
         namespace={namespace}
@@ -479,10 +506,17 @@ export function Upgrade() {
         onTab={setTab}
         onCompose={() => planM.mutate()}
         composing={planM.isPending}
+        composeDisabled={
+          !rollbackTo &&
+          ((video && !!videoProblem(form.video)) || !inputsAnswered(inputs, checkedInputs) || affinityInvalid(form.affinity))
+        }
         composeLabel={planM.isPending ? "Composing…" : plan ? "Recompose upgrade" : "Compose upgrade"}
         applyFlags={applyFlags(form)}
         onDiff={setDiff}
-        onApplied={setApplied}
+        onApplied={(r) => {
+          setApplied(r);
+          siteSaver.save(saves);
+        }}
       >
         {target && (
           <WhatMoves
@@ -492,6 +526,7 @@ export function Upgrade() {
             rollback={rollbackTo > 0}
           />
         )}
+        <SiteSaves saves={saves} />
       </Pipeline>
     </div>
   );

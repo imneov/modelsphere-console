@@ -1,11 +1,19 @@
 import { useState } from "react";
-import { ChevronDown, Plus, TriangleAlert, X } from "lucide-react";
-import type { ApplyFlags, ClusterInfo, Plan, PlanRequest, ProfileResponse, Variant } from "@swiss/lib/api";
+import { ChevronDown, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
+import type { ApplyFlags, ClusterInfo, Input as CatalogInput, Plan, PlanRequest, Preset, ProfileResponse, Variant } from "@swiss/lib/api";
 import { cn } from "@swiss/lib/utils";
 import { cacheFieldError, type CacheCard, type CacheDefaults } from "@swiss/lib/cache";
-import { productChoices, unlistedProducts } from "@swiss/lib/gpu";
+import { productChoices, unlistedProducts, type GPUCapacity } from "@swiss/lib/gpu";
+import { CHECK_MS, inputError, inputProblem, rememberable, setInputOverrides, type InputChoice, type InputRow } from "@swiss/lib/inputs";
+import { useDebounced } from "@swiss/lib/useDebounced";
+import { PRODUCT_KEY, affinityRules, editRule, listLabel, setAffinity, type AffinityRule } from "@swiss/lib/affinity";
+import { overlay, withPreset } from "@swiss/lib/formLayer";
+import { toYaml } from "@swiss/lib/yaml";
+import { isVideo, VIDEO_EMPTY, videoFields, videoOverrides, type VideoFields } from "@swiss/lib/video";
+import { DEFAULTS as VIDEO_DEFAULTS, KEYS as VIDEO_KEYS } from "@swiss/lib/videoChart";
 import { FEATURES, featureOn } from "@swiss/lib/profile";
 import { layersOf } from "@swiss/components/Provenance";
+import { VideoSettings } from "@swiss/components/VideoSettings";
 import {
   DIRECTIVES,
   DIRECTIVES_BY_KEY,
@@ -29,12 +37,23 @@ export interface Toleration {
   operator: "Exists" | "Equal";
   value: string;
   effect: string;
+  // The toleration as the release's form layer has it, sent as is while the
+  // fields still match it: keys no field shows, tolerationSeconds, survive.
+  raw?: Record<string, unknown>;
 }
 
 export interface Form {
   edits: string;
   gpuProducts: string[];
+  // The resource picked among the vendor's; empty lets swissd pick.
+  gpuResource: string;
   tolerations: Toleration[];
+  // A site profile preset, by name, merged into a deploy's form values. An
+  // upgrade has none: the release's form layer already carries its values.
+  preset: string;
+  // The rules the release's form layer's affinities carry, on an upgrade:
+  // each one edited or removed in place.
+  affinity: AffinityRule[];
   priorityClassName: string;
   schedulerName: string;
   cart: boolean;
@@ -48,6 +67,8 @@ export interface Form {
   createNamespace: boolean;
   serviceId: string;
   localPath: string;
+  // By chart path, as typed. Empty is the row's answer (InputRow).
+  inputs: Record<string, string>;
   scaler: boolean;
   // The LLMScaler's bounds. Empty leaves the chart's own.
   scalerMin: string;
@@ -86,12 +107,18 @@ export interface Form {
   // with the diff and the apply. The swiss pages leave it off and ask in the
   // apply dialog instead.
   skipSchemaValidation: boolean;
+  // A video variant's own fields. The rest of the form is the LLM form's, and
+  // planRequest writes only the parts of it the video chart takes.
+  video: VideoFields;
 }
 
 export const EMPTY: Form = {
   edits: "",
   gpuProducts: [],
+  gpuResource: "",
   tolerations: [],
+  preset: "",
+  affinity: [],
   priorityClassName: "",
   schedulerName: "",
   cart: true,
@@ -102,6 +129,7 @@ export const EMPTY: Form = {
   createNamespace: false,
   serviceId: "",
   localPath: "",
+  inputs: {},
   scaler: true,
   scalerMin: "",
   scalerMax: "",
@@ -125,7 +153,14 @@ export const EMPTY: Form = {
   cacheHistoryLimit: "",
   cacheMaxSlots: "",
   skipSchemaValidation: false,
+  video: VIDEO_EMPTY,
 };
+
+// videoForm is a fresh video deploy's form: the LLM form's, with the video
+// fields read from the variant's values and the GPU pods' default tolerations.
+export function videoForm(f: Form, values: Record<string, unknown> | undefined): Form {
+  return { ...f, video: videoFields(values), tolerations: VIDEO_DEFAULTS.tolerations };
+}
 
 // The switches swissd gives a default for, by chart section.
 const DEFAULTED_SWITCHES = { modelRoute: "modelRoute", scaler: "scaler", cart: "cart", slo: "sloRequirement", serviceMonitor: "serviceMonitor", cache: "cache" } as const;
@@ -178,9 +213,12 @@ export function DeploySettings({
   serviceIdPlaceholder,
   localPathDefault,
   localPathPlaceholder,
+  inputs,
   image,
   supportedGPUs,
   clusterGPUs,
+  gpuResources,
+  capacity,
   cache,
   // Upgrade locks the namespace: it names the helm release being upgraded, and
   // changing it does not move the release, it installs a second one.
@@ -189,6 +227,10 @@ export function DeploySettings({
   // archived plan verbatim, so an editable field beside it would promise a
   // change that the rollback would then not make.
   readOnly = false,
+  remember,
+  onRemember,
+  presets,
+  video = false,
 }: {
   form: Form;
   onChange: (patch: Partial<Form>) => void;
@@ -199,6 +241,7 @@ export function DeploySettings({
   // a field with.
   localPathDefault?: string;
   localPathPlaceholder?: string;
+  inputs?: InputRow[];
   // The engine image the catalog pins, and what the site's mirror rewrites it
   // to. Equal when this site mirrors nothing, which is when there is no rewrite
   // to offer a choice about.
@@ -210,8 +253,23 @@ export function DeploySettings({
   // first does not name is marked, and selecting it is a forced deploy.
   supportedGPUs?: string[];
   clusterGPUs?: string[];
+  // The resources the site lists for the variant's vendor, its default first;
+  // absent for a variant without GPUs or a profile this page cannot read.
+  gpuResources?: string[];
+  // What the picked resource and products can land on; absent without GPUs.
+  capacity?: CapacityProps;
   cache?: CacheCard;
+  // Which typed answers to save to the site profile once the deploy applies; absent where it cannot be saved.
+  remember?: Record<string, boolean>;
+  onRemember?: (key: string, on: boolean) => void;
+  // The site profile's presets, on a deploy.
+  presets?: Record<string, Preset>;
+  // A video variant: the video chart's own settings (form.video) are added, and
+  // what only an LLM chart takes -- replicas and scaler bounds, route tuning,
+  // ServiceMonitor, the engine image, the compile cache -- is left out.
+  video?: boolean;
 }) {
+  const picked = presets?.[form.preset];
   const set =
     (k: keyof Form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -305,6 +363,15 @@ export function DeploySettings({
             />
           </Row>
 
+          {inputs && <InputFields inputs={inputs} values={form.inputs} onChange={(v) => onChange({ inputs: v })} remember={remember} onRemember={onRemember} />}
+
+          {video ? (
+            <Row
+              label="Autoscale / SLO"
+              note="a scaler and an SLO requirement for each pool; a pool is not scaled until its SLO has a maximum, set in the SLO card once the release is up"
+              toggle={<Switch checked={form.slo} onChange={toggle("slo")} label="autoscale" />}
+            />
+          ) : (
           <Row
             label="Autoscale"
             note="on by default — an LLMScaler owns the replica count between min and max; empty keeps the chart's bounds"
@@ -343,6 +410,7 @@ export function DeploySettings({
               />
             )}
           </Row>
+          )}
 
           <Row
             label="Namespace"
@@ -381,6 +449,16 @@ export function DeploySettings({
         </CardContent>
       </Card>
 
+      {video && (
+        <VideoSettings
+          value={form.video}
+          onChange={(v) => onChange({ video: v })}
+          lockIdentity={lockIdentity}
+          classInput={!!inputs?.some((r) => r.input.key === VIDEO_KEYS.storageClass)}
+        />
+      )}
+
+      {!video && (
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Routing options</CardTitle>
@@ -631,6 +709,7 @@ export function DeploySettings({
           </Row>
         </CardContent>
       </Card>
+      )}
 
       {/* Folded away, but every flag is still written into the plan either
           way -- a section nobody opens must not hand the decision back to a
@@ -641,6 +720,7 @@ export function DeploySettings({
           <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
         </summary>
         <div className="divide-y border-t px-4">
+          {!video && (
           <Row
             label="ServiceMonitor"
             note="Prometheus metrics scraped alongside the release"
@@ -652,6 +732,7 @@ export function DeploySettings({
               />
             }
           />
+          )}
 
           {/* Off is the answer almost always: the catalog pins the tag and the
               site rewrites the repository to its mirror, and between them the
@@ -661,7 +742,7 @@ export function DeploySettings({
 
               Off empties the field, so turning it off puts the inherited answer
               back rather than leaving a stale override behind. */}
-          {image && (
+          {image && !video && (
             <Row
               label="Image"
               note="repository:tag — off inherits the catalog's tag and the site's mirror"
@@ -685,6 +766,32 @@ export function DeploySettings({
               )}
             </Row>
           )}
+          {gpuResources && (
+            <Row
+              label="GPU resource"
+              note={gpuResources.length > 1 ? "the extended resource pods request; auto takes the one the products' nodes report" : "the only one the site lists for this vendor"}
+            >
+              {gpuResources.length > 1 ? (
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-3 font-mono text-xs"
+                  value={form.gpuResource}
+                  onChange={(e) => onChange({ gpuResource: e.target.value })}
+                  aria-label="GPU resource"
+                >
+                  <option value="">auto · default {gpuResources[0]}</option>
+                  {[...new Set([...gpuResources, form.gpuResource].filter(Boolean))].map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              ) : gpuResources.length === 1 ? (
+                <span className="font-mono text-xs text-muted-foreground">{gpuResources[0]}</span>
+              ) : (
+                <span className="text-xs text-warning">the site profile lists no GPU resource for this vendor</span>
+              )}
+            </Row>
+          )}
           <Row label="GPU product" note="restricts scheduling to these products; any one will do">
             <Products
               selected={form.gpuProducts}
@@ -693,12 +800,43 @@ export function DeploySettings({
               listed={supportedGPUs}
             />
           </Row>
+          {capacity && (
+            <Row label="On this cluster" note="nodes with this resource and product, and what is free on them">
+              <CapacityLine {...capacity} />
+            </Row>
+          )}
+          {presets && Object.keys(presets).length > 0 && (
+            <Row label="Preset" note="site profile values merged into this deploy's: a list keeps both sides' items, a value set here wins">
+              <div className="w-full min-w-0 space-y-1.5 py-1">
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  value={form.preset}
+                  onChange={(e) => onChange({ preset: e.target.value })}
+                  aria-label="Preset"
+                >
+                  <option value="">none</option>
+                  {Object.keys(presets).sort().map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+                {picked?.description && <p className="text-xs text-muted-foreground">{picked.description}</p>}
+                {picked && <pre className="max-h-56 overflow-auto rounded-md border bg-muted/30 p-2 font-mono text-[11px] leading-snug">{toYaml(picked.values ?? {})}</pre>}
+              </div>
+            </Row>
+          )}
           <Row label="Tolerations" note="lets this deploy land on tainted GPU nodes">
             <Tolerations
               rows={form.tolerations}
               onChange={(v) => onChange({ tolerations: v })}
             />
           </Row>
+          {form.affinity.length > 0 && (
+            <Row label="Affinity" note="exactly as this release's form values set it; edit or remove each rule">
+              <AffinityRules rules={form.affinity} onChange={(affinity) => onChange({ affinity })} />
+            </Row>
+          )}
           <Row label="Priority class">
             <Suggest
               value={form.priorityClassName}
@@ -715,7 +853,7 @@ export function DeploySettings({
               placeholder={cluster?.schedulerName ?? "the chart's default"}
             />
           </Row>
-          {cache && (
+          {cache && !video && (
             <Row
               label="Compile cache"
               note="keeps compiled kernels on the node, so a restarted pod skips the 20–40 minute recompile; empty fields keep the site's, else the chart's. Off writes nothing, so a site that turns it on still applies: set cache.enabled: false in the plan editor to force it off"
@@ -762,19 +900,88 @@ export function DeploySettings({
   );
 }
 
+// The variant's catalog inputs, one row each. Shared with the video form.
+export function InputFields({
+  inputs,
+  values,
+  onChange,
+  remember,
+  onRemember,
+}: {
+  inputs: InputRow[];
+  values: Record<string, string>;
+  onChange: (v: Record<string, string>) => void;
+  remember?: Record<string, boolean>;
+  onRemember?: (key: string, on: boolean) => void;
+}) {
+  const checked = useDebounced(values, CHECK_MS);
+  return (
+    <>
+      {inputs.map((row) => {
+        const { input, answer, from, choices, site } = row;
+        const value = values[input.key] ?? "";
+        const typed = checked[input.key] ?? "";
+        const error = inputError({ input, answer }, typed);
+        const problem = error === "required" ? "required" : error && inputProblem(input, typed.trim() || answer || "");
+        return (
+          <Row
+            key={input.key}
+            label={input.title}
+            note={
+              from === "release"
+                ? "the release's answer, kept unless you change it"
+                : from === "site"
+                  ? "the site profile's answer, unless you change it"
+                  : from === "variant"
+                    ? "the variant's default, unless you change it"
+                    : "unanswered: the variant has no default, and the site profile no answer"
+            }
+            hint={input.description ? `${input.description} (${input.key})` : input.key}
+            aside={`e.g. ${String(input.example)}`}
+          >
+            <div className="min-w-0 flex-1">
+              <Suggest
+                value={value}
+                onChange={(v) => onChange({ ...values, [input.key]: v })}
+                suggestion={answer}
+                placeholder={answer}
+                invalid={!!error}
+                choices={choices?.map((c) => ({ value: c.answer, label: FROM[c.from] }))}
+              />
+              {problem && <p className="mt-1 text-[11px] text-destructive">{problem}</p>}
+              {remember && onRemember && rememberable(row, typed) && (
+                <label className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <input type="checkbox" className="size-3.5 accent-primary" checked={!!remember[input.key]} onChange={(e) => onRemember(input.key, e.target.checked)} />
+                  <HoverHint text="Every variant that declares this key, for any model, will take it.">
+                    <span>Save to the site profile</span>
+                  </HoverHint>
+                  {site && <span className="break-all">· replaces the site's answer {site.written}</span>}
+                </label>
+              )}
+            </div>
+          </Row>
+        );
+      })}
+    </>
+  );
+}
+
 // Three columns: label, switch, control. The switch column is reserved so a
 // switch beside an input never shoves that input sideways. Every box fills
 // the control column, so they share one left edge and one right edge.
-function Row({
+export function Row({
   label,
   note,
   hint,
   caption,
+  aside,
   toggle,
   children,
   muted,
 }: {
   label: string;
+  // Muted text after the label's hint icon, e.g. an input's example.
+  aside?: string;
   note?: string;
   // Longer hover text when note stays short (or when note is absent).
   hint?: string;
@@ -801,6 +1008,7 @@ function Row({
             {label}
           </span>
         </HoverHint>
+        {aside && <span className="ml-1.5 break-all text-xs text-muted-foreground">{aside}</span>}
         {caption ? (
           <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{caption}</p>
         ) : null}
@@ -881,21 +1089,42 @@ function CacheFields({ form, onChange, defaults }: { form: Form; onChange: (patc
   );
 }
 
+const TOLERATION_FIELDS = ["key", "operator", "value", "effect"];
+
+// What a toleration's row shows. An operator left out is Equal, as Kubernetes reads it.
+export function tolerationRow(r: Record<string, unknown>): Toleration {
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  return { key: str(r.key), operator: r.operator === "Exists" ? "Exists" : "Equal", value: str(r.value), effect: str(r.effect), raw: r };
+}
+
+// The keys of a deployed toleration no row field shows, as "k: v".
+export function tolerationExtras(t: Toleration): string[] {
+  return Object.entries(t.raw ?? {})
+    .filter(([k]) => !TOLERATION_FIELDS.includes(k))
+    .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
+}
+
 function tolerationsOf(o: Record<string, unknown>): Toleration[] {
   if (!Array.isArray(o.tolerations)) return [];
-  return o.tolerations.flatMap((t): Toleration[] => {
-    if (!t || typeof t !== "object") return [];
-    const r = t as Record<string, unknown>;
-    if (typeof r.key !== "string" || !r.key) return [];
-    return [
-      {
-        key: r.key,
-        operator: r.operator === "Equal" ? "Equal" : "Exists",
-        value: typeof r.value === "string" ? r.value : "",
-        effect: typeof r.effect === "string" ? r.effect : "",
-      },
-    ];
-  });
+  return o.tolerations.flatMap((t): Toleration[] => (t && typeof t === "object" && !Array.isArray(t) ? [tolerationRow(t as Record<string, unknown>)] : []));
+}
+
+// A row with no key is a half-typed one, unless it is a deployed toleration
+// that has none: that one tolerates every taint.
+export function tolerationValue(t: Toleration): Record<string, unknown> | undefined {
+  const raw = t.raw;
+  if (raw) {
+    const was = tolerationRow(raw);
+    if (TOLERATION_FIELDS.every((k) => was[k as keyof Toleration] === t[k as keyof Toleration])) return raw;
+  }
+  const key = t.key.trim();
+  if (!key && !(raw && !raw.key)) return undefined;
+  const out: Record<string, unknown> = Object.fromEntries(Object.entries(raw ?? {}).filter(([k]) => !TOLERATION_FIELDS.includes(k)));
+  if (key) out.key = key;
+  out.operator = t.operator;
+  if (t.operator === "Equal" && t.value.trim()) out.value = t.value.trim();
+  if (t.effect) out.effect = t.effect;
+  return out;
 }
 
 // The products sit in a required nodeAffinity term under a vendor-specific
@@ -917,7 +1146,7 @@ function gpuProductsOf(o: Record<string, unknown>): string[] {
       const vals = dig(e, "values");
       if (
         typeof key === "string" &&
-        /\.product$|device-id$|ascend910$/i.test(key) &&
+        PRODUCT_KEY.test(key) &&
         Array.isArray(vals)
       ) {
         return vals.filter((v): v is string => typeof v === "string");
@@ -957,39 +1186,79 @@ function TabHint() {
   );
 }
 
-function Suggest({
+const FROM: Record<InputChoice["from"], string> = { release: "Release", site: "Site profile", variant: "Variant default" };
+
+// choices list under the field when the empty field is clicked; typing closes the list.
+export function Suggest({
   value,
   onChange,
   suggestion,
   placeholder,
   disabled,
+  invalid,
+  choices,
 }: {
   value: string;
   onChange: (v: string) => void;
   suggestion?: string;
   placeholder?: string;
   disabled?: boolean;
+  invalid?: boolean;
+  choices?: { value: string; label: string }[];
 }) {
   const s = useSuggestion(value, suggestion, disabled);
+  const [listed, setListed] = useState(false);
   return (
     <div className="relative min-w-0 flex-1">
       <Input
+        autoComplete="off"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => accept(e, s.offer, onChange)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setListed(false);
+          accept(e, s.offer, onChange);
+        }}
         disabled={disabled}
         placeholder={placeholder}
-        className={cn(s.hint && "pr-11")}
-        {...s.focus}
+        aria-invalid={invalid || undefined}
+        className={cn(s.hint && "pr-11", invalid && "border-destructive")}
+        onFocus={s.focus.onFocus}
+        onBlur={() => {
+          s.focus.onBlur();
+          setListed(false);
+        }}
+        onClick={() => setListed(!!choices?.length && !value)}
       />
       {s.hint && <TabHint />}
+      {listed && !value && choices && (
+        <div role="listbox" className="absolute top-full right-0 left-0 z-50 mt-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+          {choices.map((c) => (
+            // mousedown, not click: the field keeps focus, and its blur does not close the list first.
+            <button
+              key={c.label}
+              type="button"
+              role="option"
+              aria-selected={false}
+              className="flex w-full items-center gap-3 rounded-sm px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(c.value);
+                setListed(false);
+              }}
+            >
+              <span className="min-w-0 flex-1 font-mono text-xs break-all">{c.value}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{c.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 // The slash is drawn, never stored: the chart wants the path without it, and a
 // leading one typed or pasted here is stripped rather than sent.
-function PathInput({
+export function PathInput({
   value,
   onChange,
   suggestion,
@@ -1052,7 +1321,7 @@ const EFFECTS = ["", "NoSchedule", "PreferNoSchedule", "NoExecute"];
 
 // Structured rows rather than a YAML box: a toleration is four fields, and
 // three of them are closed sets.
-function Tolerations({
+export function Tolerations({
   rows,
   onChange,
 }: {
@@ -1070,7 +1339,7 @@ function Tolerations({
             className="w-44"
             value={r.key}
             onChange={(e) => patch(i, { key: e.target.value })}
-            placeholder="taint key"
+            placeholder={r.raw && !r.raw.key ? "every taint" : "taint key"}
             aria-label="taint key"
           />
           <Select
@@ -1095,6 +1364,11 @@ function Tolerations({
             label="effect"
             emptyLabel="any effect"
           />
+          {tolerationExtras(r).map((x) => (
+            <span key={x} className="font-mono text-xs text-muted-foreground">
+              {x}
+            </span>
+          ))}
           <button
             type="button"
             onClick={() => onChange(rows.filter((_, j) => j !== i))}
@@ -1112,6 +1386,36 @@ function Tolerations({
       >
         Add toleration
       </button>
+    </div>
+  );
+}
+
+function AffinityRules({ rules, onChange }: { rules: AffinityRule[]; onChange: (v: AffinityRule[]) => void }) {
+  const patch = (i: number, r: AffinityRule) => onChange(rules.map((x, j) => (i === j ? r : x)));
+  return (
+    <div className="w-full min-w-0 space-y-2 py-1">
+      {rules.map((r, i) => (
+        <div key={i} className={cn("rounded-md border p-2", r.drop && "opacity-50")}>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="min-w-0 truncate font-mono text-muted-foreground">
+              {r.scope} · {listLabel(r.list)}
+            </span>
+            <button type="button" onClick={() => patch(i, { ...r, drop: !r.drop })} className="ms-auto shrink-0 text-muted-foreground hover:text-destructive">
+              {r.drop ? "undo" : "remove"}
+            </button>
+          </div>
+          <textarea
+            value={r.text}
+            onChange={(e) => patch(i, editRule(r, e.target.value))}
+            disabled={r.drop}
+            spellCheck={false}
+            aria-label={`${r.scope} ${listLabel(r.list)} rule`}
+            rows={Math.max(2, r.text.split("\n").length)}
+            className={cn("mt-1 w-full rounded-md border bg-background px-2 py-1 font-mono text-[11px] leading-snug", r.drop && "line-through")}
+          />
+          {r.error && <p className="text-xs text-destructive">{r.error}</p>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -1146,9 +1450,61 @@ function Select({
 }
 
 // Products offers every card of the variant's vendor on this cluster, the ones
-// the catalog lists first and the rest after an "untested" mark: the catalog
+// the catalog lists first and the rest after an "unverified" mark: the catalog
 // does not know what is racked here.
-function Products({
+export interface CapacityProps {
+  // Absent until the nodes are read.
+  value?: GPUCapacity;
+  perPod: number;
+  needNodes: number;
+  refreshing: boolean;
+  onRefresh: () => void;
+}
+
+// Nodes and GPUs the picked resource and products can land on, total and free.
+// No node is a resource and product that do not meet: the pods would stay Pending.
+function CapacityLine({ value, perPod, needNodes, refreshing, onRefresh }: CapacityProps) {
+  const short = !!value?.free && value.free.nodes < needNodes;
+  const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  return (
+    <div className="flex w-full items-center gap-2 text-xs">
+      <span className={cn("flex-1", value && (value.nodes === 0 || short) ? "text-warning" : "text-muted-foreground")}>
+        {!value ? (
+          "nodes not read"
+        ) : value.nodes === 0 ? (
+          "no node has this resource and product: the pods would stay Pending"
+        ) : (
+          <>
+            this resource and product: {plural(value.nodes, "node")} / {value.gpus} GPUs
+            {" · "}
+            {value.free ? (
+              <span
+                className="cursor-help underline decoration-dotted underline-offset-2"
+                title={`Available: GPUs free on schedulable nodes, and the nodes among them with at least ${perPod} free, a pod's worth`}
+              >
+                available {plural(value.free.nodes, "node")} / {value.free.gpus} GPUs
+              </span>
+            ) : (
+              "free GPUs unknown: the cluster-wide pod list is not readable"
+            )}
+            {short && ` · needs ${plural(needNodes, "available node")}`}
+          </>
+        )}
+      </span>
+      <button
+        type="button"
+        aria-label="refresh nodes"
+        disabled={refreshing}
+        onClick={onRefresh}
+        className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+      >
+        <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
+      </button>
+    </div>
+  );
+}
+
+export function Products({
   selected,
   onChange,
   options,
@@ -1166,19 +1522,19 @@ function Products({
       </span>
     );
   }
-  const untested = (o: string) => unlistedProducts(listed, [o]).length > 0;
-  const supported = options.filter((o) => !untested(o));
-  const others = options.filter(untested);
+  const unverified = (o: string) => unlistedProducts(listed, [o]).length > 0;
+  const supported = options.filter((o) => !unverified(o));
+  const others = options.filter(unverified);
   const forced = unlistedProducts(listed, selected);
   const chip = (o: string) => {
     const active = selected.includes(o);
-    const off = untested(o);
+    const off = unverified(o);
     return (
       <button
         key={o}
         type="button"
         aria-pressed={active}
-        title={off ? "untested with this variant" : undefined}
+        title={off ? "unverified with this variant" : undefined}
         onClick={() => onChange(active ? selected.filter((p) => p !== o) : [...selected, o])}
         className={cn(
           "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
@@ -1201,7 +1557,7 @@ function Products({
         )}
         {others.length > 0 && (
           <span className="inline-flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-muted-foreground">untested</span>
+            <span className="text-[11px] text-muted-foreground">unverified</span>
             {others.map(chip)}
           </span>
         )}
@@ -1209,7 +1565,7 @@ function Products({
       {forced.length > 0 ? (
         <p className="flex items-center gap-1.5 text-xs text-warning">
           <TriangleAlert className="size-3.5 shrink-0" />
-          {forced.join(", ")} untested with this variant, deployed as forced
+          {forced.join(", ")} unverified with this variant, deployed as forced
         </p>
       ) : (
         selected.length === 0 && <p className="text-xs text-muted-foreground">none selected: any supported product</p>
@@ -1232,6 +1588,20 @@ extraArgs:
   - --tp-size=4`;
 
 const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
+const strings = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+const at = (tree: Record<string, unknown> | undefined, path: string): unknown =>
+  path.split(".").reduce<unknown>((acc, k) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[k] : undefined), tree);
+
+function setPath(tree: Record<string, unknown>, path: string, value: unknown) {
+  const keys = path.split(".");
+  let node = tree;
+  for (const k of keys.slice(0, -1)) {
+    if (!node[k] || typeof node[k] !== "object" || Array.isArray(node[k])) node[k] = {};
+    node = node[k] as Record<string, unknown>;
+  }
+  node[keys[keys.length - 1]] = value;
+}
 
 function extraValue(f: Form, key: string): string {
   return f.nginxExtras.find((r) => r.key === key)?.value.trim() ?? "";
@@ -1509,10 +1879,32 @@ export function planRequest(
     forceGpuProducts?: boolean;
     // The chart has no cache section (CHART_FEATURES): the switch is forced off.
     cacheUnsupported?: boolean;
+    // To send the form's answers typed.
+    inputs?: CatalogInput[];
+    // The values of the preset f picks.
+    preset?: Record<string, unknown>;
+    // The release's form layer, on an upgrade: the form's values are put over
+    // it, so the request carries the whole layer rebuilt.
+    formLayer?: Record<string, unknown>;
+    // A video variant: the form's video fields, and none of what only an LLM
+    // chart takes (replicas, CART, route tuning, monitor, cache, engine image).
+    video?: boolean;
   },
 ): PlanRequest {
-  const overrides: Record<string, unknown> = {};
+  const overrides: Record<string, unknown> = opts.video ? videoOverrides(f.video, opts.formLayer) : {};
   const on = effective(f);
+  // An upgrade lays the form over the release's form layer, where a key left
+  // out stays: a route emptied here is sent as "", which swissd and the charts
+  // read as unset, so it falls back to the service ID.
+  const hadRoute = !!str(at(opts.formLayer, "modelRoute.nginx.route"));
+
+  if (opts.video) {
+    // The one SLO switch is the pools' JobSLOs and their scalers together.
+    overrides.scaler = { enabled: f.slo };
+    overrides.sloRequirement = { enabled: f.slo };
+    const route = on.modelRoute ? f.route.trim() : "";
+    overrides.modelRoute = route || hadRoute ? { enabled: on.modelRoute, nginx: { route } } : { enabled: on.modelRoute };
+  } else {
 
   // replicaCount and the scaler bounds are the same decision, so only the one
   // that applies is sent: a fixed count under a live scaler is two answers to
@@ -1537,6 +1929,7 @@ export function planRequest(
   const modelRoute: Record<string, unknown> = { enabled: on.modelRoute };
   const nginx: Record<string, unknown> = {};
   if (route) nginx.route = route;
+  else if (hadRoute) nginx.route = "";
 
   const nginxValues: Record<string, string> = {
     expose_routed_peer: f.exposeRoutedPeer ? "true" : "false",
@@ -1592,27 +1985,26 @@ export function planRequest(
     if (num(f.cacheMaxSlots) !== undefined) cache.maxSlotsPerNode = num(f.cacheMaxSlots);
     overrides.cache = cache;
   }
+  }
 
-  // A row with no key tolerates nothing; it is a half-typed row, not a value.
-  const tolerations = f.tolerations
-    .filter((t) => t.key.trim())
-    .map((t) => {
-      const out: Record<string, unknown> = { key: t.key.trim(), operator: t.operator };
-      if (t.operator === "Equal" && t.value.trim()) out.value = t.value.trim();
-      if (t.effect) out.effect = t.effect;
-      return out;
-    });
-  if (tolerations.length) overrides.tolerations = tolerations;
+  const tolerations = f.tolerations.flatMap((t) => tolerationValue(t) ?? []);
+  // The video chart's are the GPU pods', and always sent: they replace the chart's own list.
+  if (opts.video) setPath(overrides, VIDEO_KEYS.tolerations, tolerations);
+  else if (tolerations.length || opts.formLayer?.tolerations !== undefined) overrides.tolerations = tolerations;
 
   // Only the repository: the tag and digest are the catalog's, and a form that
   // wrote the whole image section would drop them.
   // The tag lands in the form layer, which merges after the catalog's -- so it
   // wins, and the plan reports it as shadowed rather than the two disagreeing
   // quietly.
-  if (f.image.trim()) overrides.image = splitImage(f.image);
+  if (f.image.trim() && !opts.video) overrides.image = splitImage(f.image);
 
   if (f.priorityClassName.trim()) overrides.priorityClassName = f.priorityClassName.trim();
   if (f.schedulerName.trim()) overrides.schedulerName = f.schedulerName.trim();
+
+  setInputOverrides(overrides, opts.inputs, f.inputs);
+  const layer = withPreset(opts.formLayer ? overlay(opts.formLayer, overrides) : overrides, opts.preset);
+  setAffinity(layer, f.affinity, f.gpuProducts.length > 0);
 
   return {
     catalog: opts.catalog || undefined,
@@ -1623,6 +2015,7 @@ export function planRequest(
     editsYAML: f.edits.trim() || undefined,
     gpuProducts: f.gpuProducts.length ? f.gpuProducts : undefined,
     forceGpuProducts: f.gpuProducts.length > 0 && opts.forceGpuProducts ? true : undefined,
+    gpuResource: f.gpuResource || undefined,
     variant: opts.variant || undefined,
     release: f.serviceId.trim() || undefined,
     namespace: f.namespace.trim() || undefined,
@@ -1630,7 +2023,7 @@ export function planRequest(
     createNamespace: f.createNamespace || undefined,
     serviceId: f.serviceId.trim() || undefined,
     localPath: f.localPath.trim() || undefined,
-    overrides,
+    overrides: layer,
   };
 }
 
@@ -1663,31 +2056,66 @@ export function formFromPlan(plan: Plan): Form {
     const v = at(path);
     return v === undefined || v === null ? "" : String(v);
   };
-  const bool = (path: string, fallback = false) => {
+  // A switch the form layer does not name is shown as the release runs it: the
+  // last layer that sets it, else the fallback. An API or older deploy leaves a
+  // switch to the site or the defaults, and an upgrade that read it as the
+  // fallback would turn it off unasked.
+  const sw = (path: string, fallback = false) => {
     const v = at(path);
-    return typeof v === "boolean" ? v : fallback;
+    if (typeof v === "boolean") return v;
+    return effectiveBool(plan, path) ?? fallback;
   };
   const nv = nginxValuesMap(at("modelRoute.nginx.values"));
+
+  if (isVideo(plan.engine)) {
+    const tolerations = at(VIDEO_KEYS.tolerations);
+    return {
+      ...EMPTY,
+      namespace: plan.release.namespace,
+      serviceId: str("serviceId"),
+      localPath: str("model.localPath"),
+      gpuProducts: gpuProductsOf(o).length ? gpuProductsOf(o) : strings(at("sglang.gpuProduct")),
+      gpuResource: String(((plan.layers?.derived?.model ?? {}) as Record<string, unknown>).gpuResource ?? ""),
+      tolerations: Array.isArray(tolerations) ? tolerationsOf({ tolerations }) : VIDEO_DEFAULTS.tolerations,
+      affinity: affinityRules(o),
+      // Earlier forms wrote the service ID as the route; it reads back as empty.
+      route: str("modelRoute.nginx.route") === str("serviceId") ? "" : str("modelRoute.nginx.route"),
+      modelRoute: sw("modelRoute.enabled"),
+      slo: effectiveBool(plan, VIDEO_KEYS.sloRequirement) ?? effectiveBool(plan, VIDEO_KEYS.scaler) ?? false,
+      // Earlier forms wrote these under sglang; the chart reads either.
+      priorityClassName: str("priorityClassName") || str("sglang.priorityClassName"),
+      schedulerName: str("schedulerName") || str("sglang.schedulerName"),
+      video: {
+        ...videoFields(o, { release: true }),
+        // The chart's own default when no layer names a size.
+        current: { storageSize: effectiveString(plan, VIDEO_KEYS.storageSize) || VIDEO_DEFAULTS.storageSize, storageClass: effectiveString(plan, VIDEO_KEYS.storageClass) },
+      },
+      edits: editsOf(plan),
+    };
+  }
 
   return {
     ...EMPTY,
     namespace: plan.release.namespace,
     serviceId: str("serviceId"),
     localPath: str("model.localPath"),
-    scaler: bool("scaler.enabled"),
+    scaler: sw("scaler.enabled"),
     scalerMin: str("scaler.minReplicas"),
     scalerMax: str("scaler.maxReplicas"),
     // The product sits under the vendor's own label key, so find it by suffix
     // rather than guessing which vendor this variant was built for.
     gpuProducts: gpuProductsOf(o),
+    // The resource the release runs on, so an upgrade stays on it.
+    gpuResource: String(((plan.layers?.derived?.model ?? {}) as Record<string, unknown>).gpuResource ?? ""),
     tolerations: tolerationsOf(o),
+    affinity: affinityRules(o),
     replicaCount: str("replicaCount"),
     route: str("modelRoute.nginx.route"),
     image: joinImage(str("image.repository"), str("image.tag")),
-    cart: bool("cart.enabled", true),
-    modelRoute: bool("modelRoute.enabled"),
-    slo: bool("sloRequirement.enabled", true),
-    serviceMonitor: bool("serviceMonitor.enabled"),
+    cart: sw("cart.enabled", true),
+    modelRoute: sw("modelRoute.enabled"),
+    slo: sw("sloRequirement.enabled", true),
+    serviceMonitor: sw("serviceMonitor.enabled"),
     priorityClassName: str("priorityClassName"),
     schedulerName: str("schedulerName"),
     exposeRoutedPeer: truthyStr(nv.expose_routed_peer, true),
@@ -1702,7 +2130,7 @@ export function formFromPlan(plan: Plan): Form {
       .map(([key, value]) => ({ key, value: String(value ?? "") })),
     backendMaxConcurrency: backendMaxConcurrencyOf(at("modelRoute.nginx.peers")),
     cartMaxLoad: str("modelRoute.cart.maxLoad"),
-    monitor: bool("modelRoute.monitor.enabled", true),
+    monitor: sw("modelRoute.monitor.enabled", true),
     monitorModel: str("modelRoute.monitor.model"),
     monitorGpuType: str("modelRoute.monitor.gpuType"),
     // What the release ran with, which the site may have decided rather than
@@ -1714,11 +2142,36 @@ export function formFromPlan(plan: Plan): Form {
     cacheMaxSlots: str("cache.maxSlotsPerNode"),
     // Per apply, so not on the plan: an upgrade that needs it asks again.
     skipSchemaValidation: false,
-    edits:
-      plan.layers?.edit && Object.keys(plan.layers.edit).length > 0
-        ? toYamlish(plan.layers.edit)
-        : "",
+    edits: editsOf(plan),
   };
+}
+
+// The plan's edit layer as the editor's text.
+export function editsOf(plan: Plan): string {
+  return plan.layers?.edit && Object.keys(plan.layers.edit).length > 0 ? toYamlish(plan.layers.edit) : "";
+}
+
+// effectiveString is the non-empty string at path in the last plan layer that
+// sets one; "" when none does.
+function effectiveString(plan: Plan, path: string): string {
+  let s = "";
+  for (const layer of layersOf(plan)) {
+    const v = at(plan.layers[layer] as Record<string, unknown> | undefined, path);
+    if (typeof v === "string" && v.trim()) s = v.trim();
+  }
+  return s;
+}
+
+// effectiveBool is the boolean at path in the last plan layer that sets one,
+// form and edit included; undefined when no layer does (the chart's own
+// default is not a layer).
+function effectiveBool(plan: Plan, path: string): boolean | undefined {
+  let on: boolean | undefined;
+  for (const layer of layersOf(plan)) {
+    const v = at(plan.layers[layer] as Record<string, unknown> | undefined, path);
+    if (typeof v === "boolean") on = v;
+  }
+  return on;
 }
 
 function cacheOn(plan: Plan): boolean {

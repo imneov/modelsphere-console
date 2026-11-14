@@ -2,6 +2,8 @@ import { useId, useState, type ReactNode } from "react";
 import {
   Badge,
   Button,
+  Checkbox,
+  CodeBlock,
   DataSelect,
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +15,6 @@ import {
   FieldHint,
   FieldInput,
   FieldSelect,
-  FieldTextarea,
   FloatingField,
   FormSection,
   Input,
@@ -22,14 +23,21 @@ import {
   ToggleGroupItem,
   cn,
 } from "@modelsphere/ui";
-import { Plus, X } from "lucide-react";
-import type { ClusterInfo } from "@swiss/lib/api";
+import { Plus, RefreshCw, X } from "lucide-react";
+import type { ClusterInfo, Preset } from "@swiss/lib/api";
+import { editRule, listLabel, type AffinityRule } from "@swiss/lib/affinity";
+import { toYaml } from "@swiss/lib/yaml";
 import { cacheFieldError, type CacheCard, type CacheDefaults } from "@swiss/lib/cache";
-import { effective, imageChoices, type Form, type Toleration } from "@swiss/components/DeploySettings";
+import { unlistedProducts, type GPUCapacity } from "@swiss/lib/gpu";
+import { CHECK_MS, inputError, rememberable, type InputRow } from "@swiss/lib/inputs";
+import { useDebounced } from "@swiss/lib/useDebounced";
+import { effective, imageChoices, tolerationExtras, type Form, type Toleration } from "@swiss/components/DeploySettings";
 import { MAX_VALUES, rejectKey } from "@swiss/lib/routeDirectives";
 import { FALLBACK_ROUTE_OPTIONS, routeDirectives, runtimeValue, type RouteDirective, type RouteOptions } from "@/modules/inferences/routeOptions";
 import { useT } from "@/modules/inferences/i18n";
 import { isAdaptiveOption, toggleAdaptive } from "../adaptive-concurrency";
+import { OverrideYaml, type HelmValuesSource } from "./OverrideYaml";
+import { VideoPools, VideoStorage, declaresStorageClass } from "./VideoFields";
 import { NAMED_VALUES, extraValue, fracOutOfRange, serviceIdError, type Section } from "@/modules/inferences/deploy-lib";
 
 const EFFECTS = ["", "NoSchedule", "PreferNoSchedule", "NoExecute"];
@@ -43,17 +51,39 @@ export interface DeployFormProps {
   cluster?: ClusterInfo;
   defaults: { serviceId?: string; localPath?: string; localPathTemplate?: string; image?: { catalog: string; site: string }; cache?: CacheCard };
   gpuOptions: string[];
+  // The variant's own products, verified with it; any other option is unverified.
+  gpuListed?: string[];
+  // The resources the site lists for the variant's vendor, its default first;
+  // absent for a variant without GPUs or a profile this page cannot read.
+  gpuResources?: string[];
+  // What the picked resource and products can land on; absent without GPUs.
+  capacity?: CapacityProps;
   expanded: Record<Section, boolean>;
   onExpand: (s: Section, open: boolean) => void;
   idPrefix: string;
   routeOptions?: RouteOptions | null;
   catalogRoute?: string;
+  // The chart's values and swissd's layers for the Override YAML editor.
+  helmValues?: HelmValuesSource;
+  recovery?: ReactNode;
+  // The variant's inputs, each with the answer that applies when its field is left empty.
+  inputs?: InputRow[];
+  // Which typed answers to save to the site profile once the deploy applies; absent where it cannot be saved.
+  remember?: Record<string, boolean>;
+  onRemember?: (key: string, on: boolean) => void;
+  // The site profile's presets, on a deploy.
+  presets?: Record<string, Preset>;
+  // A video variant: the form adds the video chart's own fields (form.video)
+  // and leaves out what only an LLM chart takes -- route tuning, the compile
+  // cache and the engine image.
+  video?: boolean;
 }
 
-export function DeployForm({ form, onChange, upgrade, submitted, target, cluster, defaults, gpuOptions, expanded, onExpand, idPrefix, routeOptions, catalogRoute }: DeployFormProps) {
+export function DeployForm({ form, onChange, upgrade, submitted, target, cluster, defaults, gpuOptions, gpuListed, gpuResources, capacity, expanded, onExpand, idPrefix, routeOptions, catalogRoute, helmValues, recovery, inputs, remember, onRemember, presets, video }: DeployFormProps) {
   const t = useT();
   const on = effective(form);
   const f = (k: string) => t(`deploy.fields.${k}`);
+  const forced = unlistedProducts(gpuListed, form.gpuProducts);
   const images = defaults.image ? imageChoices(defaults.image) : [];
   const byKey = new Map(routeDirectives(routeOptions).map((d) => [d.key, d]));
   const showRuntime = !!upgrade && routeOptions?.route === (catalogRoute ?? (form.route || form.serviceId));
@@ -110,19 +140,25 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
               </FloatingField>
             )}
           </div>
-          <FloatingField layout="inline" label={f("slo")} hint={f("sloHint")}>
+          <FloatingField layout="inline" label={f("slo")} hint={video ? t("deploy.video.autoscaleHint") : f("sloHint")}>
             {sw("slo", f("slo"))}
           </FloatingField>
+          {video && <VideoStorage value={form.video} onChange={(v) => onChange({ video: v })} upgrade={upgrade} classInput={declaresStorageClass(inputs)} />}
         </>,
       )}
 
       {section(
         "resources",
         <>
-          <FloatingField label={f("gpuProducts")} hint={f("gpuProductsHint")}>
-            <FieldSelect multiple values={form.gpuProducts} onValuesChange={(v) => onChange({ gpuProducts: v })} options={gpuOptions.map((o) => ({ value: o, label: o }))} placeholder={gpuOptions.length ? undefined : f("gpuProductsEmpty")} disabled={!gpuOptions.length} />
+          {video && <VideoPools value={form.video} onChange={(v) => onChange({ video: v })} submitted={submitted} />}
+          {gpuResources && <GpuResource resources={gpuResources} value={form.gpuResource} onChange={(gpuResource) => onChange({ gpuResource })} />}
+          <FloatingField label={f("gpuProducts")} hint={f("gpuProductsHint")} notice={forced.length > 0 ? t("deploy.fields.gpuForced", { products: forced.join(", ") }) : undefined}>
+            <FieldSelect multiple values={form.gpuProducts} onValuesChange={(v) => onChange({ gpuProducts: v })} options={gpuOptions.map((o) => ({ value: o, label: o, badge: unlistedProducts(gpuListed, [o]).length ? <Badge variant="warning">{f("gpuUnverified")}</Badge> : <Badge variant="success">{f("gpuVerified")}</Badge> }))} placeholder={gpuOptions.length ? undefined : f("gpuProductsEmpty")} disabled={!gpuOptions.length} />
           </FloatingField>
+          {capacity && <CapacityHint {...capacity} />}
+          {presets && Object.keys(presets).length > 0 && <PresetField presets={presets} value={form.preset} onChange={(preset) => onChange({ preset })} />}
           <Tolerations rows={form.tolerations} onChange={(v) => onChange({ tolerations: v })} />
+          {form.affinity.length > 0 && <AffinityRules rules={form.affinity} onChange={(affinity) => onChange({ affinity })} />}
           <div className="grid grid-cols-2 gap-3">
             <FloatingField value={shown(form.priorityClassName, cluster?.priorityClassName)} label={f("priorityClass")}>
               <Suggest value={form.priorityClassName} onChange={(priorityClassName) => onChange({ priorityClassName })} suggestion={cluster?.priorityClassName} />
@@ -135,7 +171,8 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
           <FloatingField value={shown(form.localPath, defaults.localPath || defaults.localPathTemplate)} label={f("localPath")} hint={f("localPathHint")}>
             <Suggest value={form.localPath} onChange={(localPath) => onChange({ localPath })} suggestion={defaults.localPath} placeholder={defaults.localPath || defaults.localPathTemplate} />
           </FloatingField>
-          {defaults.image && (
+          {inputs && <InputFields inputs={inputs} values={form.inputs} onChange={(v) => onChange({ inputs: v })} remember={remember} onRemember={onRemember} />}
+          {defaults.image && !video && (
             <FloatingField
               layout="inline"
               label={f("image")}
@@ -171,9 +208,10 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
         </>,
       )}
 
-      {section(
+      {!video && section(
         "routing",
         <>
+          {recovery}
           <FloatingField layout="inline" label={label("expose_routed_peer", "exposeRoutedPeer")} hint={hint("expose_routed_peer", "exposeRoutedPeerHint")}>
             {sw("exposeRoutedPeer", f("exposeRoutedPeer"))}
           </FloatingField>
@@ -219,7 +257,7 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
       {section(
         "advanced",
         <>
-          {cache && (
+          {cache && !video && (
             <FloatingField
               layout="inline"
               label={f("cache")}
@@ -236,12 +274,50 @@ export function DeployForm({ form, onChange, upgrade, submitted, target, cluster
           <FloatingField layout="inline" label={f("skipSchemaValidation")} hint={f("skipSchemaValidationHint")}>
             {sw("skipSchemaValidation", f("skipSchemaValidation"))}
           </FloatingField>
-          <FloatingField label={f("edits")} hint={f("editsHint")} multiline>
-            <FieldTextarea {...text("edits")} rows={10} spellCheck={false} className="font-mono text-xs" />
-          </FloatingField>
+          <OverrideYaml value={form.edits} onChange={(edits) => onChange({ edits })} source={helmValues} />
         </>,
       )}
     </div>
+  );
+}
+
+// The variant's catalog inputs, one field each. Shared with the video form.
+export function InputFields({ inputs, values, onChange, remember, onRemember }: { inputs: InputRow[]; values: Record<string, string>; onChange: (v: Record<string, string>) => void; remember?: Record<string, boolean>; onRemember?: (key: string, on: boolean) => void }) {
+  const t = useT();
+  const f = (k: string) => t(`deploy.fields.${k}`);
+  const checked = useDebounced(values, CHECK_MS);
+  const shown = (value: string, fallback?: string) => value || fallback || "";
+  return (
+    <>
+      {inputs.map((row) => {
+        const { input, answer, choices, site } = row;
+        const value = values[input.key] ?? "";
+        const error = inputError({ input, answer }, checked[input.key]);
+        const set = (v: string) => onChange({ ...values, [input.key]: v });
+        return (
+          <div key={input.key} className="flex flex-col gap-1.5">
+            <FloatingField
+              value={shown(value, answer)}
+              label={input.title}
+              required
+              hint={input.description ? `${input.description} (${input.key})` : input.key}
+              aside={t("deploy.fields.inputExample", { example: String(input.example) })}
+              error={error && (error === "required" ? t("deploy.fields.inputRequired") : t(`deploy.fields.inputProblem.${input.type ?? "string"}`, { pattern: input.pattern ?? "" }))}
+            >
+              <Suggest value={value} onChange={set} suggestion={answer} placeholder={answer} choices={choices?.map((c) => ({ value: c.answer, label: f(`inputFrom.${c.from}`) }))} />
+            </FloatingField>
+            {remember && onRemember && rememberable(row, checked[input.key]) && (
+              <label className="flex flex-wrap items-center gap-1.5 px-1 text-xs text-muted-foreground">
+                <Checkbox checked={!!remember[input.key]} onCheckedChange={(on) => onRemember(input.key, !!on)} />
+                {f("inputRemember")}
+                <FieldHint>{f("inputRememberHint")}</FieldHint>
+                {site && <span className="break-all">· {t("deploy.fields.inputReplaces", { answer: site.written })}</span>}
+              </label>
+            )}
+          </div>
+        );
+      })}
+    </>
   );
 }
 
@@ -269,7 +345,76 @@ function CacheFields({ form, onChange, defaults }: { form: Form; onChange: (patc
   );
 }
 
-function Tolerations({ rows, onChange }: { rows: Toleration[]; onChange: (v: Toleration[]) => void }) {
+export interface CapacityProps {
+  // Absent until the nodes are read.
+  value?: GPUCapacity;
+  perPod: number;
+  needNodes: number;
+  refreshing: boolean;
+  onRefresh: () => void;
+}
+
+// Nodes and GPUs the picked resource and products can land on, total and free.
+// No node is a resource and product that do not meet: the pods would stay Pending.
+function CapacityHint({ value, perPod, needNodes, refreshing, onRefresh }: CapacityProps) {
+  const t = useT();
+  const f = (k: string) => t(`deploy.fields.${k}`);
+  const short = !!value?.free && value.free.nodes < needNodes;
+  return (
+    <div className="flex items-start gap-2 text-xs">
+      <span className={cn("flex-1 pt-1", value && (value.nodes === 0 || short) ? "text-warning" : "text-muted-foreground")}>
+        {!value ? (
+          f("gpuCapacityUnread")
+        ) : value.nodes === 0 ? (
+          f("gpuCapacityNone")
+        ) : (
+          <>
+            {t("deploy.fields.gpuCapacity", { nodes: value.nodes, gpus: value.gpus })}
+            {" · "}
+            {value.free ? (
+              <span className="cursor-help underline decoration-dotted underline-offset-2" title={t("deploy.fields.gpuCapacityFreeHint", { perPod })}>
+                {t("deploy.fields.gpuCapacityFree", { gpus: value.free.gpus, nodes: value.free.nodes })}
+              </span>
+            ) : (
+              f("gpuCapacityUsageUnknown")
+            )}
+            {short && <> · {t("deploy.fields.gpuCapacityShort", { need: needNodes })}</>}
+          </>
+        )}
+      </span>
+      <Button variant="ghost" size="icon" className="size-6" aria-label={t("common:actions.refresh")} disabled={refreshing} onClick={onRefresh}>
+        <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
+      </Button>
+    </div>
+  );
+}
+
+// The vendor's resource to request: a choice only where the site lists several.
+function GpuResource({ resources, value, onChange }: { resources: string[]; value: string; onChange: (v: string) => void }) {
+  const t = useT();
+  const f = (k: string) => t(`deploy.fields.${k}`);
+  if (resources.length < 2) {
+    return (
+      <FloatingField label={f("gpuResource")} hint={resources.length ? f("gpuResourceOnly") : undefined} notice={resources.length ? undefined : f("gpuResourceNone")}>
+        <FieldInput value={resources[0] ?? ""} readOnly className="font-mono text-xs text-muted-foreground" />
+      </FloatingField>
+    );
+  }
+  // The select reads "" as nothing chosen, so auto has a value of its own.
+  const AUTO = "auto";
+  const options = [...new Set([...resources, value].filter(Boolean))];
+  return (
+    <FloatingField label={f("gpuResource")} hint={f("gpuResourceHint")}>
+      <FieldSelect
+        value={value || AUTO}
+        onValueChange={(v) => v && onChange(v === AUTO ? "" : v)}
+        options={[{ value: AUTO, label: t("deploy.fields.gpuResourceAuto", { resource: resources[0] }) }, ...options.map((r) => ({ value: r, label: r }))]}
+      />
+    </FloatingField>
+  );
+}
+
+export function Tolerations({ rows, onChange }: { rows: Toleration[]; onChange: (v: Toleration[]) => void }) {
   const t = useT();
   const f = (k: string) => t(`deploy.fields.${k}`);
   const patch = (i: number, p: Partial<Toleration>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
@@ -277,18 +422,73 @@ function Tolerations({ rows, onChange }: { rows: Toleration[]; onChange: (v: Tol
     <Group label={f("tolerations")} hint={f("tolerationsHint")}>
         {rows.map((r, i) => (
           <div key={i} className="grid grid-cols-[1fr_7rem_1fr_9rem_auto] items-center gap-2">
-            <Input value={r.key} onChange={(e) => patch(i, { key: e.target.value })} placeholder={f("tolKey")} aria-label={f("tolKey")} />
+            <Input value={r.key} onChange={(e) => patch(i, { key: e.target.value })} placeholder={r.raw && !r.raw.key ? f("tolAny") : f("tolKey")} aria-label={f("tolKey")} />
             <DataSelect value={r.operator} onValueChange={(v) => patch(i, { operator: v as Toleration["operator"], value: v === "Exists" ? "" : r.value })} options={["Equal", "Exists"].map((o) => ({ value: o, label: o }))} />
             <Input value={r.value} onChange={(e) => patch(i, { value: e.target.value })} placeholder={f("tolValue")} aria-label={f("tolValue")} disabled={r.operator === "Exists"} />
             <DataSelect value={r.effect} onValueChange={(v) => patch(i, { effect: v })} options={EFFECTS.map((e) => ({ value: e, label: e || f("anyEffect") }))} />
             <Button variant="ghost" size="icon" className="size-8" aria-label={t("common:actions.delete")} onClick={() => onChange(rows.filter((_, j) => j !== i))}>
               <X className="size-4" />
             </Button>
+            {tolerationExtras(r).length > 0 && <span className="col-span-5 font-mono text-xs text-muted-foreground">{tolerationExtras(r).join(" · ")}</span>}
           </div>
         ))}
         <Button variant="ghost" size="sm" className="w-fit" onClick={() => onChange([...rows, { key: "", operator: "Equal", value: "", effect: "" }])}>
           <Plus className="size-3.5" /> {f("tolAdd")}
         </Button>
+    </Group>
+  );
+}
+
+const NO_PRESET = "__none";
+
+export function PresetField({ presets, value, onChange }: { presets: Record<string, Preset>; value: string; onChange: (v: string) => void }) {
+  const t = useT();
+  const f = (k: string) => t(`deploy.fields.${k}`);
+  const picked = presets[value];
+  return (
+    <div className="flex flex-col gap-1.5">
+      <FloatingField label={f("preset")} hint={f("presetHint")}>
+        <FieldSelect
+          value={value || NO_PRESET}
+          onValueChange={(v) => v && onChange(v === NO_PRESET ? "" : v)}
+          options={[{ value: NO_PRESET, label: f("presetNone") }, ...Object.keys(presets).sort().map((n) => ({ value: n, label: n }))]}
+        />
+      </FloatingField>
+      {picked?.description && <p className="text-xs text-muted-foreground">{picked.description}</p>}
+      {picked && <CodeBlock language="yaml" value={toYaml(picked.values ?? {})} />}
+    </div>
+  );
+}
+
+function AffinityRules({ rules, onChange }: { rules: AffinityRule[]; onChange: (v: AffinityRule[]) => void }) {
+  const t = useT();
+  const f = (k: string) => t(`deploy.fields.${k}`);
+  const patch = (i: number, r: AffinityRule) => onChange(rules.map((x, j) => (i === j ? r : x)));
+  return (
+    <Group label={f("affinity")} hint={f("affinityHint")}>
+      {rules.map((r, i) => (
+        <div key={i} className={cn("flex flex-col gap-1 rounded-md border p-2", r.drop && "opacity-50")}>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="min-w-0 truncate font-mono text-muted-foreground">
+              {r.scope} · {listLabel(r.list)}
+            </span>
+            <Button variant="ghost" size="sm" className="ms-auto h-7" onClick={() => patch(i, { ...r, drop: !r.drop })}>
+              {r.drop ? f("affinityUndo") : f("affinityRemove")}
+            </Button>
+          </div>
+          <textarea
+            value={r.text}
+            onChange={(e) => patch(i, editRule(r, e.target.value))}
+            disabled={r.drop}
+            spellCheck={false}
+            aria-label={`${r.scope} ${listLabel(r.list)}`}
+            aria-invalid={!!r.error}
+            rows={Math.max(2, r.text.split("\n").length)}
+            className={cn("w-full rounded-md border bg-background px-2 py-1 font-mono text-[11px] leading-snug", r.drop && "line-through", r.error && "border-destructive")}
+          />
+          {r.error && <p className="text-xs text-destructive">{t("deploy.fields.affinityInvalid", { error: r.error })}</p>}
+        </div>
+      ))}
     </Group>
   );
 }
@@ -391,20 +591,28 @@ export function RouteExtras({ form, onChange, options, showRuntime = false, mode
 }
 
 // Tab fills an empty field with the default it shows, as swiss's own form does.
-function Suggest({ value, onChange, suggestion, bare, placeholder, className, ...props }: Omit<React.ComponentProps<typeof Input>, "value" | "onChange"> & { value: string; onChange: (v: string) => void; suggestion?: string; bare?: boolean }) {
+// choices list under the field when the empty field is clicked; typing closes the list.
+export function Suggest({ value, onChange, suggestion, bare, placeholder, className, choices, ...props }: Omit<React.ComponentProps<typeof Input>, "value" | "onChange"> & { value: string; onChange: (v: string) => void; suggestion?: string; bare?: boolean; choices?: { value: string; label: string }[] }) {
   const [focused, setFocused] = useState(false);
+  const [listed, setListed] = useState(false);
   const offer = !value && !props.disabled ? suggestion : undefined;
   const hint = !!offer && focused;
   const Control = bare ? Input : FieldInput;
   return (
     <div className="relative h-full w-full min-w-0">
       <Control
+        autoComplete="off"
         {...props}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onBlur={() => {
+          setFocused(false);
+          setListed(false);
+        }}
+        onClick={() => setListed(!!choices?.length && !value)}
         onKeyDown={(e) => {
+          if (e.key === "Escape") setListed(false);
           if (e.key !== "Tab" || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || !offer) return;
           e.preventDefault();
           onChange(offer);
@@ -414,6 +622,28 @@ function Suggest({ value, onChange, suggestion, bare, placeholder, className, ..
       />
       {hint && (
         <kbd className={cn("pointer-events-none absolute right-3 rounded border px-1 py-px text-[10px] leading-none text-muted-foreground", bare ? "top-1/2 -translate-y-1/2" : "top-[27px]")}>tab</kbd>
+      )}
+      {listed && !value && choices && (
+        <div role="listbox" className="absolute top-full right-0 left-0 z-50 mt-1 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10">
+          {choices.map((c) => (
+            // mousedown, not click: the field keeps focus, and its blur does not close the list first.
+            <button
+              key={c.label}
+              type="button"
+              role="option"
+              aria-selected={false}
+              className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(c.value);
+                setListed(false);
+              }}
+            >
+              <span className="min-w-0 flex-1 font-mono text-xs break-all">{c.value}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{c.label}</span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

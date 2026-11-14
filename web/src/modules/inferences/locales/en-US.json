@@ -213,7 +213,8 @@
       "failingMessage": "{reason}: {message}",
       "noDecision": "No decision yet",
       "scaling": "{cur} → {want} replicas",
-      "steady": "{n} replicas, steady"
+      "steady": "{n} replicas, steady",
+      "unmanaged": "not scaled: no pool has a maximum"
     },
     "pdScale": {
       "label": "PD autoscaling",
@@ -224,6 +225,7 @@
       "held": "{n} slices, held: {hold}",
       "heldBare": "{n} slices, held",
       "scaling": "{cur} → {want} slices",
+      "scalingEngines": "{cur} → {want} per slice",
       "steady": "{n} slices, steady"
     }
   },
@@ -260,6 +262,7 @@
   "slo": {
     "title": "SLO of {release}",
     "description": "What the scaler sizes the service by: the latency and throughput to hold, and the replica bounds.",
+    "videoDescription": "Each pool's queue target and replica bounds. A pool with no maximum is not scaled.",
     "setup": "SLO requirement is on for {release}. Configure it here first: the scaler and openresty take their targets from it.",
     "waiting": "Waiting for the install to apply. The form opens once the requirement exists."
   },
@@ -431,6 +434,30 @@
       "routing": "Routing",
       "advanced": "Advanced"
     },
+    "recovery": {
+      "title": "Generation recovery",
+      "hint": "Deploy a continuation gateway to resume a stalled or interrupted streaming response once.",
+      "requirements": "Requires CART, a published route, and sglang chart 0.8.11+ or vllm chart 0.8.9+. Advanced YAML overrides these fields.",
+      "model": "Actual model",
+      "modelHint": "The model whose weights are deployed, for example kimi-k3 or glm-5.3. This selects the continuation strategy; it is not the client-facing served name.",
+      "timeout": "Stream idle timeout (seconds)",
+      "timeoutHint": "Time without a chunk after streaming starts. Clearing removes the form override and inherits catalog, site and chart settings.",
+      "resume": "Resume interrupted responses",
+      "resumeHint": "Off detects and logs interruptions without sending a continuation request.",
+      "buffer": "Buffer tool calls",
+      "bufferHint": "Hold tool-call chunks until complete so interrupted calls can be regenerated. Applies only when resuming is on; arguments arrive together.",
+      "compatibility": "Model and engine compatibility must be verified. Structured JSON responses and other unsupported requests pass through without recovery.",
+      "errors": {
+        "changedPlan": "The plan changed while clearing the recovery timeout. Generate and review a new plan.",
+        "overridden": "Advanced YAML overrides the recovery controls. Update its continuationGateway settings before continuing.",
+        "chart": "Generation recovery needs sglang chart 0.8.11+ or vllm chart 0.8.9+. Select a supported chart version.",
+        "cart": "Generation recovery requires CART. Enable CART or turn recovery off.",
+        "route": "Generation recovery requires a published route. Publish a route or turn recovery off.",
+        "model": "Enter the actual model for generation recovery; the client-facing served name is not sufficient.",
+        "timeout": "The recovery idle timeout must be a finite number greater than zero.",
+        "engine": "The continuation engine must match the selected sglang or vllm chart. Check Advanced YAML."
+      }
+    },
     "routeOptions": {
       "advanced": "Advanced route options",
       "advancedAdaptive": "Advanced adaptive options",
@@ -536,9 +563,24 @@
       "scalerMin": "Min replicas",
       "scalerMax": "Max replicas",
       "replicas": "Replicas",
+      "gpuResource": "GPU resource",
+      "gpuResourceHint": "The extended resource the pods request. Auto takes the one the selected products' nodes report, else the vendor's default",
+      "gpuResourceAuto": "Auto · default {resource}",
+      "gpuResourceOnly": "The only resource the site lists for this vendor",
+      "gpuResourceNone": "The site profile lists no GPU resource for this vendor",
+      "gpuCapacity": "This resource and product: {nodes, plural, one {# node} other {# nodes}} / {gpus} GPUs",
+      "gpuCapacityFree": "available {nodes, plural, one {# node} other {# nodes}} / {gpus} GPUs",
+      "gpuCapacityFreeHint": "Available: GPUs free on schedulable nodes, and the nodes among them with at least {perPod} free, a pod's worth",
+      "gpuCapacityShort": "needs {need, plural, one {# available node} other {# available nodes}}",
+      "gpuCapacityNone": "No node has this resource and product: the pods would stay Pending",
+      "gpuCapacityUsageUnknown": "free GPUs unknown: the cluster-wide pod list is not readable",
+      "gpuCapacityUnread": "Nodes not read",
       "gpuProducts": "GPU products",
       "gpuProductsHint": "Restricts scheduling to these products, any one will do; none means any the variant supports",
       "gpuProductsEmpty": "No GPU product reported by this cluster",
+      "gpuVerified": "verified",
+      "gpuUnverified": "unverified",
+      "gpuForced": "{products}: unverified with this variant, deployed as forced",
       "tolerations": "Tolerations",
       "tolerationsHint": "Lets this deploy land on tainted GPU nodes",
       "tolKey": "Key",
@@ -547,10 +589,34 @@
       "tolEffect": "Effect",
       "tolAdd": "Add toleration",
       "anyEffect": "Any",
+      "tolAny": "Every taint",
+      "preset": "Preset",
+      "presetHint": "Site profile values merged into this deploy's: a list keeps both sides' items, a value set here wins",
+      "presetNone": "None",
+      "affinity": "Affinity",
+      "affinityHint": "Exactly as this release's form values set it; edit or remove each rule",
+      "affinityInvalid": "Not valid YAML: {error}",
+      "affinityRemove": "Remove",
+      "affinityUndo": "Undo",
       "priorityClass": "Priority class",
       "scheduler": "Scheduler",
       "localPath": "Model path",
       "localPathHint": "Overrides the site profile's path template",
+      "inputExample": "e.g. {example}",
+      "inputRequired": "Required: no default or site answer",
+      "inputRemember": "Save to the site profile",
+      "inputRememberHint": "Every variant that declares this key, for any model, will take it",
+      "inputReplaces": "replaces the site's answer {answer}",
+      "inputFrom": {
+        "release": "Release",
+        "site": "Site profile",
+        "variant": "Variant default"
+      },
+      "inputProblem": {
+        "string": "Must match {pattern}",
+        "integer": "Enter a whole number",
+        "boolean": "Enter true or false"
+      },
       "image": "Override image",
       "imageHint": "Off uses the catalog's tag and the site's mirror",
       "imageValue": "Image (repository:tag)",
@@ -620,6 +686,25 @@
       "format": "Lowercase letters, digits and -, starting with a letter and ending with a letter or digit (it names Kubernetes Services, so no dots)",
       "length": "At most 53 characters"
     },
+    "overrides": {
+      "invalid": "Not valid YAML",
+      "description": "Values applied over everything this deploy sets. Load the chart's values to edit them merged instead.",
+      "load": "Load chart values",
+      "loading": "Loading…",
+      "layersDescription": "Nothing is stored until you deploy. Finish keeps only what you changed in the final values.",
+      "chart": "Chart defaults",
+      "chartHint": "The chart's values.yaml",
+      "swiss": "Overrides",
+      "swissHint": "Everything this deploy sets, its layers merged; null deletes a chart default",
+      "edit": "edit.yaml",
+      "editHint": "The overrides as stored: applied over everything this deploy sets. Delete a line to drop that override; null deletes a chart default.",
+      "final": "Final values",
+      "finalHint": "Edit here; a key you delete becomes null",
+      "changes": "{n, plural, =0 {No changes} one {# change} other {# changes}}",
+      "notLoaded": "Load chart values to see them.",
+      "search": "Search keys",
+      "noKey": "No key matches"
+    },
     "review": {
       "title": "Review",
       "plan": "Plan",
@@ -638,6 +723,10 @@
       "back": "Back to edit",
       "compose": "Compose plan",
       "composing": "Composing…",
+      "siteProfile": "Site profile",
+      "siteProfileHint": "Saved once the deploy applies:",
+      "siteSaved": "Saved to the site profile: {keys}",
+      "siteNotSaved": "Deployed; the site profile was not saved: {error}",
       "install": "Deploy",
       "apply": "Upgrade",
       "rollback": "Roll back",
@@ -659,6 +748,50 @@
     "rollbackSheet": {
       "title": "Roll back {release} to revision {revision}",
       "description": "Re-applies that revision's plan exactly as it ran; to change settings, upgrade instead."
+    },
+    "video": {
+      "serviceIdHint": "Names the helm release and the route.",
+      "routeHint": "Publishes a video ModelRoute on the shared openresty. Empty uses the service ID.",
+      "storageClass": "Storage class",
+      "storageClassDefault": "cluster default",
+      "storageClassHint": "Of the shared asset volume. It must support ReadWriteMany (CephFS, NFS): a task can be generated on one replica and downloaded from another.",
+      "storageSize": "Storage size",
+      "storageSizeCurrent": "currently {size}; empty keeps it",
+      "storageSizeHint": "A quota, not a reservation. A CephFS volume grows in place but never shrinks.",
+      "storageClassLocked": "Fixed: the shared volume already exists, and a PVC's storage class cannot change.",
+      "storageSizeGrowOnly": "Can only grow: the volume is kept across upgrades and uninstalls, and a PVC never shrinks.",
+      "database": "Database URL",
+      "databaseDefault": "chart default",
+      "databaseHint": "PostgreSQL connection string. Empty gives this service a database of its own on the platform's PostgreSQL.",
+      "databaseKept": "keeps the current setting",
+      "databaseKeptHint": "The release already sets one. Empty keeps it; typing a new one replaces it.",
+      "totalGpus": "{n, plural, one {# GPU} other {# GPUs}} in total",
+      "perPod": "{n, plural, one {# GPU} other {# GPUs}} per pod",
+      "poolOff": "Off",
+      "pools": {
+        "fl2va": {
+          "title": "FL2VA pool",
+          "hint": "Text and first/last frame to video. Each pod is one server and one SGLang running one generation at a time."
+        },
+        "ref2va": {
+          "title": "Ref2VA pool",
+          "hint": "Reference images, video and audio to video. Each pod is one server and one SGLang running one generation at a time."
+        }
+      },
+      "replicas": "Replicas",
+      "tpSize": "TP size",
+      "ulyssesDegree": "Ulysses degree",
+      "parallelHint": "GPUs per pod = TP size × Ulysses degree.",
+      "turbo": "Turbo",
+      "turboHint": "The 8-step Turbo LoRA and its sampling settings. Off serves the base model.",
+      "autoscale": "Autoscale / SLO",
+      "autoscaleHint": "Deploys a scaler and an SLO requirement for each pool. A pool is not scaled until its SLO has a maximum: set it, and the queue depth that scales the pool, with Edit SLO once the release is up.",
+      "gpuProductsHint": "Restricts the GPU pods to these products; any one will do.",
+      "problems": {
+        "serviceId": "A service ID is required.",
+        "noPool": "Enable at least one pool.",
+        "zero": "Replicas, TP size and Ulysses degree must each be at least 1."
+      }
     }
   },
   "runsPage": {
@@ -770,6 +903,8 @@
       "placement": "Placement",
       "catalog": "Catalogs, charts and images",
       "model": "Model paths",
+      "inputs": "Variant inputs",
+      "presets": "Presets",
       "routing": "Routing",
       "auth": "Entrypoint auth",
       "scaler": "Cache and scaler",
@@ -782,6 +917,8 @@
       "placement": "Where releases land. The scheduler and priority class apply before the deploy form merges, so a deploy can override either.",
       "catalog": "Where the models come from, and the registries the catalog deliberately does not name.",
       "model": "Built from the catalog's source.hf. Variables: hf (the full repo id), org and name (its halves), model (the catalog entry name); see the field's example for the syntax.",
+      "inputs": "Answers to the inputs catalog variants declare, by chart key. Only a variant that declares a key takes its answer, and a deploy can still override it. A string takes the model path variables.",
+      "presets": "Named values a deploy may pick one of, merged into its form values: a list keeps both sides' items.",
       "routing": "The openresty entrypoint every model publishes a route on.",
       "auth": "Used only by the serving and health checks. This document is a ConfigMap, so it names a Secret rather than holding the key.",
       "pdScale": "swissd's PD slice autoscaler, for releases planned with PD on and the form SLO on. Field names follow the LLMScaler's.",
@@ -797,11 +934,41 @@
       "priorityClass": "Priority class",
       "gpusPerNode": "GPUs per node",
       "gpusPerNodeHint": "A full GPU node, used to derive cache.maxSlotsPerNode",
-      "gpuAliases": "GPU product aliases",
-      "gpuAliasesHint": "For nodes a vendor install does not label with the catalog GPU product name. Each row names a catalog product and a node label selector; every key=value must match. A node matching two products takes the one with more pairs",
-      "gpuAliasProduct": "Catalog GPU product",
-      "gpuAliasSelector": "Node labels",
-      "gpuAliasAdd": "Add alias",
+      "gpus": "GPU resources",
+      "gpusHint": "The extended resources this cluster's nodes advertise, each with the node label telling its products apart. A vendor's first entry is what its pods request when no node carries the product asked for. Under a resource, a product lists the label values that also name it; its own name always does",
+      "gpusNone": "None: a site without GPU resources. A GPU variant is refused here.",
+      "gpuVendor": "Vendor",
+      "gpuResource": "Resource",
+      "gpuLabelKey": "Product label",
+      "gpuLabelKeyHint": "The node label whose value names the product, e.g. nvidia.com/gpu.product",
+      "gpuProduct": "Catalog GPU product",
+      "gpuValues": "Also named by",
+      "gpuValuesHint": "Other values of the product label that mean this product, comma separated",
+      "gpuClusterProducts": "On this cluster",
+      "gpuNoNodes": "No node reports it",
+      "gpuNodesReadAt": "Nodes read at {time}; refresh to read them again",
+      "gpuScan": "Scan nodes",
+      "gpuScanHint": "Reads every node by this entry as edited. A heavy call, so only on request.",
+      "gpuScanIdle": "Scan to see the products this entry finds on the cluster's nodes, before saving.",
+      "gpuScanSummary": "{nodes, plural, one {# node} other {# nodes}} with this resource, {gpus} GPUs",
+      "gpuScanCount": "{nodes, plural, one {# node} other {# nodes}} · {gpus} GPUs",
+      "gpuScanName": "{name}: {nodes, plural, one {# node} other {# nodes}}",
+      "gpuScanNone": "No node has {resource} allocatable",
+      "gpuScanUnlabelled": "{nodes, plural, one {# node has} other {# nodes have}} no {label} value",
+      "gpuScanStale": "Edited since the scan: scan again to see the change.",
+      "gpuUnlabelled": "{n, plural, one {# node} other {# nodes}} without a product label",
+      "gpuShow": "Details",
+      "gpuNoDefinedProducts": "None defined: a node's label value is its product name.",
+      "gpuProductAdd": "Add product",
+      "gpuAdd": "Add GPU resource",
+      "gpuEdit": "Edit GPU resource",
+      "gpuDefault": "Default",
+      "gpuDefaultHint": "What {vendor} pods request when no node carries the product asked for",
+      "gpuMakeDefault": "Set as default",
+      "gpuDefaultColumnHint": "Each vendor's default resource: what its pods request when no node carries the product asked for. A vendor with several resources picks one.",
+      "gpuAliasesIgnored": "This profile still has GPU product aliases, which swissd now ignores. Name each product under its resource above.",
+      "gpuAliasesRemove": "Remove aliases",
+      "gpuAliasesIgnoredLabel": "GPU product aliases (ignored)",
       "chartDefault": "the chart's default",
       "catalogs": "Catalogs",
       "catalogsHint": "Each an https base or an absolute path, under a name. With several, pages open in the default one. Set here they win over swissd's config file. Schema v2 is recommended; v1 is the read-only legacy index, and what a catalog with no schema set reads",
@@ -824,6 +991,8 @@
       "pathTemplate": "Path template",
       "overrides": "Path overrides",
       "overridesHint": "Keyed by catalog model name, for weights that do not sit where the template says",
+      "inputs": "Answers",
+      "inputsHint": "8000 reads as a number and true as a boolean; quote one to keep it a string",
       "key": "Key",
       "value": "Value",
       "add": "Add",
@@ -863,6 +1032,15 @@
       "deferTimeout": "Defer timeout (s)",
       "deferTimeoutHint": "How long a hold may defer a scale before it is applied anyway: a DisaggregatedSet rollout that never lands, a failed release, pods that never get ready. Uninstalling, a missing DisaggregatedSet and an apply in flight still hold. Empty is 600; 0 defers indefinitely",
       "deferTimeoutNever": "Never; defers indefinitely",
+      "presetAdd": "Add preset",
+      "presetEdit": "Edit preset",
+      "presetName": "Name",
+      "presetDescription": "Description",
+      "presetDescriptionHint": "Shown beside the name in the deploy page's picker",
+      "presetValues": "Values",
+      "presetValuesHint": "Chart values as YAML. Not checked against the chart here: a deploy merges them into its form values",
+      "presetNoValues": "No values",
+      "presetsNone": "None: a deploy has no preset to pick",
       "siteName": "Site",
       "siteUrl": "URL",
       "siteAdd": "Add site"
@@ -897,15 +1075,16 @@
           "duplicate": "Already listed with this schema"
         }
       },
-      "gpuAlias": {
-        "product": {
-          "required": "Product is required"
-        },
-        "selector": {
-          "required": "Labels are required",
-          "format": "key=value pairs, comma separated",
-          "conflict": "A node could match another product as well; add a label"
-        }
+      "preset": {
+        "required": "Name is required",
+        "duplicate": "Another preset has this name",
+        "map": "Values must be a map of chart keys",
+        "yaml": "Not valid YAML: {error}"
+      },
+      "gpu": {
+        "required": "Required",
+        "duplicate": "Listed twice",
+        "conflict": "Already names another product under this resource"
       }
     }
   },
