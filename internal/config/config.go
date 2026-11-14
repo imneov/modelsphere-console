@@ -9,6 +9,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -57,8 +58,10 @@ func (r Router) Enabled() bool { return r.Secret != "" || r.Namespace != "" }
 // Cluster is where the iam CRDs (User/Role/RoleBinding) are read and written.
 // Empty kubeconfig means in-cluster, which is the normal deployment.
 type Cluster struct {
-	Kubeconfig string `yaml:"kubeconfig,omitempty"`
-	Context    string `yaml:"context,omitempty"`
+	Kubeconfig  string  `yaml:"kubeconfig,omitempty"`
+	Context     string  `yaml:"context,omitempty"`
+	ClientQPS   float32 `yaml:"clientQPS,omitempty"`
+	ClientBurst int     `yaml:"clientBurst,omitempty"`
 }
 
 type Server struct {
@@ -69,9 +72,7 @@ type Server struct {
 	Auth        Auth   `yaml:"auth,omitempty"`
 }
 
-// Auth signs and verifies the HS256 tokens. The claim set and algorithm are
-// kept identical to Rise Global so a later cutover is just sharing this secret
-// and pointing at Global's apiserver.
+// Auth uses Global-compatible HS256 claims with an optional canonical User UID.
 type Auth struct {
 	// Disabled runs console with no login: every request carries the local
 	// administrator, and the authorizer's system:masters short-circuit allows
@@ -234,6 +235,9 @@ func (c *Config) origin() string {
 
 // Validate covers what console needs to serve.
 func (c *Config) Validate() error {
+	if math.IsNaN(float64(c.Cluster.ClientQPS)) || math.IsInf(float64(c.Cluster.ClientQPS), 0) || c.Cluster.ClientQPS < 0 || c.Cluster.ClientBurst < 0 || (c.Cluster.ClientQPS == 0) != (c.Cluster.ClientBurst == 0) {
+		return fmt.Errorf("cluster clientQPS and clientBurst must both be zero or positive")
+	}
 	if err := c.Billing.validate(c.Router); err != nil {
 		return fmt.Errorf("%s: %w", c.origin(), err)
 	}

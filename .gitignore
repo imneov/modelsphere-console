@@ -12,7 +12,7 @@
 # to find, so `go build` works without node.
 /web/dist/*
 !/web/dist/.gitkeep
-/web/node_modules/
+node_modules/
 /web/*.tsbuildinfo
 /web/.next/
 /web/out/

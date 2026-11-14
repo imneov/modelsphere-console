@@ -34,11 +34,12 @@ type Kube struct {
 
 // NewKube builds a client. An empty kubeconfig means in-cluster first, then the
 // usual loading rules -- the same fallback swissd uses.
-func NewKube(kubeconfig, context_ string) (*Kube, error) {
+func NewKube(kubeconfig, context_ string, limits ClientLimits) (*Kube, error) {
 	cfg, err := restConfig(kubeconfig, context_)
 	if err != nil {
 		return nil, err
 	}
+	cfg.QPS, cfg.Burst = limits.QPS, limits.Burst
 	dyn, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("dynamic client: %w", err)
@@ -48,6 +49,11 @@ func NewKube(kubeconfig, context_ string) (*Kube, error) {
 		return nil, fmt.Errorf("clientset: %w", err)
 	}
 	return &Kube{dyn: dyn, typed: typed}, nil
+}
+
+type ClientLimits struct {
+	QPS   float32
+	Burst int
 }
 
 // NewKubeFrom wraps a dynamic client the caller already has, which is how tests

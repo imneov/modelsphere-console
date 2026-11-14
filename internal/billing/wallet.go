@@ -81,7 +81,7 @@ func (store *Store) lockWallet(ctx context.Context, transaction *sql.Tx, ownerUI
 }
 
 func (store *Store) Credit(ctx context.Context, credit Credit) (Wallet, error) {
-	if credit.OperationID == "" || credit.OwnerUID == "" || credit.Actor == "" || !validCurrency(credit.Currency) || (store.currency != "" && credit.Currency != store.currency) || credit.Amount == 0 || (credit.Kind != "topup" && credit.Kind != "adjustment") || (credit.Kind == "topup" && credit.Amount < 0) {
+	if credit.OperationID == "" || strings.HasPrefix(credit.OperationID, "settle/") || credit.OwnerUID == "" || credit.Actor == "" || !validCurrency(credit.Currency) || (store.currency != "" && credit.Currency != store.currency) || credit.Amount == 0 || (credit.Kind != "topup" && credit.Kind != "adjustment") || (credit.Kind == "topup" && credit.Amount < 0) {
 		return Wallet{}, errors.New("operation ID, owner, actor, currency and a valid nonzero amount are required")
 	}
 	hash, _, err := fingerprint(credit)

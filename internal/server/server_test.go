@@ -34,19 +34,7 @@ func testServerWithConfig(t *testing.T, cfg *config.Config, objs ...runtime.Obje
 	t.Helper()
 	adminHash, _ := iam.HashPassword("admin-pw")
 	bobHash, _ := iam.HashPassword("bob-pw")
-	user := func(name, hash string, groups ...string) *unstructured.Unstructured {
-		gs := make([]any, len(groups))
-		for i, g := range groups {
-			gs[i] = g
-		}
-		return &unstructured.Unstructured{Object: map[string]any{
-			"apiVersion": iam.Group + "/" + iam.Version,
-			"kind":       "User",
-			"metadata":   map[string]any{"name": name},
-			"spec":       map[string]any{"groups": gs, "encryptedPassword": hash},
-		}}
-	}
-	admin := user("admin", adminHash, "system:masters")
+	admin := fixtureUser("admin", adminHash, "system:masters")
 	dyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{
 			gatewayapi.WalletAdmissions: "WalletAdmissionList",
@@ -57,7 +45,7 @@ func testServerWithConfig(t *testing.T, cfg *config.Config, objs ...runtime.Obje
 			iam.RoleBindingsGVR:         "IAMRoleBindingList",
 			iam.LoginRecordsGVR:         "LoginRecordList",
 		},
-		append([]runtime.Object{admin, user("bob", bobHash)}, objs...)...,
+		append([]runtime.Object{admin, fixtureUser("bob", bobHash)}, objs...)...,
 	)
 	nextRecord := 0
 	dyn.PrependReactor("create", "loginrecords", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -499,4 +487,18 @@ func TestUserCRUDRequiresAdmin(t *testing.T) {
 	}
 	// New user can log in with the password admin set.
 	_ = login(t, h, "carol", "Carol1!x")
+}
+
+func fixtureUser(name, hash string, groups ...string) *unstructured.Unstructured {
+
+	gs := make([]any, len(groups))
+	for i, g := range groups {
+		gs[i] = g
+	}
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": iam.Group + "/" + iam.Version,
+		"kind":       "User",
+		"metadata":   map[string]any{"name": name},
+		"spec":       map[string]any{"groups": gs, "encryptedPassword": hash},
+	}}
 }

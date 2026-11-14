@@ -30,3 +30,7 @@ billing:
       replicas: 2
     settlement:
       replicas: 2
+cluster:
+  # Control-plane projection capacity; validate against the API server's budget.
+  clientQPS: 50
+  clientBurst: 100

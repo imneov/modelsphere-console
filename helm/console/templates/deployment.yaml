@@ -22,6 +22,7 @@ spec:
         {{- include "console.selectorLabels" . | nindent 8 }}
         console.modelsphere.io/key-source: {{ .Values.router.keySource | quote }}
       annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         prometheus.io/scrape: "true"
         prometheus.io/port: {{ .Values.metrics.port | quote }}
         prometheus.io/path: /metrics

@@ -1,5 +1,12 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { api, clearToken, login as apiLogin, type Me } from "@/shell/api";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface AuthState {
   me: Me | null;
@@ -11,6 +18,7 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const client = useQueryClient();
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -29,17 +37,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (username: string, password: string) => {
+    await client.cancelQueries();
+    client.clear();
     await apiLogin(username, password);
     setMe(await api.me());
   };
 
   const logout = () => {
+    client.clear();
     clearToken();
     setMe(null);
   };
 
-
-  return <AuthContext.Provider value={{ me, loading, login, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ me, loading, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthState {

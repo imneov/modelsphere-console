@@ -11,6 +11,9 @@ metadata:
     {{- include "console.labels" . | nindent 4 }}
 data:
   console.yaml: |
+    cluster:
+      clientQPS: {{ .Values.cluster.clientQPS }}
+      clientBurst: {{ .Values.cluster.clientBurst }}
     server:
       addr: ":8080"
       metricsAddr: {{ printf ":%d" (int .Values.metrics.port) | quote }}

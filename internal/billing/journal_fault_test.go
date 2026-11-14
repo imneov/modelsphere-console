@@ -36,16 +36,7 @@ func TestJournalTakeoverTruncatesTornTailAndRejectsConcurrentWriter(t *testing.T
 	if err != nil || len(segments) != 1 {
 		t.Fatalf("segments: %v %v", segments, err)
 	}
-	file, err := os.OpenFile(segments[0], os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := file.Write([]byte{0, 0, 0, 40, 0, 0, 0, 0, 1}); err != nil {
-		t.Fatal(err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatal(err)
-	}
+	appendTornJournalTail(t, segments[0])
 	journal, err = billing.OpenJournal(t.Context(), options)
 	if err != nil {
 		t.Fatal(err)
@@ -103,5 +94,19 @@ func TestJournalRejectsCursorOutsideRecoveredFrameBoundary(t *testing.T) {
 				t.Fatal("invalid cursor accepted")
 			}
 		})
+	}
+}
+
+func appendTornJournalTail(t *testing.T, path string) {
+	t.Helper()
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Write([]byte{0, 0, 0, 40, 0, 0, 0, 0, 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
 	}
 }

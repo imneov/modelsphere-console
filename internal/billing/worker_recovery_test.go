@@ -1,7 +1,9 @@
 package billing_test
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"testing"
@@ -116,7 +118,12 @@ func TestWorkerAcknowledgesPricedSiblingsAndDefersMissingPrices(t *testing.T) {
 	fixture := recoveryWorker(t)
 	price := billing.Price{RuleID: "rule", Version: "v1", Model: "qwen", Currency: "USD", UnitTokens: 1, InputRate: 1}
 	fixture.worker.Prices = func(model string) (billing.Price, bool) { return price, model == "qwen" }
-	for _, model := range []string{"qwen", "unpriced"} {
+	encoded, err := json.Marshal(terminalRecoveryEvent("unpriced", "unpriced"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.worker.Options.MaxBytes = len(encoded) * 3 / 2
+	for _, model := range []string{"unpriced", "qwen"} {
 		if err := fixture.queue.Publish(t.Context(), terminalRecoveryEvent(model, model)); err != nil {
 			t.Fatal(err)
 		}
@@ -150,5 +157,78 @@ func assertRecoveryHealth(t *testing.T, queue *billing.RedisQueue, pending, dead
 	}
 	if health.Pending != pending || health.DeadLetters != dead {
 		t.Fatalf("recovery queue: %+v", health)
+	}
+}
+
+func TestFullUnpricedPendingBatchDoesNotStarveFreshOrLaterPendingUsage(t *testing.T) {
+	fixture := recoveryWorker(t)
+	fixture.worker.Options.MaxEvents = 2
+	price := billing.Price{RuleID: "rule", Version: "v1", Model: "qwen", Currency: "USD", UnitTokens: 1, InputRate: 1}
+	fixture.worker.Prices = func(model string) (billing.Price, bool) { return price, model == "qwen" }
+	for index := range 5 {
+		event := terminalRecoveryEvent(fmt.Sprintf("unpriced-%d", index), "unpriced")
+		if err := fixture.queue.Publish(t.Context(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 3 {
+		_ = fixture.worker.FlushOnce(t.Context())
+	}
+	if err := fixture.queue.Publish(t.Context(), terminalRecoveryEvent("healthy", "qwen")); err != nil {
+		t.Fatal(err)
+	}
+	for range 8 {
+		_ = fixture.worker.FlushOnce(t.Context())
+	}
+	page, err := fixture.store.Requests(t.Context(), billing.Filter{OwnerUID: "user", Model: "qwen", Page: 1, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.TotalItems != 1 || page.Items[0].Charge == nil {
+		t.Fatal("fresh priced usage starved behind pending unpriced events")
+	}
+	fixture.worker.Prices = func(model string) (billing.Price, bool) {
+		current := price
+		current.RuleID, current.Model = model, model
+		return current, true
+	}
+	for range 10 {
+		if err := fixture.worker.FlushOnce(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertRecoveryHealth(t, fixture.queue, 0, 0)
+	page, err = fixture.store.Requests(t.Context(), billing.Filter{OwnerUID: "user", Page: 1, Limit: 10})
+	if err != nil || page.TotalItems != 6 {
+		t.Fatalf("later pending usage was lost: %+v %v", page, err)
+	}
+}
+
+func TestConflictedPriceDoesNotBlockHealthySiblingCharges(t *testing.T) {
+	fixture := recoveryWorker(t)
+	archived := billing.Price{RuleID: "conflicted", Version: "v1", Model: "conflicted", Currency: "USD", UnitTokens: 1, InputRate: 1}
+	if err := fixture.store.SavePrice(t.Context(), archived); err != nil {
+		t.Fatal(err)
+	}
+	fixture.worker.Prices = func(model string) (billing.Price, bool) {
+		current := archived
+		current.RuleID, current.Model, current.InputRate = model, model, 2
+		return current, true
+	}
+	for _, model := range []string{"conflicted", "qwen"} {
+		if err := fixture.queue.Publish(t.Context(), terminalRecoveryEvent(model, model)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := fixture.worker.FlushOnce(t.Context()); !errors.Is(err, billing.ErrPriceVersionConflict) {
+		t.Fatalf("price configuration conflict: %v", err)
+	}
+	assertRecoveryHealth(t, fixture.queue, 1, 0)
+	page, err := fixture.store.Requests(t.Context(), billing.Filter{OwnerUID: "user", Model: "qwen", Page: 1, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.TotalItems != 1 || page.Items[0].Charge == nil || page.Items[0].Charge.Amount != 2 {
+		t.Fatalf("healthy price sibling blocked: %+v", page)
 	}
 }

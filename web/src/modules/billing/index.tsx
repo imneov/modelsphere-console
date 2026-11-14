@@ -3,10 +3,14 @@ import { Receipt, Tags } from "lucide-react";
 import type { ConsoleModule } from "@/shell";
 import { useT } from "@/modules/billing/i18n";
 const Account = lazy(() =>
-  import("@/modules/billing/Account").then((module) => ({ default: module.Account })),
+  import("@/modules/billing/Account").then((module) => ({
+    default: module.Account,
+  })),
 );
 const Prices = lazy(() =>
-  import("@/modules/billing/Prices").then((module) => ({ default: module.Prices })),
+  import("@/modules/billing/Prices").then((module) => ({
+    default: module.Prices,
+  })),
 );
 function Loading() {
   const t = useT();

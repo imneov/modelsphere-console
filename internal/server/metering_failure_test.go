@@ -4,6 +4,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -65,5 +68,35 @@ func fullJournal(t *testing.T) *billing.Journal {
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestRejectNewPolicyPreservesAcceptedGenerationWhenTerminalSinksFail(t *testing.T) {
+	var journal atomic.Pointer[billing.Journal]
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if strings.HasSuffix(request.URL.Path, "/models") {
+			_, _ = writer.Write([]byte(`{"data":[{"id":"qwen"}]}`))
+			return
+		}
+		if err := journal.Load().Close(); err != nil {
+			t.Error(err)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"choices":[{"message":{"content":"accepted generation"}}],"usage":{"prompt_tokens":10,"completion_tokens":5}}`))
+	}))
+	t.Cleanup(upstream.Close)
+	server := crdInferenceServerAt(t, upstream.URL)
+	durable := attachDurableMeter(t, server)
+	journal.Store(durable)
+	meter := &billing.Meter{Journal: durable, FailurePolicy: "reject_new", PublishTimeout: time.Millisecond, Log: slog.New(slog.DiscardHandler)}
+	server.SetMetering(meter)
+	handler := server.Handler()
+	token := login(t, handler, "admin", "admin-pw")
+	response := do(handler, "POST", "/api/llm/v1/chat/completions", token, `{"model":"qwen"}`)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "accepted generation") {
+		t.Fatalf("accepted generation interrupted: %d %s", response.Code, response.Body.String())
+	}
+	if meter.Stats().Requests != 1 || meter.Stats().DeliveryGaps != 1 {
+		t.Fatalf("terminal gap was not reported: %+v", meter.Stats())
 	}
 }

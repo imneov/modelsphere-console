@@ -24,29 +24,10 @@ func testMeteredStream(t *testing.T, source string) {
 	t.Helper()
 	release := make(chan struct{})
 	defer close(release)
-	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/llm/v1/models" {
-			_, _ = writer.Write([]byte(`{"data":[{"id":"qwen"}]}`))
-			return
-		}
-		writer.Header().Set("Content-Type", "text/event-stream")
-		_, _ = writer.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"first\"}}]}\n\n"))
-		writer.(http.Flusher).Flush()
-		select {
-		case <-release:
-		case <-request.Context().Done():
-			return
-		}
-		_, _ = writer.Write([]byte("data: {\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":20,\"prompt_tokens_details\":{\"cached_tokens\":30}}}\n\ndata: [DONE]\n\n"))
-	}))
+	upstream := streamingUsageServer(t, release)
 	defer upstream.Close()
 	server := crdInferenceServerAt(t, upstream.URL)
-	journal, err := billing.OpenJournal(t.Context(), billing.JournalOptions{Directory: t.TempDir(), SegmentBytes: 4096, MaxBytes: 65536, SyncMode: "record"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer journal.Close()
-	server.SetMetering(&billing.Meter{Journal: journal, FailurePolicy: "continue", PublishTimeout: time.Second, Log: slog.New(slog.DiscardHandler)})
+	journal := attachDurableMeter(t, server)
 	handler := server.Handler()
 	admin := login(t, handler, "admin", "admin-pw")
 	token, path := admin, "/api/llm/v1/chat/completions"
@@ -77,6 +58,32 @@ func testMeteredStream(t *testing.T, source string) {
 	if _, err := io.ReadAll(reader); err != nil {
 		t.Fatal(err)
 	}
+	assertCompleteStreamUsage(t, journal)
+
+}
+
+func streamingUsageServer(t *testing.T, release <-chan struct{}) *httptest.Server {
+	t.Helper()
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/llm/v1/models" {
+			_, _ = writer.Write([]byte(`{"data":[{"id":"qwen"}]}`))
+			return
+		}
+		writer.Header().Set("Content-Type", "text/event-stream")
+		_, _ = writer.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"first\"}}]}\n\n"))
+		writer.(http.Flusher).Flush()
+		select {
+		case <-release:
+		case <-request.Context().Done():
+			return
+		}
+		_, _ = writer.Write([]byte("data: {\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":20,\"prompt_tokens_details\":{\"cached_tokens\":30}}}\n\ndata: [DONE]\n\n"))
+	}))
+	return upstream
+}
+
+func assertCompleteStreamUsage(t *testing.T, journal *billing.Journal) {
+	t.Helper()
 	var terminal *billing.Event
 	if err := journal.Replay(t.Context(), func(event billing.Event) error {
 		if event.Type == "request_terminal" {
@@ -90,4 +97,19 @@ func testMeteredStream(t *testing.T, source string) {
 	if terminal == nil || !terminal.Usage.Complete || terminal.Usage.Source != "upstream_sse" || terminal.Usage.CacheTokens != 30 {
 		t.Fatalf("terminal usage: %+v", terminal)
 	}
+}
+
+func attachDurableMeter(t *testing.T, server *Server) *billing.Journal {
+	t.Helper()
+	journal, err := billing.OpenJournal(t.Context(), billing.JournalOptions{Directory: t.TempDir(), SegmentBytes: 4096, MaxBytes: 65536, SyncMode: "record"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := journal.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	server.SetMetering(&billing.Meter{Journal: journal, FailurePolicy: "continue", PublishTimeout: time.Second, Log: slog.New(slog.DiscardHandler)})
+	return journal
 }

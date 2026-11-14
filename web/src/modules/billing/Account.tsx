@@ -57,15 +57,8 @@ export function Account() {
   const t = useT();
   const { has } = usePermissions();
   const account = useAccount();
-  const {
-    filters,
-    tab,
-    setTab,
-    creditOpen,
-    setCreditOpen,
-    wallet,
-    change,
-  } = account;
+  const { filters, tab, setTab, creditOpen, setCreditOpen, wallet, change } =
+    account;
   return (
     <div className="flex h-full flex-col">
       <PageBanner title={t("title")} icon={<Receipt className="size-5" />} />
@@ -89,7 +82,9 @@ export function Account() {
           onChange={change}
           admin={has("billing.manage")}
         />
-        <AccountTable account={account} />
+        <div className="shrink-0">
+          <AccountTable account={account} />
+        </div>
       </div>
       <CreditDialog
         open={creditOpen}

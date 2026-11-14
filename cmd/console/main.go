@@ -53,7 +53,7 @@ func run(configPath, addr, logLevel, webDir, role string) error {
 		return err
 	}
 
-	kube, err := cluster.NewKube(cfg.Cluster.Kubeconfig, cfg.Cluster.Context)
+	kube, err := cluster.NewKube(cfg.Cluster.Kubeconfig, cfg.Cluster.Context, cluster.ClientLimits{QPS: cfg.Cluster.ClientQPS, Burst: cfg.Cluster.ClientBurst})
 	if err != nil {
 		return fmt.Errorf("cluster access: %w", err)
 	}

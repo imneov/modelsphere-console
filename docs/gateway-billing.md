@@ -49,6 +49,8 @@ Use the specification's public seams: Console HTTP handlers with controlled upst
 
 ## Admission projection
 
+`cluster.clientQPS` and `cluster.clientBurst` optionally tune the Kubernetes clients' token bucket together. Zero values preserve client-go defaults; positive values must be supplied together. The billing example uses 50 QPS / 100 burst for the measured 1000-user control-plane workload. This changes only control-plane reads/writes; inference remains local. Tune against API-server latency and throttling metrics.
+
 Playground sessions may have no API Key. A namespaced `WalletAdmission` CRD therefore projects only canonical owner UID, admission state and wallet revision. Its name is a digest of the UID. Both entrypoints consult this local Informer; no balance or ledger fact lives in Kubernetes. APIKey status is maintained for per-Key management and inspection.
 
 ```text

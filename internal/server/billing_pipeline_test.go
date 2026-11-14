@@ -121,45 +121,8 @@ func TestRealRedisPostgresPipelinePricesOnceAndSettlesSharedWallets(t *testing.T
 	}
 	publishPipelinePrice(t, handler, admin, "v2", "2000000000", "500000000", "4000000000")
 	awaitPipelinePrices(t, fixture.caches, "v2")
-	var terminal billing.Event
-	lost := false
-	err := fixture.journal.Replay(t.Context(), func(event billing.Event) error {
-		if err := fixture.queue.Publish(t.Context(), event); err != nil {
-			return err
-		}
-		if !lost {
-			lost = true
-			return context.DeadlineExceeded
-		}
-		return nil
-	})
-	if err == nil {
-		t.Fatal("publish confirmation loss was not injected")
-	}
-	if err := fixture.journal.Replay(t.Context(), func(event billing.Event) error {
-		if event.Type == "request_terminal" {
-			terminal = event
-		}
-		return fixture.queue.Publish(t.Context(), event)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := fixture.queue.Publish(t.Context(), terminal); err != nil {
-		t.Fatal(err)
-	}
-	for range 4 {
-		var group sync.WaitGroup
-		for _, worker := range fixture.workers {
-			group.Add(1)
-			go func() {
-				defer group.Done()
-				if err := worker.FlushOnce(t.Context()); err != nil {
-					t.Error(err)
-				}
-			}()
-		}
-		group.Wait()
-	}
+	replayWithLostConfirmation(t, fixture)
+	flushConcurrentPipelineWorkers(t, fixture.workers)
 	assertPipelineCharges(t, handler, admin)
 	generation, err := fixture.store.AcquireFence(t.Context(), "settler")
 	if err != nil {
@@ -219,5 +182,52 @@ func assertPipelineCharges(t *testing.T, handler http.Handler, admin string) {
 	}
 	if charge := page.Items[0].Charge; charge == nil || charge.Amount != 3700000 || charge.Price.Version != "v2" || charge.State != "pending" {
 		t.Fatalf("first current price: %+v", charge)
+	}
+}
+
+func replayWithLostConfirmation(t *testing.T, fixture *pipelineFixture) {
+	t.Helper()
+	var terminal billing.Event
+	lost := false
+	err := fixture.journal.Replay(t.Context(), func(event billing.Event) error {
+		if err := fixture.queue.Publish(t.Context(), event); err != nil {
+			return err
+		}
+		if !lost {
+			lost = true
+			return context.DeadlineExceeded
+		}
+		return nil
+	})
+	if err == nil {
+		t.Fatal("publish confirmation loss was not injected")
+	}
+	if err := fixture.journal.Replay(t.Context(), func(event billing.Event) error {
+		if event.Type == "request_terminal" {
+			terminal = event
+		}
+		return fixture.queue.Publish(t.Context(), event)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.queue.Publish(t.Context(), terminal); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func flushConcurrentPipelineWorkers(t *testing.T, workers []*billing.UsageWorker) {
+	t.Helper()
+	for range 4 {
+		var group sync.WaitGroup
+		for _, worker := range workers {
+			group.Add(1)
+			go func() {
+				defer group.Done()
+				if err := worker.FlushOnce(t.Context()); err != nil {
+					t.Error(err)
+				}
+			}()
+		}
+		group.Wait()
 	}
 }

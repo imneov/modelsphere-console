@@ -60,7 +60,11 @@ export const api = {
       operationID,
       owners,
     }),
-  migrationOwners: () => request<{ items: KeyOwner[] }>("GET", "/api/router/users?includeInactive=true"),
+  migrationOwners: () =>
+    request<{ items: KeyOwner[] }>(
+      "GET",
+      "/api/router/users?includeInactive=true",
+    ),
   setStatus: (id: string, status: "enabled" | "disabled") =>
     request<void>(
       "PUT",

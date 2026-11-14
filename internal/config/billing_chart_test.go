@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	syaml "sigs.k8s.io/yaml"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -19,7 +20,7 @@ func TestHelmBillingExampleProducesValidatedProcessConfiguration(t *testing.T) {
 	if err := configuration.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if !configuration.Billing.Enabled || configuration.Router.KeySource != "crd" || configuration.Billing.Usage.Concurrency != 4 || configuration.Router.Pipeline.MaxAttempts != 2 {
+	if configuration.Cluster.ClientQPS != 50 || configuration.Cluster.ClientBurst != 100 || !configuration.Billing.Enabled || configuration.Router.KeySource != "crd" || configuration.Billing.Usage.Concurrency != 4 || configuration.Router.Pipeline.MaxAttempts != 2 {
 		t.Fatalf("billing configuration was lost: %+v", configuration.Billing)
 	}
 }
@@ -55,6 +56,10 @@ func TestHelmBillingKeepsJournalClaimsAndSeparatesWorkerSelectors(t *testing.T) 
 		case "Deployment":
 			workers++
 			spec := object["spec"].(map[string]any)
+			annotations := spec["template"].(map[string]any)["metadata"].(map[string]any)["annotations"].(map[string]any)
+			if annotations["checksum/config"] == "" || annotations["checksum/config"] == nil {
+				t.Fatal("worker configuration changes would not roll the process")
+			}
 			selector := spec["selector"].(map[string]any)["matchLabels"].(map[string]any)
 			if selector["app.kubernetes.io/name"] != "console-billing" {
 				t.Fatalf("worker matches the gateway selector: %+v", selector)
@@ -81,5 +86,14 @@ func assertRetainedJournal(t *testing.T, encoded []byte) {
 	policy := stateful.Spec.PersistentVolumeClaimRetentionPolicy
 	if len(stateful.Spec.VolumeClaimTemplates) != 1 || policy == nil || policy.WhenDeleted != appsv1.RetainPersistentVolumeClaimRetentionPolicyType || policy.WhenScaled != appsv1.RetainPersistentVolumeClaimRetentionPolicyType {
 		t.Fatal("gateway journal is not retained per ordinal")
+	}
+}
+
+func TestClusterRateLimitsMustBeConfiguredTogether(t *testing.T) {
+	for _, limits := range []Cluster{{ClientQPS: -1}, {ClientBurst: -1}, {ClientQPS: 20}, {ClientBurst: 40}} {
+		configuration := Config{Cluster: limits}
+		if err := configuration.Validate(); err == nil || !strings.Contains(err.Error(), "clientQPS") {
+			t.Fatalf("invalid limits accepted: %+v: %v", limits, err)
+		}
 	}
 }

@@ -112,12 +112,7 @@ func TestRepeatedSSEProtectionCancelsUpstreamAndKeepsOneTerminal(t *testing.T) {
 	}))
 	defer upstream.Close()
 	server := crdInferenceServerAt(t, upstream.URL)
-	journal, err := billing.OpenJournal(t.Context(), billing.JournalOptions{Directory: t.TempDir(), SegmentBytes: 4096, MaxBytes: 65536, SyncMode: "record"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer journal.Close()
-	server.SetMetering(&billing.Meter{Journal: journal, FailurePolicy: "continue", PublishTimeout: time.Second, Log: slog.New(slog.DiscardHandler)})
+	journal := attachDurableMeter(t, server)
 	if err := server.router.ConfigurePipeline(router.PipelineOptions{MaxAttempts: 3, MaxSSEFrameBytes: 1 << 20, RepeatDeltaLimit: 3}); err != nil {
 		t.Fatal(err)
 	}
@@ -144,13 +139,8 @@ func TestRepeatedSSEProtectionCancelsUpstreamAndKeepsOneTerminal(t *testing.T) {
 	if len(events) != 2 || events[1].Reason != "generation_repetition_limit" || events[1].Usage.Complete || len(events[1].Attempts) != 1 {
 		t.Fatalf("protection terminal: %+v", events)
 	}
-	encoded, err := json.Marshal(events)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(encoded), "private-repeat-marker") {
-		t.Fatal("generated text leaked into journal events")
-	}
+	assertJournalOmitsGeneratedContent(t, events)
+
 }
 
 func TestCircuitRejectsNewRequestsAfterConfiguredUpstreamFailures(t *testing.T) {
@@ -182,5 +172,16 @@ func TestCircuitRejectsNewRequestsAfterConfiguredUpstreamFailures(t *testing.T) 
 	}
 	if count != 4 {
 		t.Fatalf("circuit rejection was treated as an admitted generation: %d events", count)
+	}
+}
+
+func assertJournalOmitsGeneratedContent(t *testing.T, events []billing.Event) {
+	t.Helper()
+	encoded, err := json.Marshal(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "private-repeat-marker") {
+		t.Fatal("generated text leaked into journal events")
 	}
 }

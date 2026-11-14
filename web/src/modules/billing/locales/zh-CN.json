@@ -1,11 +1,4 @@
 {
-  "group": {
-    "账务": "账务"
-  },
-  "menu": {
-    "account": "用量与钱包",
-    "prices": "模型价格"
-  },
   "title": "用量与钱包",
   "balance": "余额",
   "admission": "计费准入",

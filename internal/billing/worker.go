@@ -187,47 +187,61 @@ func batchBytes(batch Batch) (int, error) {
 func (worker *UsageWorker) commit(ctx context.Context, batch Batch) (result error) {
 	started := time.Now()
 	defer func() { worker.Metrics.observe("usage_commit", started, result) }()
+	var deferred error
 	for start := 0; start < len(batch.Messages); {
-		size, end := 0, start
-		for end < len(batch.Messages) {
-			encoded, err := json.Marshal(batch.Messages[end].Event)
-			if err != nil {
-				return err
-			}
-			if len(encoded) > worker.Options.MaxBytes {
-				return errors.New("event exceeds configured batch byte limit")
-			}
-			if size+len(encoded) > worker.Options.MaxBytes || int64(end-start) >= worker.Options.MaxEvents {
-				break
-			}
-			size += len(encoded)
-			end++
-		}
-		chunk := Batch{Partition: batch.Partition, Token: batch.Token, Messages: batch.Messages[start:end]}
-		events := make([]Event, 0, len(chunk.Messages))
-		for _, message := range chunk.Messages {
-			events = append(events, message.Event)
-		}
-		if err := worker.Store.Ingest(ctx, events, worker.Prices); err != nil {
-			if errors.Is(err, ErrPriceVersionConflict) || (!errors.Is(err, ErrConflict) && !errors.Is(err, ErrPriceMissing)) {
-				return err
-			}
-			if err := worker.commitIndividually(ctx, chunk); err != nil {
-				return err
-			}
-			start = end
-			continue
-		}
-		if err := worker.Queue.Ack(ctx, chunk); err != nil {
+		chunk, end, err := worker.nextChunk(batch, start)
+		if err != nil {
 			return err
 		}
-		worker.committed.Add(uint64(len(events)))
-		if worker.Metrics != nil {
-			for _, event := range events {
-				worker.Metrics.durations.WithLabelValues("ingestion_lag").Observe(max(0, time.Since(event.OccurredAt).Seconds()))
+		if err := worker.commitChunk(ctx, chunk); err != nil {
+			if !errors.Is(err, ErrPriceMissing) && !errors.Is(err, ErrPriceVersionConflict) {
+				return err
 			}
+			deferred = errors.Join(deferred, err)
 		}
 		start = end
+	}
+	return deferred
+}
+
+func (worker *UsageWorker) nextChunk(batch Batch, start int) (Batch, int, error) {
+	size, end := 0, start
+	for end < len(batch.Messages) {
+		encoded, err := json.Marshal(batch.Messages[end].Event)
+		if err != nil {
+			return Batch{}, start, err
+		}
+		if len(encoded) > worker.Options.MaxBytes {
+			return Batch{}, start, errors.New("event exceeds configured batch byte limit")
+		}
+		if size+len(encoded) > worker.Options.MaxBytes || int64(end-start) >= worker.Options.MaxEvents {
+			break
+		}
+		size += len(encoded)
+		end++
+	}
+	return Batch{Partition: batch.Partition, Token: batch.Token, Messages: batch.Messages[start:end]}, end, nil
+}
+
+func (worker *UsageWorker) commitChunk(ctx context.Context, chunk Batch) error {
+	events := make([]Event, 0, len(chunk.Messages))
+	for _, message := range chunk.Messages {
+		events = append(events, message.Event)
+	}
+	if err := worker.Store.Ingest(ctx, events, worker.Prices); err != nil {
+		if !errors.Is(err, ErrConflict) && !errors.Is(err, ErrPriceMissing) {
+			return err
+		}
+		return worker.commitIndividually(ctx, chunk)
+	}
+	if err := worker.Queue.Ack(ctx, chunk); err != nil {
+		return err
+	}
+	worker.committed.Add(uint64(len(events)))
+	if worker.Metrics != nil {
+		for _, event := range events {
+			worker.Metrics.durations.WithLabelValues("ingestion_lag").Observe(max(0, time.Since(event.OccurredAt).Seconds()))
+		}
 	}
 	return nil
 }
@@ -275,7 +289,8 @@ func (worker *UsageWorker) commitIndividually(ctx context.Context, batch Batch) 
 		single := Batch{Partition: batch.Partition, Token: batch.Token, Messages: []Message{message}}
 		err := worker.Store.Ingest(ctx, []Event{message.Event}, worker.Prices)
 		if errors.Is(err, ErrPriceVersionConflict) {
-			return err
+			deferred = errors.Join(deferred, err)
+			continue
 		}
 		if errors.Is(err, ErrConflict) {
 			if err := worker.Queue.DeadLetter(ctx, single, "immutable_fact_conflict"); err != nil {
@@ -285,7 +300,7 @@ func (worker *UsageWorker) commitIndividually(ctx context.Context, batch Batch) 
 			continue
 		}
 		if errors.Is(err, ErrPriceMissing) {
-			deferred = ErrPriceMissing
+			deferred = errors.Join(deferred, ErrPriceMissing)
 			continue
 		}
 		if err != nil {

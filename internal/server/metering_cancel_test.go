@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"context"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,12 +33,7 @@ func testCancelledMeteredStream(t *testing.T, source string) {
 	}))
 	defer upstream.Close()
 	server := crdInferenceServerAt(t, upstream.URL)
-	journal, err := billing.OpenJournal(t.Context(), billing.JournalOptions{Directory: t.TempDir(), SegmentBytes: 4096, MaxBytes: 65536, SyncMode: "record"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer journal.Close()
-	server.SetMetering(&billing.Meter{Journal: journal, FailurePolicy: "continue", PublishTimeout: time.Second, Log: slog.New(slog.DiscardHandler)})
+	journal := attachDurableMeter(t, server)
 	handler := server.Handler()
 	admin := login(t, handler, "admin", "admin-pw")
 	token, path := admin, "/api/llm/v1/chat/completions"

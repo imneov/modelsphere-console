@@ -14,16 +14,7 @@ import (
 func TestLegacyKeysAreMappedAndVerifiedBeforeAuthorityCutover(t *testing.T) {
 	upstream, _ := gatewayUpstream(t)
 	source := inferenceServer(t, upstream.URL, 0)
-	for _, name := range []string{"admin", "bob"} {
-		user, err := source.store.GetUser(t.Context(), name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		user.UID = types.UID(name + "-uid")
-		if _, err := source.store.UpdateUser(t.Context(), user); err != nil {
-			t.Fatal(err)
-		}
-	}
+	bindMigrationUserUIDs(t, source)
 	target, err := router.NewCRDStore(t.Context(), source.kube.Dynamic(), "console", slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +54,27 @@ func TestLegacyKeysAreMappedAndVerifiedBeforeAuthorityCutover(t *testing.T) {
 	if response := do(switched, "POST", "/v1/chat/completions", key.Value, `{"model":"kimi"}`); response.Code != http.StatusForbidden {
 		t.Fatalf("import widened model scope: %d", response.Code)
 	}
-	response = do(switched, "GET", "/api/router/apikeys", admin, "")
+	assertMigratedKeyMetadata(t, switched, admin, key)
+
+}
+
+func bindMigrationUserUIDs(t *testing.T, source *Server) {
+	t.Helper()
+	for _, name := range []string{"admin", "bob"} {
+		user, err := source.store.GetUser(t.Context(), name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		user.UID = types.UID(name + "-uid")
+		if _, err := source.store.UpdateUser(t.Context(), user); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func assertMigratedKeyMetadata(t *testing.T, switched http.Handler, admin string, key createdKey) {
+	t.Helper()
+	response := do(switched, "GET", "/api/router/apikeys", admin, "")
 	var list struct {
 		Items []struct {
 			ID, User, PrincipalUID, CreatedBy string

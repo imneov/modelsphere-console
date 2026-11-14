@@ -28,17 +28,7 @@ func TestTrustedRecoveryCompletesStartOnlyRequestWithoutRegeneration(t *testing.
 	if err := store.Ingest(t.Context(), []billing.Event{start}, nil); err != nil {
 		t.Fatal(err)
 	}
-	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method != "GET" || request.URL.Path != "/usage/request" || request.Header.Get("Authorization") != "Bearer trusted-token" {
-			t.Errorf("unexpected reconciliation request: %s %s", request.Method, request.URL.Path)
-			writer.WriteHeader(400)
-			return
-		}
-		if err := json.NewEncoder(writer).Encode(map[string]any{"request_id": "request", "model": "qwen", "terminal_at": terminal, "usage": billing.Usage{InputTokens: 10, OutputTokens: 5, Complete: true}}); err != nil {
-			t.Error(err)
-		}
-	}))
-	t.Cleanup(upstream.Close)
+	upstream := trustedUsageServer(t, terminal)
 	journal, err := billing.OpenJournal(t.Context(), billing.JournalOptions{Directory: t.TempDir(), SegmentBytes: 4096, MaxBytes: 16384, SyncMode: "record"})
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +54,29 @@ func TestTrustedRecoveryCompletesStartOnlyRequestWithoutRegeneration(t *testing.
 	}); err != nil {
 		t.Fatal(err)
 	}
-	page, err = store.Requests(t.Context(), billing.Filter{OwnerUID: "user", Page: 1, Limit: 10})
+	assertTrustedTerminal(t, store, terminal)
+
+}
+
+func trustedUsageServer(t *testing.T, terminal time.Time) *httptest.Server {
+	t.Helper()
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != "GET" || request.URL.Path != "/usage/request" || request.Header.Get("Authorization") != "Bearer trusted-token" {
+			t.Errorf("unexpected reconciliation request: %s %s", request.Method, request.URL.Path)
+			writer.WriteHeader(400)
+			return
+		}
+		if err := json.NewEncoder(writer).Encode(map[string]any{"request_id": "request", "model": "qwen", "terminal_at": terminal, "usage": billing.Usage{InputTokens: 10, OutputTokens: 5, Complete: true}}); err != nil {
+			t.Error(err)
+		}
+	}))
+	t.Cleanup(upstream.Close)
+	return upstream
+}
+
+func assertTrustedTerminal(t *testing.T, store *billing.Store, terminal time.Time) {
+	t.Helper()
+	page, err := store.Requests(t.Context(), billing.Filter{OwnerUID: "user", Page: 1, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

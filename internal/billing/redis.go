@@ -145,24 +145,32 @@ func (queue *RedisQueue) Consume(ctx context.Context, consumer string, limit int
 }
 
 func (queue *RedisQueue) readPartition(ctx context.Context, partition int, consumer string, limit int64) ([]redis.XMessage, error) {
-	messages, _, err := queue.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{Stream: queue.stream(partition), Group: queue.options.Group, Consumer: consumer, MinIdle: 0, Start: "0-0", Count: limit}).Result()
+	cursorKey := fmt.Sprintf("%s:reclaim:%s:%d", queue.options.Prefix, queue.options.Group, partition)
+	cursor, err := queue.client.Get(ctx, cursorKey).Result()
+	if errors.Is(err, redis.Nil) {
+		cursor = "0-0"
+	} else if err != nil {
+		return nil, err
+	}
+	// Reclamation rotates across the PEL; fresh events retain capacity even when prices are missing.
+	messages, next, err := queue.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{Stream: queue.stream(partition), Group: queue.options.Group, Consumer: consumer, MinIdle: 0, Start: cursor, Count: max(1, limit/2)}).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return nil, err
 	}
-	if len(messages) > 0 {
-		return messages, nil
+	if err := queue.client.Set(ctx, cursorKey, next, 0).Err(); err != nil {
+		return nil, err
 	}
-	streams, err := queue.client.XReadGroup(ctx, &redis.XReadGroupArgs{Group: queue.options.Group, Consumer: consumer, Streams: []string{queue.stream(partition), ">"}, Count: limit, Block: -1}).Result()
+	streams, err := queue.client.XReadGroup(ctx, &redis.XReadGroupArgs{Group: queue.options.Group, Consumer: consumer, Streams: []string{queue.stream(partition), ">"}, Count: max(1, limit-int64(len(messages))), Block: -1}).Result()
 	if errors.Is(err, redis.Nil) {
-		return nil, nil
+		return messages, nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	if len(streams) == 0 {
-		return nil, nil
+		return messages, nil
 	}
-	return streams[0].Messages, nil
+	return append(messages, streams[0].Messages...), nil
 }
 
 func (queue *RedisQueue) Renew(ctx context.Context, batch Batch) error {

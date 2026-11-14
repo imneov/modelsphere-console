@@ -23,7 +23,7 @@ func (s *Server) handleBillingCredit(writer http.ResponseWriter, request *http.R
 	if !decodeBillingBody(writer, request, &input) {
 		return
 	}
-	if input.OperationID == "" || len(input.OperationID) > 200 || input.User == "" || input.PrincipalUID == "" || input.Currency != s.billing.Currency || input.Amount == 0 || (input.Kind != "topup" && input.Kind != "adjustment") || (input.Kind == "topup" && input.Amount < 0) {
+	if input.OperationID == "" || strings.HasPrefix(input.OperationID, "settle/") || len(input.OperationID) > 200 || input.User == "" || input.PrincipalUID == "" || input.Currency != s.billing.Currency || input.Amount == 0 || (input.Kind != "topup" && input.Kind != "adjustment") || (input.Kind == "topup" && input.Amount < 0) {
 		writeError(writer, http.StatusBadRequest, "operation, user, currency, amount and kind are required")
 		return
 	}

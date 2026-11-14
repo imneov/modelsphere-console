@@ -1,6 +1,9 @@
 # console configuration. One document; see internal/config for the schema.
 
 cluster:
+  # Zero preserves client-go rate limits; configure both for larger controller workloads.
+  clientQPS: 0
+  clientBurst: 0
   # Empty means in-cluster. On a laptop, point at a kubeconfig:
   # kubeconfig: ~/.kube/config
   # context: kind-modelsphere
@@ -54,3 +57,67 @@ router:
   namespace: console
   secret: console/console-api-keys
   backend: llm
+  # Enable only during an explicit legacy-owner import, before the CRD cutover.
+  migration: false
+  pipeline:
+    maxAttempts: 1
+    retryBackoff: 0s
+    maxSSEFrameBytes: 1048576
+    # Zero disables each optional generation/circuit limit.
+    maxDuration: 0s
+    maxResponseBytes: 0
+    repeatDeltaLimit: 0
+    circuitFailureThreshold: 0
+    circuitResetAfter: 30s
+
+# Enable after CRD cutover, prices and durable dependencies are configured.
+# Production credentials are injected through the named environment variables.
+billing:
+  enabled: false
+  role: gateway
+  currency: USD
+  admissionThreshold: 0
+  store:
+    driver: postgres
+    dsnEnv: CONSOLE_BILLING_DSN
+    maxConnections: 20
+    # sqlitePath is only for single-process adapter/development use.
+    sqlitePath: ""
+  queue:
+    urlEnv: CONSOLE_BILLING_REDIS_URL
+    prefix: modelsphere:billing
+    partitions: 8
+    leaseDuration: 30s
+  journal:
+    directory: /var/lib/console/billing
+    shardIDEnv: CONSOLE_JOURNAL_SHARD
+    segmentBytes: 16777216
+    maxBytes: 1073741824
+    minFreeBytes: 0
+    retention: 24h
+    syncMode: record
+    syncInterval: 100ms
+    failurePolicy: continue
+    replayInterval: 1s
+    replayRate: 1000
+    # Explicit recovery role only; republish retained original IDs after queue data loss.
+    replayRetained: false
+  usage:
+    flushInterval: 5s
+    pollInterval: 100ms
+    maxEvents: 500
+    maxBytes: 4194304
+    concurrency: 4
+  settlement:
+    interval: 10s
+    maxWallets: 100
+    maxCharges: 1000
+    leaseName: console-billing-settlement
+    leaseDuration: 30s
+    renewDeadline: 20s
+    retryPeriod: 5s
+  reconciliation:
+    # A trusted read-only GET endpoint; never an inference/generation endpoint.
+    url: ""
+    upstream: ""
+    tokenEnv: ""

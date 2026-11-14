@@ -13,6 +13,11 @@ imagePullSecrets: []
 # through node drains whenever there is more than one.
 replicaCount: 2
 
+cluster:
+  # Zero preserves client-go limits; set both positive for larger controller workloads.
+  clientQPS: 0
+  clientBurst: 0
+
 # NodePort by default so the UI is reachable the moment the install finishes;
 # the chart's NOTES print the address. ClusterIP plus an ingress for anything
 # longer-lived.

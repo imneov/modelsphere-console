@@ -49,6 +49,12 @@ func TestRetainedJournalRecoversQueueDataLossWithOriginalEvents(t *testing.T) {
 	if err := journal.Replay(t.Context(), func(event billing.Event) error { return queue.Publish(t.Context(), event) }); err != nil {
 		t.Fatal(err)
 	}
+	assertRecoveredQueueEvent(t, queue, event)
+
+}
+
+func assertRecoveredQueueEvent(t *testing.T, queue *billing.RedisQueue, event billing.Event) {
+	t.Helper()
 	batch, err := queue.Consume(t.Context(), "replacement", 10)
 	if err != nil {
 		batch, err = queue.Consume(t.Context(), "replacement", 10)
