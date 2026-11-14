@@ -9,7 +9,9 @@
       "models": "可用模型",
       "expiresAt": "过期时间",
       "createdBy": "创建者",
-      "createdAt": "创建时间"
+      "createdAt": "创建时间",
+      "user": "所属用户",
+      "status": "状态"
     },
     "allModels": "全部模型",
     "neverExpires": "永不过期",
@@ -39,7 +41,9 @@
       "noModels": "暂无可用模型，只能创建可访问全部模型的密钥。",
       "pickModel": "请至少选择一个模型",
       "submit": "创建",
-      "submitting": "创建中…"
+      "submitting": "创建中…",
+      "owner": "所属用户",
+      "pickOwner": "请选择所属用户"
     },
     "created": {
       "title": "API 密钥已创建",
@@ -48,6 +52,27 @@
       "keyPlaceholder": "密钥",
       "done": "我已保存"
     },
-    "search": "搜索名称"
+    "search": "搜索名称",
+    "unmapped": "待映射属主",
+    "status": {
+      "enabled": "已启用",
+      "disabled": "人工禁用",
+      "system-disabled": "系统禁用"
+    },
+    "enable": "启用",
+    "disable": "停用",
+    "reason": {
+      "admin": "管理员停用",
+      "expired": "已过期",
+      "insufficient-balance": "余额不足",
+      "user-inactive": "用户已停用"
+    },
+    "migration": {
+      "open": "迁移旧 Key",
+      "description": "逐个指定归属用户。提交后冻结旧库的创建和删除，核对成功后再由部署配置切换 CRD。",
+      "operation": "迁移操作 ID",
+      "submit": "冻结并核对迁移",
+      "complete": "迁移已核对完成。请将 router.keySource 切换为 crd，并关闭 router.migration。"
+    }
   }
 }

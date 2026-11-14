@@ -56,28 +56,55 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 }
 
 func (s *Server) requirePasswordReset(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// There is no seeded password to rotate when nobody logs in.
-		if s.cfg.Server.Auth.Disabled || !strings.HasPrefix(r.URL.Path, "/api/") || isPasswordResetPath(r) {
-			next.ServeHTTP(w, r)
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if s.cfg.Server.Auth.Disabled || !strings.HasPrefix(request.URL.Path, "/api/") {
+			next.ServeHTTP(writer, request)
 			return
 		}
-		id := identityFrom(r.Context())
-		if id == nil || s.store == nil {
-			writeError(w, http.StatusUnauthorized, "unauthenticated")
+		strict := s.router != nil && s.router.SessionAuthorizer() != nil
+		if !strict && isPasswordResetPath(request) {
+			next.ServeHTTP(writer, request)
 			return
 		}
-		u, err := s.store.GetUser(r.Context(), id.Name)
+		identity := identityFrom(request.Context())
+		if identity == nil || s.store == nil {
+			writeError(writer, http.StatusUnauthorized, "unauthenticated")
+			return
+		}
+		var user *iam.User
+		var err error
+		if strict && s.isInferenceRequest(request) {
+			user, err = s.router.SessionUser(request.Context(), identity.Name)
+		} else {
+			user, err = s.store.GetUser(request.Context(), identity.Name)
+		}
 		if err != nil {
-			writeError(w, http.StatusUnauthorized, "unauthenticated")
+			writeError(writer, http.StatusUnauthorized, "unauthenticated")
 			return
 		}
-		if u.RequiresPasswordReset() {
-			writeError(w, http.StatusForbidden, "请先修改初始密码")
+		if strict {
+			resolved, err := iam.ResolveSession(identity, user)
+			if err != nil {
+				writeError(writer, http.StatusUnauthorized, "session no longer matches the active user; sign in again")
+				return
+			}
+			request = request.WithContext(withIdentity(request.Context(), resolved))
+		}
+		if user.RequiresPasswordReset() && !isPasswordResetPath(request) {
+			writeError(writer, http.StatusForbidden, "请先修改初始密码")
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(writer, request)
 	})
+}
+
+func (s *Server) isInferenceRequest(request *http.Request) bool {
+	for _, backend := range s.cfg.Backends {
+		if (backend.Gateway != nil || backend.Name == s.cfg.Router.Backend) && strings.HasPrefix(request.URL.Path, strings.TrimSuffix(backend.Prefix, "/")+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func isPasswordResetPath(r *http.Request) bool {

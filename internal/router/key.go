@@ -25,18 +25,33 @@ const (
 // bits leave nothing to brute-force, so a salted SHA-256 is enough and keeps the
 // check off the hot path's CPU budget.
 type Key struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Description string     `json:"description,omitempty"`
-	Salt        string     `json:"salt"`
-	Hash        string     `json:"hash"`
-	Models      []string   `json:"models,omitempty"`
-	CreatedBy   string     `json:"createdBy"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+	User            string     `json:"user,omitempty"`
+	PrincipalKind   string     `json:"principalKind,omitempty"`
+	PrincipalUID    string     `json:"principalUID,omitempty"`
+	WalletID        string     `json:"walletID,omitempty"`
+	Creator         string     `json:"creator,omitempty"`
+	KeyMasked       string     `json:"keyMasked,omitempty"`
+	From            string     `json:"from,omitempty"`
+	Disabled        bool       `json:"disabled,omitempty"`
+	BillingState    string     `json:"-"`
+	WalletRevision  int64      `json:"-"`
+	EffectiveStatus string     `json:"-"`
+	DisabledReason  string     `json:"-"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	Description     string     `json:"description,omitempty"`
+	Salt            string     `json:"salt"`
+	Hash            string     `json:"hash"`
+	Models          []string   `json:"models,omitempty"`
+	CreatedBy       string     `json:"createdBy"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
 }
 
 func (k Key) Masked() string {
+	if k.KeyMasked != "" {
+		return k.KeyMasked
+	}
 	return Prefix + "_" + k.ID[:min(4, len(k.ID))] + "***"
 }
 

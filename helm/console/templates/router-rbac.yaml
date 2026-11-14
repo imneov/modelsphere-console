@@ -11,6 +11,17 @@ metadata:
   labels:
     {{- include "console.labels" . | nindent 4 }}
 rules:
+  - apiGroups: ["gateway.modelsphere.io"]
+    resources: ["apikeys", "apikeys/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["gateway.modelsphere.io"]
+    resources: ["walletadmissions"]
+    verbs: ["get", "list", "watch"]
+  {{- if .Values.billing.enabled }}
+  - apiGroups: ["gateway.modelsphere.io"]
+    resources: ["pricerules"]
+    verbs: ["get", "list", "watch", "create", "update"]
+  {{- end }}
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["create"]

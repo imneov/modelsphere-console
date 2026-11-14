@@ -10,6 +10,7 @@ import (
 
 	"github.com/modelsphere/console/internal/config"
 	"github.com/modelsphere/console/internal/gateway"
+	"github.com/modelsphere/console/internal/router"
 )
 
 // backendResource is the RBAC resource a backend is authorized as; the backend's
@@ -62,7 +63,6 @@ func (s *Server) mountBackends(mux *http.ServeMux) {
 		if !ok {
 			continue
 		}
-		proxy := s.backendProxy(b)
 		prefix := strings.TrimSuffix(b.Prefix, "/")
 		catalogMounted = catalogMounted || prefix == "/api/llm"
 		catalogResolve := resolve
@@ -72,25 +72,7 @@ func (s *Server) mountBackends(mux *http.ServeMux) {
 		mux.HandleFunc(prefix+"/route-options", func(w http.ResponseWriter, r *http.Request) {
 			s.handleRouteOptions(w, r, b, catalogResolve)
 		})
-		mux.HandleFunc(strings.TrimSuffix(b.Prefix, "/")+"/", func(w http.ResponseWriter, r *http.Request) {
-			if !s.authorize(w, r, backendVerb(r.Method), backendResource, b.Name) {
-				return
-			}
-			target, err := resolve(r.Context())
-			if err != nil {
-				// A gateway backend that cannot be found is a 502 like any other
-				// unreachable backend, but the reason is the useful part.
-				writeError(w, http.StatusBadGateway, fmt.Sprintf("backend %s: %v", b.Name, err))
-				return
-			}
-			if b.Gateway != nil {
-				target = s.routeByModel(w, r, b, target)
-				if target == nil {
-					return
-				}
-			}
-			proxy.ServeHTTP(w, r.WithContext(withTarget(r.Context(), target)))
-		})
+		mux.HandleFunc(prefix+"/", s.proxyBackend(b, resolve))
 	}
 	if !catalogMounted {
 		mux.HandleFunc("/api/llm/route-options", func(w http.ResponseWriter, r *http.Request) {
@@ -101,6 +83,35 @@ func (s *Server) mountBackends(mux *http.ServeMux) {
 			}
 			writeError(w, http.StatusNotFound, "no gateway backend configured")
 		})
+	}
+}
+
+func (s *Server) proxyBackend(b config.Backend, resolve targetResolver) http.HandlerFunc {
+	proxy := s.backendProxy(b)
+	prefix := strings.TrimSuffix(b.Prefix, "/")
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.authorize(w, r, backendVerb(r.Method), backendResource, b.Name) {
+			return
+		}
+		target, err := resolve(r.Context())
+		if err != nil {
+			// A gateway backend that cannot be found is a 502 like any other
+			// unreachable backend, but the reason is the useful part.
+			writeError(w, http.StatusBadGateway, fmt.Sprintf("backend %s: %v", b.Name, err))
+			return
+		}
+		if b.Gateway != nil {
+			target = s.routeByModel(w, r, b, target)
+			if target == nil {
+				return
+			}
+		}
+		if s.meter != nil && s.router != nil && (b.Name == s.cfg.Router.Backend || b.Gateway != nil) && r.Method == http.MethodPost {
+			identity := identityFrom(r.Context())
+			s.router.ServeSession(w, r, identity.Name, identity.PrincipalUID, prefix, &router.Target{URL: target.url, Header: target.header, Key: target.key})
+			return
+		}
+		proxy.ServeHTTP(w, r.WithContext(withTarget(r.Context(), target)))
 	}
 }
 

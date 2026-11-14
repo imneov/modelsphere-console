@@ -1,0 +1,32 @@
+# Existing gateway and credential Secret in the release namespace.
+playground:
+  gateway:
+    profile: models/site-profile
+
+router:
+  keySource: crd
+  migration: false
+  pipeline:
+    maxAttempts: 2
+    maxDuration: 120s
+    maxResponseBytes: 16777216
+    repeatDeltaLimit: 32
+    circuitFailureThreshold: 5
+    circuitResetAfter: 30s
+
+billing:
+  enabled: true
+  credentials:
+    secretName: console-billing-credentials
+    dsnKey: postgres-dsn
+    redisKey: redis-url
+  settings:
+    currency: USD
+    admissionThreshold: 0
+  persistence:
+    size: 10Gi
+  workers:
+    usage:
+      replicas: 2
+    settlement:
+      replicas: 2

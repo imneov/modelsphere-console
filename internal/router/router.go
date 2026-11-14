@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/modelsphere/console/internal/billing"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -41,24 +42,39 @@ var (
 // backend's own credential, so the gateway keeps one key and needs no change.
 // Errors use the OpenAI envelope, since the callers are SDKs.
 type Router struct {
-	keys    *Store
-	backend Backend
-	maxBody int64
-	log     *slog.Logger
-	metrics *metrics
-	proxy   *httputil.ReverseProxy
+	importer *CRDStore
+	pipeline PipelineOptions
+	circuit  *circuitBreaker
+	meter    *billing.Meter
+	legacy   *Store
+	keys     KeyStore
+	backend  Backend
+	maxBody  int64
+	log      *slog.Logger
+	metrics  *metrics
+	proxy    *httputil.ReverseProxy
 }
 
 // New builds a router; a nil backend answers 503 for every call.
-func New(keys *Store, backend Backend, maxBody int64, log *slog.Logger, reg prometheus.Registerer) *Router {
+func New(keys KeyStore, backend Backend, maxBody int64, log *slog.Logger, reg prometheus.Registerer) *Router {
 	rt := &Router{keys: keys, backend: backend, maxBody: maxBody, log: log, metrics: newMetrics(reg)}
 	rt.proxy = rt.newProxy()
+	rt.pipeline = PipelineOptions{MaxAttempts: 1, MaxSSEFrameBytes: 1 << 20, Transport: http.DefaultTransport}
+	rt.circuit = &circuitBreaker{states: map[string]circuitState{}}
+	rt.proxy.Transport = &retryTransport{router: rt, base: http.DefaultTransport}
 	return rt
 }
 
 // call is what the handler decided, for the proxy to act on.
 type call struct {
-	target *Target
+	upstreamStatus int
+	guard          *generationGuard
+	cancel         context.CancelFunc
+	info           RequestInfo
+	attempts       []billing.Attempt
+	trace          *billing.Trace
+	reason         string
+	target         *Target
 }
 
 type callKey struct{}
@@ -69,35 +85,15 @@ func callFrom(ctx context.Context) *call {
 }
 
 func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	key, err := rt.keys.Verify(r.Context(), apiKeyOf(r))
-	switch {
-	case errors.Is(err, ErrExpired):
-		rt.reject(w, "expired", http.StatusUnauthorized, "invalid_request_error", "expired_api_key", "API key has expired")
-		return
-	case errors.Is(err, ErrInvalid):
-		rt.reject(w, "invalid_key", http.StatusUnauthorized, "invalid_request_error", "invalid_api_key", "Invalid API key")
-		return
-	case err != nil:
-		rt.log.Error("api keys unavailable", "err", err)
-		rt.reject(w, "keys_unavailable", http.StatusServiceUnavailable, "server_error", "service_unavailable", "API keys cannot be checked right now")
+	key, ok := rt.verifyKey(w, r)
+	if !ok {
 		return
 	}
-	rt.metrics.lastRequest.WithLabelValues(key.ID, key.Name).SetToCurrentTime()
 
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, rt.maxBody))
+	body, err := rt.requestBody(w, r)
 	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			rt.reject(w, "too_large", http.StatusRequestEntityTooLarge, "invalid_request_error", "request_too_large",
-				fmt.Sprintf("Request body exceeds %d bytes", tooLarge.Limit))
-			return
-		}
-		rt.reject(w, "unreadable", http.StatusBadRequest, "invalid_request_error", "", "Request body could not be read")
 		return
 	}
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	r.ContentLength = int64(len(body))
-	r.Header.Set("Content-Length", strconv.Itoa(len(body)))
 
 	if rt.backend == nil {
 		rt.reject(w, "no_backend", http.StatusServiceUnavailable, "server_error", "service_unavailable", "No inference backend is configured")
@@ -129,15 +125,32 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c := &call{target: target}
-	sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
-	rt.proxy.ServeHTTP(sw, r.WithContext(context.WithValue(r.Context(), callKey{}, c)))
-	// The model label comes from a request the gateway accepted, so a caller
-	// cannot mint series by naming models that do not exist.
-	if sw.status >= 300 {
-		model = ""
+	rt.invoke(w, r, key, model, target, "sdk")
+}
+
+func (rt *Router) verifyKey(w http.ResponseWriter, r *http.Request) (Key, bool) {
+	key, err := rt.keys.Verify(r.Context(), apiKeyOf(r))
+	switch {
+	case errors.Is(err, ErrBillingBlocked):
+		rt.reject(w, "billing_blocked", http.StatusPaymentRequired, "insufficient_quota", "insufficient_balance", "Wallet balance does not allow new calls")
+		return Key{}, false
+	case errors.Is(err, ErrDisabled):
+		rt.reject(w, "disabled", http.StatusForbidden, "permission_error", "disabled_api_key", "API key is disabled")
+		return Key{}, false
+	case errors.Is(err, ErrExpired):
+		rt.reject(w, "expired", http.StatusUnauthorized, "invalid_request_error", "expired_api_key", "API key has expired")
+		return Key{}, false
+	case errors.Is(err, ErrInvalid):
+		rt.reject(w, "invalid_key", http.StatusUnauthorized, "invalid_request_error", "invalid_api_key", "Invalid API key")
+		return Key{}, false
+	case err != nil:
+		rt.log.Error("api keys unavailable", "err", err)
+		rt.reject(w, "keys_unavailable", http.StatusServiceUnavailable, "server_error", "service_unavailable", "API keys cannot be checked right now")
+		return Key{}, false
 	}
-	rt.metrics.requests.WithLabelValues(key.ID, key.Name, model, strconv.Itoa(sw.status)).Inc()
+	rt.metrics.lastRequest.WithLabelValues(key.ID, key.Name).SetToCurrentTime()
+
+	return key, true
 }
 
 func (rt *Router) reject(w http.ResponseWriter, reason string, status int, typ, code, message string) {
@@ -225,31 +238,64 @@ var unresolved = &Target{URL: url.URL{Scheme: "http", Host: "router-without-targ
 
 func (rt *Router) newProxy() *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
-		Rewrite: func(pr *httputil.ProxyRequest) {
-			target := unresolved
-			c := callFrom(pr.In.Context())
-			if c != nil && c.target != nil {
-				target = c.target
-			}
-			pr.Out.URL.RawPath = ""
-			pr.SetURL(&target.URL)
-			pr.SetXForwarded()
-			for k := range pr.Out.Header {
-				if strings.HasPrefix(http.CanonicalHeaderKey(k), "X-Remote-") {
-					pr.Out.Header.Del(k)
+		Rewrite: rt.rewriteProxy,
+		ModifyResponse: func(response *http.Response) error {
+			invocation := callFrom(response.Request.Context())
+			if invocation != nil {
+				invocation.upstreamStatus = response.StatusCode
+				invocation.info.Status = response.StatusCode
+				if err := rt.phase(response.Request.Context(), PhaseResponse, invocation.info); err != nil {
+					invocation.reason = "plugin_rejected"
+					return err
 				}
 			}
-			pr.Out.Header.Del("Cookie")
-			pr.Out.Header.Del("Authorization")
-			if target.Key != "" {
-				pr.Out.Header.Set(target.Header, target.Key)
+			if invocation != nil && (invocation.trace != nil || invocation.guard != nil) {
+				if invocation.trace != nil {
+					invocation.trace.Observe(billing.Usage{}, response.Header.Get("X-Request-ID"))
+				}
+				response.Body = observeBody(response.Body, invocation.trace, response.Header.Get("Content-Type"), func(error) { invocation.reason = "upstream_disconnect" }, invocation.guard, rt.pipeline.MaxSSEFrameBytes)
 			}
+			return nil
 		},
 		FlushInterval: -1,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			if invocation := callFrom(r.Context()); invocation != nil {
+				if invocation.reason == "" {
+					invocation.reason = "upstream_error"
+				}
+				if reason := invocation.guard.Reason(); reason != "" {
+					openAIError(w, http.StatusGatewayTimeout, "server_error", "generation_protection", "Generation stopped: "+reason)
+					return
+				}
+			}
 			rt.log.Warn("inference backend unreachable", "path", r.URL.Path, "err", err)
 			openAIError(w, http.StatusBadGateway, "server_error", "bad_gateway", "Inference gateway is unreachable")
 		},
+	}
+}
+
+func (rt *Router) rewriteProxy(pr *httputil.ProxyRequest) {
+	target := unresolved
+	c := callFrom(pr.In.Context())
+	if c != nil && c.target != nil {
+		target = c.target
+	}
+	pr.Out.URL.RawPath = ""
+	pr.SetURL(&target.URL)
+	pr.SetXForwarded()
+	for k := range pr.Out.Header {
+		if strings.HasPrefix(http.CanonicalHeaderKey(k), "X-Remote-") {
+			pr.Out.Header.Del(k)
+		}
+	}
+	pr.Out.Header.Del("Cookie")
+	pr.Out.Header.Del("Accept-Encoding")
+	for _, header := range []string{"Idempotency-Key", "X-Idempotency-Key", "X-Api-Key", "Api-Key", "Proxy-Authorization"} {
+		pr.Out.Header.Del(header)
+	}
+	pr.Out.Header.Del("Authorization")
+	if target.Key != "" {
+		pr.Out.Header.Set(target.Header, target.Key)
 	}
 }
 
@@ -308,3 +354,23 @@ func (w *statusWriter) Flush() {
 }
 
 func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func (rt *Router) requestBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, rt.maxBody))
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			rt.reject(w, "too_large", http.StatusRequestEntityTooLarge, "invalid_request_error", "request_too_large", fmt.Sprintf("Request body exceeds %d bytes", tooLarge.Limit))
+		} else {
+			rt.reject(w, "unreadable", http.StatusBadRequest, "invalid_request_error", "", "Request body could not be read")
+		}
+		return nil, err
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	r.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
+	r.ContentLength = int64(len(body))
+	r.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	return body, nil
+}
+
+func httpStatus(status int) string { return strconv.Itoa(status) }

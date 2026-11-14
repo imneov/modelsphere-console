@@ -30,10 +30,10 @@ type Attributes struct {
 // controller is needed. The CRD objects are identical to Global's, so on upgrade
 // Global's controllers adopt them and its authorizer takes over unchanged.
 type Authorizer struct {
-	store *Store
+	store AuthorizationStore
 }
 
-func NewAuthorizer(store *Store) *Authorizer { return &Authorizer{store: store} }
+func NewAuthorizer(store AuthorizationStore) *Authorizer { return &Authorizer{store: store} }
 
 func (a *Authorizer) PermissionsFor(ctx context.Context, id *Identity) ([]string, error) {
 	if id == nil {

@@ -22,7 +22,7 @@ community install can be upgraded to the commercial Global without a migration:
 | Surface        | Kept identical to Global                                   |
 |----------------|------------------------------------------------------------|
 | User/role data | `iam.theriseunion.io/v1alpha1` User, IAMRole, IAMRoleBinding CRDs |
-| Tokens         | OAuth2 password grant, HS256 JWT, same claim set           |
+| Tokens         | OAuth2 password grant, HS256 JWT, Global-compatible claims plus optional canonical User `uid` |
 | Authorization  | K8s-RBAC-shaped, `system:masters` short-circuit, platform scope only |
 
 Upgrade = share the JWT secret and point the identity endpoints at Global's

@@ -20,7 +20,9 @@ import (
 
 	"github.com/modelsphere/console/internal/cluster"
 	"github.com/modelsphere/console/internal/config"
+	"github.com/modelsphere/console/internal/gatewayapi"
 	"github.com/modelsphere/console/internal/iam"
+	"github.com/modelsphere/console/internal/router"
 )
 
 func testServer(t *testing.T) *Server {
@@ -47,10 +49,13 @@ func testServerWithConfig(t *testing.T, cfg *config.Config, objs ...runtime.Obje
 	admin := user("admin", adminHash, "system:masters")
 	dyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(),
 		map[schema.GroupVersionResource]string{
-			iam.UsersGVR:        "UserList",
-			iam.RolesGVR:        "IAMRoleList",
-			iam.RoleBindingsGVR: "IAMRoleBindingList",
-			iam.LoginRecordsGVR: "LoginRecordList",
+			gatewayapi.WalletAdmissions: "WalletAdmissionList",
+			gatewayapi.PriceRules:       "PriceRuleList",
+			router.APIKeysGVR:           "APIKeyList",
+			iam.UsersGVR:                "UserList",
+			iam.RolesGVR:                "IAMRoleList",
+			iam.RoleBindingsGVR:         "IAMRoleBindingList",
+			iam.LoginRecordsGVR:         "LoginRecordList",
 		},
 		append([]runtime.Object{admin, user("bob", bobHash)}, objs...)...,
 	)

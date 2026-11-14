@@ -1,0 +1,90 @@
+{{- if .Values.billing.enabled }}
+{{- range $role, $worker := .Values.billing.workers }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "console.fullname" $ }}-billing-{{ $role }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "console.fullname" $ }}-billing-{{ $role }}
+  labels:
+    {{- include "console.labels" $ | nindent 4 }}
+spec:
+  replicas: {{ $worker.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: console-billing
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $role }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: console-billing
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/component: {{ $role }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ $.Values.metrics.port | quote }}
+        prometheus.io/path: /metrics
+    spec:
+      serviceAccountName: {{ include "console.fullname" $ }}-billing-{{ $role }}
+      securityContext: {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: 75
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: worker
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          args: ["--config", "/etc/console/console.yaml", "--role", {{ $role | quote }}]
+          env:
+            {{- include "console.billing.env" $ | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: {{ $.Values.metrics.port }}
+          readinessProbe:
+            httpGet: { path: /readyz, port: metrics }
+          startupProbe:
+            httpGet: { path: /healthz, port: metrics }
+            failureThreshold: 60
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+          resources: {{- toYaml $worker.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/console
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "console.fullname" $ }}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "console.fullname" $ }}-billing-{{ $role }}-metrics
+  labels:
+    {{- include "console.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  selector:
+    app.kubernetes.io/name: console-billing
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: {{ $role }}
+  ports:
+    - name: metrics
+      port: {{ $.Values.metrics.port }}
+      targetPort: metrics
+{{- end }}
+{{- end }}

@@ -54,3 +54,5 @@ cscope.po.out
 # End of https://www.toptal.com/developers/gitignore/api/tags
 
 .DS_Store
+__pycache__/
+*.pyc

@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/modelsphere/console/internal/billing"
 	"github.com/modelsphere/console/internal/cluster"
 	"github.com/modelsphere/console/internal/config"
 	"github.com/modelsphere/console/internal/iam"
@@ -37,6 +38,8 @@ type Server struct {
 	authz  *iam.Authorizer
 
 	router   *router.Router
+	meter    *billing.Meter
+	billing  *billing.Service
 	registry *prometheus.Registry
 	models   *modelIndex
 
@@ -55,6 +58,13 @@ func New(cfg *config.Config, kube *cluster.Kube, log *slog.Logger, version strin
 // SetWeb installs the SPA filesystem. Without one, console is API only.
 func (s *Server) SetWeb(f fs.FS) { s.web = f }
 
+func (s *Server) SetMetering(meter *billing.Meter) {
+	s.meter = meter
+	if s.router != nil {
+		s.router.SetMetering(meter)
+	}
+}
+
 // SetIAM installs the identity kernel: the user store, the token signer, and
 // the login authenticator. Without it, /oauth and /api/iam are unavailable and
 // every /api/* request is rejected.
@@ -64,7 +74,7 @@ func (s *Server) SetIAM(store *iam.Store, signer *iam.Signer, authn *iam.Authent
 
 // EnableRouter serves /v1 with the keys in store, forwarding to the backend the
 // config's router section names, and /api/router for managing the keys.
-func (s *Server) EnableRouter(store *router.Store) {
+func (s *Server) EnableRouter(store router.KeyStore) error {
 	resolve := s.backendTargets()[s.cfg.Router.Backend]
 	if resolve == nil {
 		s.log.Error("router has no backend: it was skipped at startup", "backend", s.cfg.Router.Backend)
@@ -78,11 +88,21 @@ func (s *Server) EnableRouter(store *router.Store) {
 		backend = routerBackend{s: s, name: s.cfg.Router.Backend, resolve: resolve}
 	}
 	s.router = router.New(store, backend, maxBody, s.log, s.registry)
+	if err := s.router.ConfigurePipeline(inferencePipeline(s.cfg.Router.Pipeline)); err != nil {
+		return err
+	}
+	s.router.SetMetering(s.meter)
+
+	return nil
 }
 
 // MetricsHandler serves the Prometheus metrics, on their own listener.
 func (s *Server) MetricsHandler() http.Handler {
-	return promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{})
+	gatherers := prometheus.Gatherers{s.registry}
+	if s.billing != nil && s.billing.Registry != nil {
+		gatherers = append(gatherers, s.billing.Registry)
+	}
+	return promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{})
 }
 
 // Handler builds the mux and wraps it in the middleware chain. Auth runs inside
@@ -122,6 +142,9 @@ func (s *Server) Handler() http.Handler {
 
 		if s.router != nil {
 			s.mountRouter(mux)
+		}
+		if s.billing != nil {
+			s.mountBilling(mux)
 		}
 	}
 
@@ -204,6 +227,9 @@ func (s *Server) recover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if v := recover(); v != nil {
+				if v == http.ErrAbortHandler {
+					panic(v)
+				}
 				s.log.Error("panic", "path", r.URL.Path, "value", v)
 				writeError(w, http.StatusInternalServerError, "internal error")
 			}
@@ -242,4 +268,11 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func writeError(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
+}
+
+func (s *Server) EnableKeyMigration(target *router.CRDStore) error {
+	if s.router == nil {
+		return router.ErrUnavailable
+	}
+	return s.router.SetKeyMigration(target)
 }

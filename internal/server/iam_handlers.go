@@ -11,6 +11,7 @@ import (
 
 // userView is the API shape of a user: the password hash is never serialised.
 type userView struct {
+	UID           string   `json:"uid,omitempty"`
 	Name          string   `json:"name"`
 	Email         string   `json:"email,omitempty"`
 	DisplayName   string   `json:"displayName,omitempty"`
@@ -23,6 +24,7 @@ type userView struct {
 
 func toView(u *iam.User) userView {
 	v := userView{
+		UID:         iam.CanonicalUID(u),
 		Name:        u.Name,
 		Email:       u.Spec.Email,
 		DisplayName: u.Spec.DisplayName,
@@ -66,6 +68,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 			"permissions":          []string{"*"},
 			"requirePasswordReset": false,
 			"authDisabled":         true,
+			"capabilities":         s.capabilities(),
 		})
 		return
 	}
@@ -85,6 +88,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		"permissions":          permissions,
 		"requirePasswordReset": u.RequiresPasswordReset(),
 		"authDisabled":         false,
+		"capabilities":         s.capabilities(),
 	})
 }
 
@@ -254,7 +258,13 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 // resource. system:masters passes everything (the seeded admin); anyone else
 // needs a role binding that grants it.
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request, verb, resource, name string) bool {
-	ok, err := s.authz.Authorize(r.Context(), identityFrom(r.Context()),
+	authorizer := s.authz
+	if s.router != nil && s.isInferenceRequest(r) {
+		if cached := s.router.SessionAuthorizer(); cached != nil {
+			authorizer = cached
+		}
+	}
+	ok, err := authorizer.Authorize(r.Context(), identityFrom(r.Context()),
 		iam.Attributes{Verb: verb, APIGroup: iam.Group, Resource: resource, Name: name})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -265,4 +275,12 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, verb, resourc
 		return false
 	}
 	return true
+}
+
+func (s *Server) capabilities() []string {
+	capabilities := []string{}
+	if s.billing != nil {
+		capabilities = append(capabilities, "billing")
+	}
+	return capabilities
 }

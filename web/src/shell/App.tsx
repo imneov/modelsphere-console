@@ -1,9 +1,21 @@
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router";
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/shell/auth";
 import { PermissionGuard, PermissionsProvider } from "@/shell/permissions";
 import { Layout } from "@/shell/Layout";
-import { ModuleProvider, joinPath, validateModules, type ConsoleModule } from "@/shell/module";
+import {
+  ModuleProvider,
+  joinPath,
+  validateModules,
+  type ConsoleModule,
+} from "@/shell/module";
 import { Login } from "@/shell/pages/Login";
 import { Home } from "@/shell/pages/Home";
 import { ChangePassword } from "@/shell/pages/ChangePassword";
@@ -22,8 +34,21 @@ function RequireAuth({ modules }: { modules: ConsoleModule[] }) {
     return <Navigate to="/" replace />;
   }
   if (location.pathname === "/change-password") return <Outlet />;
+  const enabled = modules.filter(
+    (module) =>
+      !module.capability || me.capabilities?.includes(module.capability),
+  );
+  if (
+    modules.some(
+      (module) =>
+        !enabled.includes(module) &&
+        (location.pathname === module.basePath ||
+          location.pathname.startsWith(`${module.basePath}/`)),
+    )
+  )
+    return <Navigate to="/" replace />;
   return (
-    <Layout modules={modules}>
+    <Layout modules={enabled}>
       <Outlet />
     </Layout>
   );
@@ -48,8 +73,16 @@ export function App({ modules }: { modules: ConsoleModule[] }) {
                       path={joinPath(m.basePath, p.path)}
                       element={
                         <ModuleProvider module={m}>
-                          <div className={m.frame === "flush" ? "h-full" : "p-6"}>
-                            {p.permission ? <PermissionGuard permission={p.permission}>{p.element}</PermissionGuard> : p.element}
+                          <div
+                            className={m.frame === "flush" ? "h-full" : "p-6"}
+                          >
+                            {p.permission ? (
+                              <PermissionGuard permission={p.permission}>
+                                {p.element}
+                              </PermissionGuard>
+                            ) : (
+                              p.element
+                            )}
                           </div>
                         </ModuleProvider>
                       }

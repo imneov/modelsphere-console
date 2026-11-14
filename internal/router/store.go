@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -22,7 +23,15 @@ var (
 	ErrNotFound    = errors.New("api key not found")
 	ErrUnavailable = errors.New("api keys cannot be read")
 	ErrBadInput    = errors.New("bad api key input")
+	ErrDisabled    = errors.New("api key disabled")
 )
+
+type KeyStore interface {
+	Create(context.Context, Input) (Key, string, error)
+	Delete(context.Context, string) error
+	List(context.Context) ([]Key, error)
+	Verify(context.Context, string) (Key, error)
+}
 
 // backend is the one Secret the keys live in.
 type backend interface {
@@ -41,11 +50,12 @@ const (
 
 // Store keeps the keys in one Secret, one entry per key id holding its JSON.
 type Store struct {
-	b         backend
-	namespace string
-	name      string
-	log       *slog.Logger
-	now       func() time.Time
+	migrationState atomic.Uint32
+	b              backend
+	namespace      string
+	name           string
+	log            *slog.Logger
+	now            func() time.Time
 
 	mu        sync.Mutex
 	keys      map[string]Key
@@ -60,9 +70,12 @@ func NewStore(b backend, namespace, name string, log *slog.Logger) *Store {
 func (s *Store) Ref() string { return s.namespace + "/" + s.name }
 
 type Input struct {
-	Name        string
-	Description string
-	Models      []string
+	User         string
+	PrincipalUID string
+	ExpiresAt    *time.Time
+	Name         string
+	Description  string
+	Models       []string
 	// ExpiresIn zero means the key never expires.
 	ExpiresIn time.Duration
 	CreatedBy string
@@ -155,6 +168,9 @@ func (s *Store) Verify(ctx context.Context, value string) (Key, error) {
 		}
 		key, found = s.keys[id]
 	}
+	if migrationRetired(&s.migrationState) {
+		return Key{}, ErrUnavailable
+	}
 	if !found || !key.matches(secret) {
 		return Key{}, ErrInvalid
 	}
@@ -168,9 +184,12 @@ func (s *Store) Verify(ctx context.Context, value string) (Key, error) {
 // wrote in between.
 func (s *Store) mutate(ctx context.Context, change func(map[string]Key) error) error {
 	for try := 1; ; try++ {
-		keys, version, err := s.read(ctx)
+		keys, version, marker, err := s.readSnapshot(ctx)
 		if err != nil {
 			return err
+		}
+		if marker.Phase != "" {
+			return ErrMigrationFrozen
 		}
 		if err := change(keys); err != nil {
 			return err
@@ -192,24 +211,8 @@ func (s *Store) mutate(ctx context.Context, change func(map[string]Key) error) e
 // version is where a write has to start from: nil when the Secret does not exist
 // yet and the write creates it.
 func (s *Store) read(ctx context.Context) (map[string]Key, *string, error) {
-	data, rv, err := s.b.SecretVersioned(ctx, s.namespace, s.name)
-	if apierrors.IsNotFound(err) {
-		return map[string]Key{}, nil, nil
-	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("read api keys %s: %w", s.Ref(), err)
-	}
-	version := &rv
-	keys := make(map[string]Key, len(data))
-	for id, raw := range data {
-		var k Key
-		if err := json.Unmarshal(raw, &k); err != nil || k.ID != id {
-			s.log.Warn("api key entry skipped: not a key this console wrote", "secret", s.Ref(), "entry", id)
-			continue
-		}
-		keys[id] = k
-	}
-	return keys, version, nil
+	keys, version, _, err := s.readSnapshot(ctx)
+	return keys, version, err
 }
 
 func (s *Store) write(ctx context.Context, keys map[string]Key, version *string) error {

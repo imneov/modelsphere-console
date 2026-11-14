@@ -89,3 +89,23 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{ include "console.fullname" . }}-api-keys
 {{- end -}}
 
+
+{{- define "console.billing.env" -}}
+- name: {{ .Values.billing.settings.store.dsnEnv }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.billing.credentials.secretName | quote }}
+      key: {{ .Values.billing.credentials.dsnKey | quote }}
+- name: {{ .Values.billing.settings.queue.urlEnv }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.billing.credentials.secretName | quote }}
+      key: {{ .Values.billing.credentials.redisKey | quote }}
+{{- with .Values.billing.settings.reconciliation.tokenEnv }}
+- name: {{ . }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ $.Values.billing.credentials.secretName | quote }}
+      key: {{ required "billing.credentials.reconciliationKey is required" $.Values.billing.credentials.reconciliationKey | quote }}
+{{- end }}
+{{- end -}}

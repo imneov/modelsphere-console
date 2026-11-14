@@ -47,5 +47,10 @@ backends:
 # it) and forwards /v1 to the backend named here with that backend's own
 # credential. Usage is exported as router_* metrics on server.metricsAddr.
 router:
+  # Choose one authority. Existing installations use secret until their keys
+  # have been imported with explicit owners. CRD mode authenticates locally
+  # using APIKey/User Informers.
+  keySource: secret
+  namespace: console
   secret: console/console-api-keys
   backend: llm

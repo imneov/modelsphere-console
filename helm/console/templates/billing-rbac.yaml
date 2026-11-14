@@ -1,0 +1,66 @@
+{{- if and .Values.billing.enabled .Values.rbac.create }}
+{{- range $role := list "usage" "settlement" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "console.fullname" $ }}-billing-{{ $role }}
+rules:
+  {{- if eq $role "usage" }}
+  - apiGroups: ["gateway.modelsphere.io"]
+    resources: ["pricerules"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.modelsphere.io"]
+    resources: ["pricerules/status"]
+    verbs: ["get", "update"]
+  {{- else }}
+  - apiGroups: ["gateway.modelsphere.io"]
+    resources: ["apikeys"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.modelsphere.io"]
+    resources: ["apikeys/status", "walletadmissions/status"]
+    verbs: ["get", "update"]
+  - apiGroups: ["gateway.modelsphere.io"]
+    resources: ["walletadmissions"]
+    verbs: ["get", "create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "console.fullname" $ }}-billing-{{ $role }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "console.fullname" $ }}-billing-{{ $role }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "console.fullname" $ }}-billing-{{ $role }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "console.fullname" . }}-billing-settlement
+rules:
+  - apiGroups: ["iam.theriseunion.io"]
+    resources: ["users"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "console.fullname" . }}-billing-settlement
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "console.fullname" . }}-billing-settlement
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "console.fullname" . }}-billing-settlement
+    namespace: {{ .Release.Namespace }}
+{{- end }}

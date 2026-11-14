@@ -11,9 +11,11 @@ import (
 
 // Identity is an authenticated caller, extracted from a verified token.
 type Identity struct {
-	Name   string
-	Groups []string
-	Email  string
+	PrincipalUID string
+	IssuedAt     time.Time
+	Name         string
+	Groups       []string
+	Email        string
 }
 
 // IsSystemMaster reports whether the caller is in system:masters, the group the
@@ -40,7 +42,7 @@ type Token struct {
 
 const tokenScope = "openid profile email groups"
 
-// Signer mints HS256 tokens. The claim set is identical to Global's HMAC mode.
+// Signer retains Global's core HMAC claims and adds an optional canonical UID binding.
 type Signer struct {
 	issuer string
 	secret []byte
@@ -67,6 +69,9 @@ func (s *Signer) Mint(u *User) (*Token, error) {
 		"groups":             realUserGroups(u),
 		"scope":              tokenScope,
 		"jti":                randomHex(16),
+	}
+	if uid := CanonicalUID(u); uid != "" {
+		claims["uid"] = uid
 	}
 	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.secret)
 	if err != nil {
@@ -101,6 +106,12 @@ func (s *Signer) Verify(tokenString string) (*Identity, error) {
 
 func identityFromClaims(claims jwt.MapClaims) *Identity {
 	id := &Identity{Groups: []string{"system:authenticated"}}
+	if uid, ok := claims["uid"].(string); ok {
+		id.PrincipalUID = uid
+	}
+	if issued, ok := claims["iat"].(float64); ok {
+		id.IssuedAt = time.Unix(int64(issued), 0).UTC()
+	}
 	if v, ok := claims["sub"].(string); ok {
 		id.Name = v
 	}

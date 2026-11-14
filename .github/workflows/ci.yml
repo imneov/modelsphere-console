@@ -18,6 +18,28 @@ concurrency:
 jobs:
   go:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: billing
+          POSTGRES_PASSWORD: dev-only-change-me
+          POSTGRES_DB: billing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U billing -d billing"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      BILLING_TEST_POSTGRES_DSN: postgres://billing:dev-only-change-me@127.0.0.1:5432/billing?sslmode=disable
+      BILLING_TEST_REDIS_URL: redis://127.0.0.1:6379/0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

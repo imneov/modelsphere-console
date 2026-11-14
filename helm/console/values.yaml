@@ -165,6 +165,12 @@ playground:
 # not recorded on the keys.
 router:
   enabled: true
+  # Select the single key authority. Keep secret for an existing installation;
+  # import explicit owners before switching to crd (see docs/gateway-billing.md).
+  keySource: secret
+  # Enable staging only while Secret remains authoritative.
+  migration: false
+  pipeline: {}
   # Largest /v1 request body accepted, in bytes. The body is read whole to check
   # which model it asks for. Empty means 16 MiB.
   maxBodyBytes: ""
@@ -193,7 +199,76 @@ backendSecrets: {}
 rbac:
   create: true
 
+# The journal claim needs the nonroot process's group on newly provisioned volumes.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+
 resources: {}
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# Billing requires CRD key authority and the existing inference gateway above.
+# Credentials remain in existing Secrets and never enter Helm release values.
+billing:
+  enabled: false
+  credentials:
+    secretName: ""
+    dsnKey: postgres-dsn
+    redisKey: redis-url
+    reconciliationKey: ""
+  settings:
+    currency: USD
+    admissionThreshold: 0
+    store:
+      driver: postgres
+      dsnEnv: CONSOLE_BILLING_DSN
+      maxConnections: 20
+    queue:
+      urlEnv: CONSOLE_BILLING_REDIS_URL
+      prefix: modelsphere:billing
+      partitions: 8
+      leaseDuration: 30s
+    journal:
+      directory: /var/lib/console/billing
+      shardIDEnv: CONSOLE_JOURNAL_SHARD
+      segmentBytes: 16777216
+      maxBytes: 1073741824
+      minFreeBytes: 268435456
+      retention: 24h
+      syncMode: record
+      syncInterval: 100ms
+      failurePolicy: continue
+      replayInterval: 1s
+      replayRate: 1000
+    usage:
+      flushInterval: 5s
+      pollInterval: 100ms
+      maxEvents: 500
+      maxBytes: 4194304
+      concurrency: 4
+    settlement:
+      interval: 10s
+      maxWallets: 100
+      maxCharges: 1000
+      leaseName: console-billing-settlement
+      leaseDuration: 30s
+      renewDeadline: 20s
+      retryPeriod: 5s
+    reconciliation: {}
+  persistence:
+    # One retained claim per gateway ordinal. Do not scale down before replaying
+    # that ordinal's pending journal. RWO attaches to its replacement pod.
+    size: 10Gi
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+  workers:
+    usage:
+      replicas: 2
+      resources: {}
+    settlement:
+      replicas: 2
+      resources: {}

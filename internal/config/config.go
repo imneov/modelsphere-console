@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 type Config struct {
@@ -24,6 +25,7 @@ type Config struct {
 	Server   Server    `yaml:"server,omitempty"`
 	Backends []Backend `yaml:"backends,omitempty"`
 	Router   Router    `yaml:"router,omitempty"`
+	Billing  Billing   `yaml:"billing,omitempty"`
 
 	Origin string `yaml:"-"`
 }
@@ -31,6 +33,10 @@ type Config struct {
 // Router is /v1, the endpoint programs call models through with API keys admins
 // issue. Empty Secret leaves it, and key management, off.
 type Router struct {
+	Pipeline  RouterPipeline `yaml:"pipeline,omitempty"`
+	KeySource string         `yaml:"keySource,omitempty"`
+	Migration bool           `yaml:"migration,omitempty"`
+	Namespace string         `yaml:"namespace,omitempty"`
 	// Secret holding the issued keys, "namespace/name"; console creates it.
 	Secret string `yaml:"secret,omitempty"`
 	// Backend is the backend /v1 forwards to, by name. Default "llm".
@@ -46,7 +52,7 @@ const (
 	DefaultMetricsAddr   = ":9090"
 )
 
-func (r Router) Enabled() bool { return r.Secret != "" }
+func (r Router) Enabled() bool { return r.Secret != "" || r.Namespace != "" }
 
 // Cluster is where the iam CRDs (User/Role/RoleBinding) are read and written.
 // Empty kubeconfig means in-cluster, which is the normal deployment.
@@ -197,6 +203,8 @@ func Find(explicit string) string {
 }
 
 func (c *Config) applyDefaults() {
+	c.Billing.applyDefaults()
+	c.Router.Pipeline.applyDefaults()
 	if c.Server.Addr == "" {
 		c.Server.Addr = ":8080"
 	}
@@ -226,7 +234,10 @@ func (c *Config) origin() string {
 
 // Validate covers what console needs to serve.
 func (c *Config) Validate() error {
-	if c.Server.Auth.JWTSecret == "" && !c.Server.Auth.Disabled {
+	if err := c.Billing.validate(c.Router); err != nil {
+		return fmt.Errorf("%s: %w", c.origin(), err)
+	}
+	if c.Server.Auth.JWTSecret == "" && !c.Server.Auth.Disabled && (!c.Billing.Enabled || c.Billing.Role == "gateway") {
 		return fmt.Errorf("%s: server.auth.jwtSecret is required -- it signs every token, or set server.auth.disabled to run without a login", c.origin())
 	}
 	names, prefixes := map[string]bool{}, map[string]bool{}
@@ -243,8 +254,19 @@ func (c *Config) Validate() error {
 		names[b.Name], prefixes[b.Prefix] = true, true
 	}
 	if a := c.Router; a.Enabled() {
+		if err := a.Pipeline.validate(); err != nil {
+			return fmt.Errorf("%s: %w", c.origin(), err)
+		}
 		switch {
-		case !refRE.MatchString(a.Secret):
+		case a.KeySource != "" && a.KeySource != "secret" && a.KeySource != "crd":
+			return fmt.Errorf("%s: router.keySource must be secret or crd", c.origin())
+		case a.KeySource == "crd" && a.Secret != "" && !refRE.MatchString(a.Secret):
+			return fmt.Errorf("%s: router.secret must be namespace/name when supplied", c.origin())
+		case a.Migration && (a.KeySource == "crd" || !refRE.MatchString(a.Secret)):
+			return fmt.Errorf("%s: router.migration requires Secret authority and router.secret", c.origin())
+		case (a.KeySource == "crd" || a.Migration) && len(validation.IsDNS1123Label(a.Namespace)) != 0:
+			return fmt.Errorf("%s: router.namespace is required for CRD keys", c.origin())
+		case a.KeySource != "crd" && !refRE.MatchString(a.Secret):
 			return fmt.Errorf("%s: router.secret %q must be namespace/name", c.origin(), a.Secret)
 		case !names[a.Backend]:
 			return fmt.Errorf("%s: router.backend %q is not a configured backend; /v1 would have nowhere to go", c.origin(), a.Backend)
@@ -256,7 +278,7 @@ func (c *Config) Validate() error {
 }
 
 // reservedPrefixes are console's own API; a backend there would shadow them.
-var reservedPrefixes = []string{"/api/iam", "/api/me", "/api/router"}
+var reservedPrefixes = []string{"/api/iam", "/api/me", "/api/router", "/api/billing"}
 
 func validateBackend(b Backend) error {
 	// Only /api/* passes the auth middleware's guard; anything else is served

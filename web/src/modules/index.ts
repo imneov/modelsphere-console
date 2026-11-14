@@ -5,5 +5,6 @@ import { iamModule } from "@/modules/iam";
 import { inferencesModule } from "@/modules/inferences";
 import { playgroundModule } from "@/modules/playground";
 import { routerModule } from "@/modules/router";
+import { billingModule } from "@/modules/billing";
 
-export const modules: ConsoleModule[] = [inferencesModule, playgroundModule, routerModule, iamModule, docsModule];
+export const modules: ConsoleModule[] = [inferencesModule, playgroundModule, routerModule, billingModule, iamModule, docsModule];

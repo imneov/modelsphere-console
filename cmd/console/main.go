@@ -8,18 +8,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/modelsphere/console/internal/cluster"
 	"github.com/modelsphere/console/internal/config"
 	"github.com/modelsphere/console/internal/iam"
-	"github.com/modelsphere/console/internal/router"
 	"github.com/modelsphere/console/internal/server"
 	"github.com/modelsphere/console/internal/version"
 	"github.com/modelsphere/console/web"
@@ -32,6 +31,7 @@ func main() {
 		logLevel   = flag.String("log-level", envOr("CONSOLE_LOG_LEVEL", "info"), "debug|info|warn|error")
 		webDir     = flag.String("web-dir", os.Getenv("CONSOLE_WEB_DIR"), "serve the UI from this directory instead of the embedded build")
 		showVer    = flag.Bool("version", false, "print version and exit")
+		role       = flag.String("role", os.Getenv("CONSOLE_BILLING_ROLE"), "gateway|usage|settlement|replay (overrides billing.role)")
 	)
 	flag.Parse()
 
@@ -39,32 +39,17 @@ func main() {
 		fmt.Println(version.Version)
 		return
 	}
-	if err := run(*configPath, *addr, *logLevel, *webDir); err != nil {
+	if err := run(*configPath, *addr, *logLevel, *webDir, *role); err != nil {
 		fmt.Fprintln(os.Stderr, "console: "+err.Error())
 		os.Exit(1)
 	}
 }
 
-func run(configPath, addr, logLevel, webDir string) error {
+func run(configPath, addr, logLevel, webDir, role string) error {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: parseLevel(logLevel)}))
 
-	path := config.Find(configPath)
-	if path == "" {
-		return fmt.Errorf("no config file: pass --config, or set CONSOLE_CONFIG")
-	}
-	cfg, err := config.Load(path)
+	cfg, err := loadRuntimeConfig(configPath, addr, role)
 	if err != nil {
-		return err
-	}
-	if addr != "" {
-		cfg.Server.Addr = addr
-	}
-	// The signing key comes from a Secret via env in a cluster, keeping it out
-	// of the ConfigMap-rendered config.
-	if v := os.Getenv("CONSOLE_JWT_SECRET"); v != "" {
-		cfg.Server.Auth.JWTSecret = v
-	}
-	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
@@ -75,6 +60,12 @@ func run(configPath, addr, logLevel, webDir string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if cfg.Billing.Role != "gateway" {
+		if !cfg.Billing.Enabled {
+			return fmt.Errorf("billing must be enabled for a worker role")
+		}
+		return runBillingWorker(ctx, cfg, kube, log)
+	}
 
 	srv := server.New(cfg, kube, log, version.Version)
 
@@ -89,12 +80,15 @@ func run(configPath, addr, logLevel, webDir string) error {
 	srv.SetIAM(store, signer, iam.NewAuthenticator(store, signer, log), iam.NewAuthorizer(store))
 
 	if cfg.Router.Enabled() {
-		ns, name, _ := strings.Cut(cfg.Router.Secret, "/")
-		keys := router.NewStore(kube, ns, name, log)
-		srv.EnableRouter(keys)
-		log.Info("router enabled", "secret", keys.Ref(), "backend", cfg.Router.Backend)
+		if err := enableGatewayKeys(ctx, cfg, kube, srv, log); err != nil {
+			return err
+		}
 	}
 
+	return serveGateway(ctx, cfg, kube, srv, log, webDir)
+}
+
+func serveGateway(ctx context.Context, cfg *config.Config, kube *cluster.Kube, srv *server.Server, log *slog.Logger, webDir string) error {
 	if webDir != "" {
 		f, err := server.WebFromDir(webDir)
 		if err != nil {
@@ -106,6 +100,13 @@ func run(configPath, addr, logLevel, webDir string) error {
 		srv.SetWeb(f)
 	}
 
+	if cfg.Billing.Enabled {
+		runtime, err := enableGatewayBilling(ctx, cfg, kube, srv, log)
+		if err != nil {
+			return err
+		}
+		return errors.Join(srv.Run(ctx), runtime.close())
+	}
 	return srv.Run(ctx)
 }
 
@@ -122,4 +123,31 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func loadRuntimeConfig(configPath, addr, role string) (*config.Config, error) {
+	path := config.Find(configPath)
+	if path == "" {
+		return nil, fmt.Errorf("no config file: pass --config, or set CONSOLE_CONFIG")
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		return nil, err
+	}
+	if addr != "" {
+		cfg.Server.Addr = addr
+	}
+	if role != "" {
+		cfg.Billing.Role = role
+	}
+	// The signing key comes from a Secret via env in a cluster, keeping it out
+	// of the ConfigMap-rendered config.
+	if v := os.Getenv("CONSOLE_JWT_SECRET"); v != "" {
+		cfg.Server.Auth.JWTSecret = v
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }

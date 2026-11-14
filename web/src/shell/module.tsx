@@ -1,4 +1,9 @@
-import { createContext, useContext, type ComponentType, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { LayoutDashboard, type LucideIcon } from "lucide-react";
 import { pageKey } from "@/shell/i18n";
 
@@ -12,6 +17,7 @@ export interface ModuleOverviewProps {
 }
 
 export interface ConsoleModule {
+  capability?: string;
   // Stable id: used as the React key and in logs. Lowercase, no spaces.
   id: string;
   // Sidebar group heading, in Chinese. Other languages: "{id}:group.{title}"
@@ -43,8 +49,16 @@ export interface ModulePage {
 
 const ModuleContext = createContext<ConsoleModule | null>(null);
 
-export function ModuleProvider({ module, children }: { module: ConsoleModule; children: ReactNode }) {
-  return <ModuleContext.Provider value={module}>{children}</ModuleContext.Provider>;
+export function ModuleProvider({
+  module,
+  children,
+}: {
+  module: ConsoleModule;
+  children: ReactNode;
+}) {
+  return (
+    <ModuleContext.Provider value={module}>{children}</ModuleContext.Provider>
+  );
 }
 
 // joinPath("/swiss", "catalog/x") === "/swiss/catalog/x"; joinPath("/swiss", "") === "/swiss".
@@ -71,17 +85,31 @@ export function validateModules(modules: ConsoleModule[]): void {
   const ids = new Set<string>();
   const bases = new Set<string>();
   for (const m of modules) {
-    if (!/^[a-z][a-z0-9-]*$/.test(m.id)) throw new Error(`module id "${m.id}" must be lowercase kebab-case`);
-    if (RESERVED_IDS.has(m.id)) throw new Error(`module id "${m.id}" is reserved by the shell`);
+    if (!/^[a-z][a-z0-9-]*$/.test(m.id))
+      throw new Error(`module id "${m.id}" must be lowercase kebab-case`);
+    if (RESERVED_IDS.has(m.id))
+      throw new Error(`module id "${m.id}" is reserved by the shell`);
     if (ids.has(m.id)) throw new Error(`duplicate module id "${m.id}"`);
     ids.add(m.id);
-    if (!/^\/[a-z0-9-]+$/.test(m.basePath)) throw new Error(`module "${m.id}": basePath "${m.basePath}" must look like "/name"`);
-    if (RESERVED.has(m.basePath)) throw new Error(`module "${m.id}": basePath "${m.basePath}" is reserved by the shell`);
-    if (bases.has(m.basePath)) throw new Error(`module "${m.id}": basePath "${m.basePath}" already taken`);
+    if (!/^\/[a-z0-9-]+$/.test(m.basePath))
+      throw new Error(
+        `module "${m.id}": basePath "${m.basePath}" must look like "/name"`,
+      );
+    if (RESERVED.has(m.basePath))
+      throw new Error(
+        `module "${m.id}": basePath "${m.basePath}" is reserved by the shell`,
+      );
+    if (bases.has(m.basePath))
+      throw new Error(
+        `module "${m.id}": basePath "${m.basePath}" already taken`,
+      );
     bases.add(m.basePath);
     const paths = new Set<string>();
     for (const p of m.pages) {
-      if (paths.has(p.path)) throw new Error(`module "${m.id}": page path "${p.path}" declared twice`);
+      if (paths.has(p.path))
+        throw new Error(
+          `module "${m.id}": page path "${p.path}" declared twice`,
+        );
       paths.add(p.path);
     }
   }
@@ -109,20 +137,45 @@ export interface NavGroup {
 
 // navGroups turns module declarations into sidebar groups, dropping pages the
 // user may not open and groups left empty by that.
-export function navGroups(modules: ConsoleModule[], has: (permission: string) => boolean): NavGroup[] {
-  const groups: NavGroup[] = [{ items: [{ to: "/", label: "概览", ns: "shell", key: "overview", icon: LayoutDashboard, end: true }] }];
+export function navGroups(
+  modules: ConsoleModule[],
+  has: (permission: string) => boolean,
+): NavGroup[] {
+  const groups: NavGroup[] = [
+    {
+      items: [
+        {
+          to: "/",
+          label: "概览",
+          ns: "shell",
+          key: "overview",
+          icon: LayoutDashboard,
+          end: true,
+        },
+      ],
+    },
+  ];
   for (const m of modules) {
     const items = menuItems(m, has);
-    if (items.length) groups.push({ title: m.title, ns: m.id, basePath: m.basePath, items });
+    if (items.length)
+      groups.push({ title: m.title, ns: m.id, basePath: m.basePath, items });
   }
   return groups;
 }
 
-function menuItems(m: ConsoleModule, has: (permission: string) => boolean, pick: (p: ModulePage) => boolean = () => true, placement: "menu" | "topbar" = "menu"): NavItem[] {
+function menuItems(
+  m: ConsoleModule,
+  has: (permission: string) => boolean,
+  pick: (p: ModulePage) => boolean = () => true,
+  placement: "menu" | "topbar" = "menu",
+): NavItem[] {
   return m.pages
     .filter((p) => p.menu && (!p.permission || has(p.permission)) && pick(p))
     .map((p) => {
-      const topbar = placement === "topbar" && typeof p.topbar === "object" ? p.topbar : undefined;
+      const topbar =
+        placement === "topbar" && typeof p.topbar === "object"
+          ? p.topbar
+          : undefined;
       return {
         to: joinPath(m.basePath, p.path),
         label: topbar?.label ?? p.menu!.label,
@@ -135,7 +188,10 @@ function menuItems(m: ConsoleModule, has: (permission: string) => boolean, pick:
 }
 
 // topbarItems are the pages declared topbar: true that the user may open.
-export function topbarItems(modules: ConsoleModule[], has: (permission: string) => boolean): NavItem[] {
+export function topbarItems(
+  modules: ConsoleModule[],
+  has: (permission: string) => boolean,
+): NavItem[] {
   return modules.flatMap((m) => menuItems(m, has, (p) => !!p.topbar, "topbar"));
 }
 
@@ -143,6 +199,14 @@ export function topbarItems(modules: ConsoleModule[], has: (permission: string) 
 // mounted under. Matching menu entries alone misses a module's pages that have
 // none -- /inferences/x/details is under /inferences, whose index entry only
 // matches exactly.
-export function activeGroupTitle(groups: NavGroup[], pathname: string): string | undefined {
-  return groups.find((g) => g.title && g.basePath && (pathname === g.basePath || pathname.startsWith(g.basePath + "/")))?.title;
+export function activeGroupTitle(
+  groups: NavGroup[],
+  pathname: string,
+): string | undefined {
+  return groups.find(
+    (g) =>
+      g.title &&
+      g.basePath &&
+      (pathname === g.basePath || pathname.startsWith(g.basePath + "/")),
+  )?.title;
 }

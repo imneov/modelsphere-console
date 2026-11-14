@@ -8,6 +8,9 @@ spec:
   type: {{ .Values.service.type }}
   selector:
     {{- include "console.selectorLabels" . | nindent 4 }}
+    {{- if eq .Values.router.keySource "crd" }}
+    console.modelsphere.io/key-source: crd
+    {{- end }}
   ports:
     - name: http
       port: {{ .Values.service.port }}
@@ -35,3 +38,19 @@ spec:
       port: {{ .Values.metrics.port }}
       targetPort: metrics
       protocol: TCP
+
+{{- if .Values.billing.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "console.fullname" . }}-journal
+spec:
+  clusterIP: None
+  selector:
+    {{- include "console.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+{{- end }}

@@ -15,7 +15,9 @@
       "models": "Models",
       "expiresAt": "Expires",
       "createdBy": "Created by",
-      "createdAt": "Created"
+      "createdAt": "Created",
+      "user": "Owner",
+      "status": "Status"
     },
     "allModels": "All models",
     "neverExpires": "Never expires",
@@ -45,7 +47,9 @@
       "noModels": "No models available; only a key with access to all models can be created.",
       "pickModel": "Select at least one model",
       "submit": "Create",
-      "submitting": "Creating…"
+      "submitting": "Creating…",
+      "owner": "Owner",
+      "pickOwner": "Select an owner"
     },
     "created": {
       "title": "API key created",
@@ -54,6 +58,27 @@
       "keyPlaceholder": "key",
       "done": "I have saved it"
     },
-    "search": "Search name"
+    "search": "Search name",
+    "unmapped": "Owner mapping required",
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Manually disabled",
+      "system-disabled": "System disabled"
+    },
+    "enable": "Enable",
+    "disable": "Disable",
+    "reason": {
+      "admin": "Disabled by administrator",
+      "expired": "Expired",
+      "insufficient-balance": "Insufficient balance",
+      "user-inactive": "User inactive"
+    },
+    "migration": {
+      "open": "Migrate legacy keys",
+      "description": "Assign each key to its owner. Submission freezes legacy creation and deletion. Switch deployment configuration to CRD after verification succeeds.",
+      "operation": "Migration operation ID",
+      "submit": "Freeze and verify migration",
+      "complete": "Migration verified. Set router.keySource to crd and disable router.migration in the deployment configuration."
+    }
   }
 }

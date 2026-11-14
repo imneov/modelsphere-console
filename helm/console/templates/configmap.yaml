@@ -1,3 +1,8 @@
+{{- if .Values.billing.enabled }}
+{{- if or (ne .Values.router.keySource "crd") (not (include "console.router.enabled" .)) }}{{ fail "billing requires the router, an inference gateway, and router.keySource=crd" }}{{ end }}
+{{- if ne .Values.billing.settings.store.driver "postgres" }}{{ fail "distributed billing chart requires PostgreSQL" }}{{ end }}
+{{- $_ := required "billing.credentials.secretName is required" .Values.billing.credentials.secretName }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -66,9 +71,22 @@ data:
       {{- end }}
     {{- if include "console.router.enabled" . }}
     router:
+      keySource: {{ .Values.router.keySource | quote }}
+      migration: {{ .Values.router.migration }}
+      namespace: {{ .Release.Namespace | quote }}
       secret: {{ printf "%s/%s" .Release.Namespace (include "console.router.secret" .) | quote }}
       backend: llm
+      {{- with .Values.router.pipeline }}
+      pipeline: {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.router.maxBodyBytes }}
       maxBodyBytes: {{ . | int64 }}
       {{- end }}
+    {{- end }}
+
+    {{- if .Values.billing.enabled }}
+    billing:
+      enabled: true
+      role: gateway
+      {{- toYaml .Values.billing.settings | nindent 6 }}
     {{- end }}

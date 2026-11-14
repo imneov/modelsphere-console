@@ -30,14 +30,22 @@ export class ApiError extends Error {
 
 // apiFetch is `fetch` with the session attached. Modules whose client was written
 // against plain fetch (swiss's) swap it in and change nothing else.
-export function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+export function apiFetch(
+  input: string,
+  init: RequestInit = {},
+): Promise<Response> {
   const headers = new Headers(init.headers);
   const token = getToken();
-  if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
+  if (token && !headers.has("Authorization"))
+    headers.set("Authorization", `Bearer ${token}`);
   return fetch(input, { ...init, headers, credentials: "include" });
 }
 
-export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
@@ -61,6 +69,7 @@ export async function request<T>(method: string, path: string, body?: unknown): 
 }
 
 export interface Me {
+  capabilities?: string[];
   name: string;
   groups: string[];
   email?: string;
@@ -80,7 +89,11 @@ export interface ChangePasswordInput {
 // login exchanges credentials for a token at the OAuth2 password-grant endpoint
 // (form-encoded, exactly as Rise Global expects) and stores it.
 export async function login(username: string, password: string): Promise<void> {
-  const form = new URLSearchParams({ grant_type: "password", username, password });
+  const form = new URLSearchParams({
+    grant_type: "password",
+    username,
+    password,
+  });
   const res = await fetch("/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
