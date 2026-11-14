@@ -13,9 +13,8 @@ import { Provenance } from "@swiss/components/Provenance";
 import { isVideo, jobSLOs } from "@swiss/lib/video";
 import { useT } from "@/modules/inferences/i18n";
 import { modelLine, parseTab, releaseState, sloBlocked, visibleTabs, type Tab } from "@/modules/inferences/lib";
-import { serviceRelationship } from "./service-relationship";
+import { evaluateResourceAction } from "@/extensions/registry";
 import { ResourceExtensionSurface } from "@/extensions/surface";
-import { ServiceRelationshipBadge } from "@/modules/inferences/components/ServiceOwnership";
 import { statusOf } from "@/modules/inferences/components/StatusDot";
 import { DeploySheet } from "@/modules/inferences/components/DeploySheet";
 import { UninstallDialog } from "@/modules/inferences/components/UninstallDialog";
@@ -107,15 +106,17 @@ export function InferenceDetail() {
 
   const readOnly = cluster.data ? !cluster.data.allowDeploy : false;
   const removing = isUninstalling(s);
-  const relationship = serviceRelationship(s);
-  const blockedWrite = relationship.owned ? t("disabled.serviceManaged") : relationship.assignmentLocked ? t("disabled.serviceAssigned") : readOnly ? t("disabled.readOnly") : removing ? t("disabled.uninstalling") : false;
-  const upgradeBlocked = relationship.adaptiveOnly ? readOnly ? t("disabled.readOnly") : removing ? t("disabled.uninstalling") : false : blockedWrite;
+  const resourceKey = `${namespace}/${release}`;
+  const actionBlocked = (action: string) => evaluateResourceAction("inference-service", resourceKey, s, action);
+  const blockedWrite = actionBlocked("uninstall") || (readOnly ? t("disabled.readOnly") : removing ? t("disabled.uninstalling") : false);
+  const upgradeBlocked = actionBlocked("upgrade") || (readOnly ? t("disabled.readOnly") : removing ? t("disabled.uninstalling") : false);
+  const sloBlockedByExtension = actionBlocked("slo");
   const source = plan.data?.source;
   const model = modelLine(source ?? {}) || s.model;
   const pods = s.pods.map((p) => p.name);
   const video = isVideo(plan.data?.engine);
   const blocked = sloBlocked(s, plan.data, video && objects.data ? jobSLOs(objects.data.objects).length > 0 : undefined);
-  const sloOpen = !relationship.owned && !relationship.assignmentLocked && !removing && (editingSLO || (sloSetup && blocked !== "off" && s.planStatus?.phase !== "failed"));
+  const sloOpen = !sloBlockedByExtension && !removing && (editingSLO || (sloSetup && blocked !== "off" && s.planStatus?.phase !== "failed"));
   const closeSLO = () => {
     setEditingSLO(false);
     if (!sloSetup) return;
@@ -138,7 +139,7 @@ export function InferenceDetail() {
             {
               key: "slo",
               label: t("actions.slo"),
-              disabled: blockedWrite || (blocked === "off" ? t("disabled.sloOff") : blocked === "pending" ? t("disabled.sloPending") : false),
+              disabled: sloBlockedByExtension || blockedWrite || (blocked === "off" ? t("disabled.sloOff") : blocked === "pending" ? t("disabled.sloPending") : false),
               onClick: () => setEditingSLO(true),
             },
             {
@@ -163,8 +164,7 @@ export function InferenceDetail() {
           ]}
           metaColumns={4}
         />
-        <ServiceRelationshipBadge service={s} />
-        <ResourceExtensionSurface resourceType="inference-service" resourceKey={`${namespace}/${release}`} resource={s} placement="resource.header" />
+        <ResourceExtensionSurface resourceType="inference-service" resourceKey={resourceKey} resource={s} placement="resource.header" />
         <PanelTabs items={visible.map((key) => ({ value: key, label: t(`tabs.${key}`), count: counts[key] }))} />
 
         <TabsContent value="overview">
@@ -186,7 +186,7 @@ export function InferenceDetail() {
           <Endpoint namespace={namespace} release={release} status={s} access={false} />
         </TabsContent>
         <TabsContent value="versions">
-          <Versions namespace={namespace} release={release} rollbackBlocked={removing ? t("disabled.uninstalling") : readOnly || !plan.data ? t("disabled.readOnly") : false} />
+          <Versions namespace={namespace} release={release} rollbackBlocked={actionBlocked("rollback") || (removing ? t("disabled.uninstalling") : readOnly || !plan.data ? t("disabled.readOnly") : false)} />
         </TabsContent>
         <TabsContent value="runs">
           <Runs namespace={namespace} release={release} />
@@ -200,10 +200,10 @@ export function InferenceDetail() {
         )}
       </Tabs>
 
-      <SLOSheet target={sloOpen ? { namespace, release } : null} video={video} canEdit={!readOnly && !relationship.assignmentLocked && !relationship.owned && !removing} setup={sloSetup} waiting={blocked === "pending"} onClose={closeSLO} />
-      <DeploySheet target={upgrading && !relationship.owned && (!relationship.assignmentLocked || relationship.adaptiveOnly) && !removing ? { kind: "upgrade", namespace, release } : null} onClose={() => setUpgrading(false)} />
+      <SLOSheet target={sloOpen ? { namespace, release } : null} video={video} canEdit={!sloBlockedByExtension && !readOnly && !removing} setup={sloSetup} waiting={blocked === "pending"} onClose={closeSLO} />
+      <DeploySheet target={upgrading && !upgradeBlocked && !removing ? { kind: "upgrade", namespace, release } : null} onClose={() => setUpgrading(false)} />
       <UninstallDialog
-        target={uninstalling && !relationship.owned && !relationship.assignmentLocked && !removing ? { namespace, release } : null}
+        target={uninstalling && !blockedWrite && !removing ? { namespace, release } : null}
         onClose={() => setUninstalling(false)}
         onDone={() => navigate(p(""))}
       />

@@ -18,9 +18,8 @@ import { api, type Deployment } from "@swiss/lib/api";
 import { isUninstalling } from "@swiss/lib/phase";
 import { useT } from "@/modules/inferences/i18n";
 import { detailPath, modelLine, rowState } from "@/modules/inferences/lib";
-import { serviceRelationship } from "./service-relationship";
+import { evaluateResourceAction } from "@/extensions/registry";
 import { ResourceExtensionSurface } from "@/extensions/surface";
-import { ServiceRelationshipBadge } from "@/modules/inferences/components/ServiceOwnership";
 import { StatusDot } from "@/modules/inferences/components/StatusDot";
 import { DeploySheet, type DeployTarget } from "@/modules/inferences/components/DeploySheet";
 import { UninstallDialog, type UninstallTarget } from "@/modules/inferences/components/UninstallDialog";
@@ -64,7 +63,6 @@ export function InferenceList() {
             {d.release}
           </Link>
           <div className="truncate text-xs text-muted-foreground" title={modelLine(d) || undefined}>{modelLine(d) || t("list.untracked")}</div>
-          <ServiceRelationshipBadge service={d} compact />
           <ResourceExtensionSurface resourceType="inference-service" resourceKey={`${d.namespace}/${d.release}`} resource={d} placement="collection.row" />
         </div>
       ),
@@ -104,9 +102,9 @@ export function InferenceList() {
   ];
 
   const writeBlocked = (d: Deployment, untracked = false, adaptive = false): boolean | string => {
-    const relationship = serviceRelationship(d);
-    if (relationship.owned) return t("disabled.serviceManaged");
-    if (relationship.assignmentLocked && !(adaptive && relationship.adaptiveOnly)) return t("disabled.serviceAssigned");
+    const action = adaptive ? "upgrade" : "uninstall";
+    const extensionBlocked = evaluateResourceAction("inference-service", `${d.namespace}/${d.release}`, d, action);
+    if (extensionBlocked) return extensionBlocked;
     return readOnly ? t("disabled.readOnly") : isUninstalling(d) ? t("disabled.uninstalling") : untracked && !d.model ? t("disabled.untracked") : false;
   };
 
