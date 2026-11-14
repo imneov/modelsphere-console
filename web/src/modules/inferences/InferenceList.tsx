@@ -56,6 +56,7 @@ export function InferenceList() {
     {
       key: "release",
       title: t("list.columns.name"),
+      width: 300,
       hideable: false,
       render: (d) => (
         <div className="min-w-0">
