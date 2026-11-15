@@ -1,0 +1,14 @@
+FROM python:3.12-slim-bookworm AS download
+ARG TARGETARCH
+ARG VLLM_VERSION=0.33.0
+ARG TOKENIZER=openai-community/gpt2
+ARG TOKENIZER_REVISION=607a30d783dfa663caf39e06633721c8d4cfcd7e
+COPY tools/billing/bench_image.py /bench_image.py
+RUN python /bench_image.py --version "$VLLM_VERSION" --architecture "$TARGETARCH" --tokenizer "$TOKENIZER" --tokenizer-revision "$TOKENIZER_REVISION" --output /benchmark
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 libgomp1 && rm -rf /var/lib/apt/lists/*
+COPY --from=download /benchmark /opt/benchmark
+RUN /opt/benchmark/vllm-rs --version && /opt/benchmark/vllm-rs bench serve --help > /dev/null
+USER 65532:65532
+ENTRYPOINT ["/opt/benchmark/vllm-rs", "bench", "serve"]
