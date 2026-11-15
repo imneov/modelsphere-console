@@ -44,12 +44,27 @@ def metrics_snapshot(options):
 def invoke(options, keys, index, scheduled):
     """Include scheduling delay in latency so overload remains visible."""
     payload = {"model": "qwen", "messages": [{"role": "user", "content": "acceptance fixture"}]}
+    dispatched = time.monotonic()
+    result = {"queue_delay": max(0, dispatched - scheduled)}
     try:
         call(options.base[index % len(options.base)], keys[index % len(keys)]["key"],
             "POST", "/v1/chat/completions", payload)
-        return {"ok": True, "latency": time.monotonic() - scheduled}
+        result["ok"] = True
     except Exception as error:
-        return {"ok": False, "latency": time.monotonic() - scheduled, "error": type(error).__name__}
+        result.update(ok=False, error=type(error).__name__)
+    finished = time.monotonic()
+    result.update(latency=finished - scheduled, roundtrip=finished - dispatched)
+    return result
+
+
+def timing_summary(responses):
+    """Separate generator waiting from HTTP round trips; keep quantiles distinct."""
+    result = {}
+    for name in ("queue_delay", "roundtrip"):
+        values = sorted(response[name] for response in responses)
+        result[name + "_p95_ms"] = values[max(0, int(len(values) * .95) - 1)] * 1000
+        result[name + "_mean_ms"] = sum(values) / len(values) * 1000
+    return result
 
 
 def run_rate(options, keys, rate):
@@ -74,6 +89,7 @@ def run_rate(options, keys, rate):
         "success": successful, "failed": len(responses) - successful, "p95_ms": latencies[int(len(latencies) * .95) - 1] * 1000,
         "p99_ms": latencies[int(len(latencies) * .99) - 1] * 1000, "drain_seconds": time.monotonic() - started - elapsed,
         "before": before, "after": after}
+    result.update(timing_summary(responses))
     print(json.dumps({key: value for key, value in result.items() if key not in ("before", "after")}), flush=True)
     return result
 
