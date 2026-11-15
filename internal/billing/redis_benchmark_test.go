@@ -59,14 +59,15 @@ func benchmarkQueue(b *testing.B, endpoint string, poolSize, partitions int) *Re
 		b.Fatal(err)
 	}
 	queue, err := NewRedisQueue(RedisOptions{URL: parsed.String(), Prefix: "staging:queuebench:" + identifier.String(),
-		Partitions: partitions, Group: "benchmark", LeaseDuration: time.Minute})
+		Partitions: partitions, Group: "benchmark", LeaseDuration: 30 * time.Second})
 	if err != nil {
 		b.Fatal(err)
 	}
 	b.Cleanup(func() {
-		keys := []string{queue.options.Prefix + ":partitions"}
+		keys := []string{queue.options.Prefix + ":partitions", queue.options.Prefix + ":dead"}
 		for partition := range partitions {
-			keys = append(keys, queue.stream(partition))
+			keys = append(keys, queue.stream(partition), queue.lease(partition),
+				fmt.Sprintf("%s:reclaim:%s:%d", queue.options.Prefix, queue.options.Group, partition))
 		}
 		if err := queue.client.Del(context.Background(), keys...).Err(); err != nil {
 			b.Errorf("clean benchmark streams: %v", err)
