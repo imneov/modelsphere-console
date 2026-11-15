@@ -86,8 +86,6 @@ func runActiveSettlement(ctx context.Context, store SettlementStore, projector P
 	projected := make(chan struct{})
 	go func() { defer close(projected); runProjectionLoop(projectionContext, projector, options, log) }()
 	defer func() { cancelProjection(); <-projected }()
-	ticker := time.NewTicker(options.Interval)
-	defer ticker.Stop()
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -100,11 +98,10 @@ func runActiveSettlement(ctx context.Context, store SettlementStore, projector P
 			log.Error("settlement batch deferred", "err", err)
 		} else if count > 0 {
 			log.Info("charges settled", "charges", count)
+			continue
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
+		if err := waitContext(ctx, options.Interval); err != nil {
+			return err
 		}
 	}
 }
