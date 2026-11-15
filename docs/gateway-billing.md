@@ -21,21 +21,27 @@ Global's credential and DTO contracts come from [key.go](https://github.com/ther
 ## Request and accounting boundaries
 
 ```text
-SDK Key / Playground session -> trusted principal -> local admission -> existing model route
-                                                                         |
-                                                         journal start -> upstream
-                                                                         |
-                                                         journal terminal / supplement
-                                                                         |
-                                                             Redis EventQueue
-                                                                         |
-                                                        Usage + immutable price -> Charge
-                                                                         |
-                                                        Lease + database fencing -> ledger
-                                                                         |
-                                                        projection outbox -> APIKey status
+SDK Key / Playground -> cached identity + admission -> model route
+                                                         |
+                                          start / terminal events
+                                                         |
+                                             Redis EventQueue
+                                             |             |
+                                     publish succeeds   fails / uncertain
+                                             |             |
+                                         accepted      journal backup
+                                             ^             |
+                                             +-- replay ---+
+                                             |
+                              Usage worker + immutable price -> Charge
+                                             |
+                              Lease + PostgreSQL fence -> wallet ledger
+                                             |
+                              projection outbox -> CRD status -> Informers
 ```
 
+- Redis is the primary event queue. Normal successful publication does not append to the local journal. The journal is a durable fallback when publication fails or confirmation is uncertain; its replay loop republishes the same event IDs to Redis. Usage workers consume Redis, never journal files.
+- Phase one does not add historical-journal migration, format compatibility, or full retained-file replay.
 - Redis is only an event queue. BillingStore transactions own usage, prices, charges, wallets, ledger and projection recovery.
 - Wallet identity is the canonical User UID. Client headers and wallet IDs never determine ownership.
 - Prices and money use exact integer/decimal arithmetic. Missing usage or price remains unresolved.
@@ -86,7 +92,7 @@ Money is represented as signed integer currency nanounits, serialized as decimal
 ## Deployment and recovery contract
 
 - `billing.enabled` selects separate usage and settlement Deployments and a gateway StatefulSet. Gateway ordinals retain their own journal PVCs on deletion and scale-down. `fsGroup` grants the nonroot process access to newly provisioned claims.
-- `billing.journal.replayRetained` is an explicit recovery switch accepted only with the `replay` process role. It durably rewinds delivery to the first retained frame before publishing original event IDs again. This covers queue data loss within journal retention; deleted segments require database or queue backup recovery.
+- `billing.journal.replayRetained` is an explicit recovery switch accepted only with the `replay` process role. It durably rewinds delivery to the first retained frame before publishing original event IDs again. It can replay only facts actually present in backups. Normal successful Redis events are not journaled, so this cannot recover arbitrary Redis data loss; Redis/database durability and backups must protect those events. This historical recovery switch is outside phase-one acceptance.
 - External Redis must persist acknowledged stream writes; its partition count is immutable for a queue prefix. The adapter uses one Redis primary endpoint and atomic scripts, not Redis Cluster slots. PostgreSQL is required for distributed workers. SQLite is for a single local process set sharing one database file.
 - Workers expose `/healthz`, `/readyz`, and `/metrics` on the configured metrics listener. Gateway readiness is independent of PostgreSQL initialization; local Key and wallet Informers govern inference.
 - Price publication archives every version before replacing the current CRD. `GET /api/billing/prices/history` returns paginated immutable versions, including versions skipped by an Informer.

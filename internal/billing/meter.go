@@ -105,32 +105,33 @@ func randomIdentity() (string, error) {
 func (meter *Meter) record(ctx context.Context, event Event) (result error) {
 	started := time.Now()
 	defer func() { meter.Metrics.observe("record", started, result) }()
-	var journalErr error
-	if journal := meter.currentJournal(); journal != nil {
-		journalErr = journal.Append(ctx, event)
-	} else {
-		journalErr = errors.New("journal unavailable")
-	}
-	if journalErr == nil {
-		meter.journaled.Add(1)
-		return nil
-	}
-	meter.Log.Warn("metering journal unavailable", "event_id", event.EventID, "err", journalErr)
 	var queueErr error
 	if meter.Queue == nil {
 		queueErr = errors.New("event queue unavailable")
 	} else {
 		publishContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), meter.PublishTimeout)
-		defer cancel()
 		queueErr = meter.Queue.Publish(publishContext, event)
+		cancel()
 	}
 	if queueErr == nil {
 		meter.published.Add(1)
 		return nil
 	}
+	meter.Log.Warn("metering queue unavailable; recording journal backup", "event_id", event.EventID, "err", queueErr)
+	var journalErr error
+	if journal := meter.currentJournal(); journal != nil {
+		journalErr = journal.Append(context.WithoutCancel(ctx), event)
+	} else {
+		journalErr = errors.New("journal unavailable")
+	}
+	if journalErr == nil {
+		meter.journaled.Add(1)
+		meter.Metrics.record("delivery", "journal_backup")
+		return nil
+	}
 	meter.gaps.Add(1)
 	meter.Metrics.record("delivery", "gap")
-	meter.Log.Error("metering event delivery gap", "request_id", event.RequestID, "event_id", event.EventID, "queue_error", queueErr)
+	meter.Log.Error("metering event delivery gap", "request_id", event.RequestID, "event_id", event.EventID, "queue_error", queueErr, "journal_error", journalErr)
 	return errors.Join(journalErr, queueErr)
 }
 

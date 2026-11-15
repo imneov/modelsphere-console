@@ -30,24 +30,26 @@ The chart deploys two gateways with retained journal claims, two usage workers a
 | Native Go/process metrics | CPU, memory, goroutines and runtime pressure |
 | PostgreSQL WAL position | Compare WAL deltas with throughput and batch settings |
 
-- Compare `journal_append` with `journal_fsync`: high append latency with low fsync latency indicates contention or saturation. `syncMode=record` acknowledges an event only after fsync; interval mode explicitly trades a bounded crash-loss window for throughput.
+- Monitor queue publication as the normal request-path cost. Successful Redis publication does not write a journal event. `journal_append` and `journal_fsync` measure fallback recording after a Redis error or uncertain confirmation; interval mode weakens the backup crash-loss window.
 - Tune usage `maxEvents`, `maxBytes`, `flushInterval` and concurrency together. Transactions never exceed the configured count/byte caps; count-one queue reads may return one reclaimed and one fresh fact for fairness, which are committed in separate capped chunks.
 - Missing prices remain pending with backoff. Reclamation rotates through older pending pages while reserving capacity for fresh work. Publish the missing immutable price and inspect recovery; do not fabricate token counts.
 - Settlement `maxWallets` and interval bound how quickly many independent users converge. Projection has its own loop and cannot block financial settlement. An observed admission revision can lag the committed balance.
-- `record` mode's per-event fsync budget must sustain two events per completed request. Validate on the intended PVC/storage class and ingress path; a local fixture is not a production capacity certificate.
+- During a Redis outage, the journal backup may need two records per completed request. This local fsync budget applies to degraded operation, not healthy Redis traffic. Validate Redis publication, its configured durability, and fallback storage separately on the intended deployment.
 
 ## Recover
 
 | Failure | Recovery |
 | --- | --- |
 | Redis unavailable | Gateways retain original events in their journals; restore Redis and watch replay/backlog converge |
-| Redis acknowledged data lost | Stop the journal owner; mount its retained claim in one `--role replay` process with `billing.journal.replayRetained=true`; return ownership after replay. Original event IDs make duplicate delivery idempotent |
+| Redis acknowledged data lost | Restore the Redis/database backups according to their durability policy. Healthy Redis events are not mirrored into journals; local backup files cannot reconstruct events they never recorded |
 | Gateway pod lost | Recreate the same ordinal with its retained claim; the journal's exclusive lock prevents concurrent ownership |
-| PostgreSQL unavailable | Inference continues while the journal/queue has capacity; usage/settlement retry transactions after recovery |
+| PostgreSQL unavailable | Inference publishes events to Redis while queue capacity permits; usage/settlement retry transactions after recovery |
 | Settlement leader lost | Kubernetes Lease elects a successor; its PostgreSQL generation fences old writers |
 | Invalid event / immutable fact conflict | Inspect authorized dead-letter metadata, correct the producing code or configuration, and replay the original fact through the recovery API |
 | Missing upstream usage | Use the configured authenticated GET verifier and request identity; never reissue generation |
 | Wallet projection mismatch | GET reconciliation first, then authorized POST wallet rebuild; immutable ledger remains the source |
+
+Phase one adds no historical-journal migration, compatibility or full-rewind acceptance requirement. Current-run backup records can still be replayed into Redis. Confirmation timeouts may create duplicate deliveries; preserve the original event ID.
 
 `failurePolicy=continue` records an explicit delivery gap if both journal and queue fail. `reject_new` rejects new generations only when neither sink records their start; it does not interrupt accepted in-flight generations. Alert on delivery gaps regardless of policy.
 

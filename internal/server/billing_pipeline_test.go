@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/modelsphere/console/internal/billing"
 	"github.com/modelsphere/console/internal/testservices"
+	"github.com/redis/go-redis/v9"
 )
 
 type pipelineFixture struct {
@@ -20,6 +22,7 @@ type pipelineFixture struct {
 	store     *billing.Store
 	journal   *billing.Journal
 	queue     *billing.RedisQueue
+	publisher *billing.RedisQueue
 	projector *billing.AdmissionProjector
 	workers   []*billing.UsageWorker
 	caches    []*billing.PriceCache
@@ -46,7 +49,7 @@ func pipelineQueue(t *testing.T, url, prefix string) *billing.RedisQueue {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := queue.Close(); err != nil {
+		if err := queue.Close(); err != nil && !errors.Is(err, redis.ErrClosed) {
 			t.Error(err)
 		}
 	})
@@ -78,8 +81,9 @@ func newPipelineFixture(t *testing.T) *pipelineFixture {
 	})
 	url, prefix := testservices.RedisURL(t), "pipeline-"+uuid.NewString()
 	fixture.queue = pipelineQueue(t, url, prefix)
+	fixture.publisher = pipelineQueue(t, url, prefix)
 	log := slog.New(slog.DiscardHandler)
-	meter := &billing.Meter{Journal: fixture.journal, Queue: fixture.queue, FailurePolicy: "continue", PublishTimeout: time.Second, Log: log}
+	meter := &billing.Meter{Journal: fixture.journal, Queue: fixture.publisher, FailurePolicy: "continue", PublishTimeout: time.Second, Log: log}
 	if err := fixture.server.EnableBilling(&billing.Service{Store: fixture.store, Meter: meter, Queue: fixture.queue, Client: fixture.server.kube.Dynamic(), Namespace: "console", Currency: "USD"}); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +116,12 @@ func TestRealRedisPostgresPipelinePricesOnceAndSettlesSharedWallets(t *testing.T
 	if err := fixture.projector.ProjectPending(t.Context(), 100); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"key-one", "key-two"} {
+	for index, name := range []string{"key-one", "key-two"} {
+		if index == 1 {
+			if err := fixture.publisher.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}
 		key := createKey(t, handler, admin, `{"name":"`+name+`","user":"bob"}`)
 		awaitKeyResponse(t, handler, key.Value, "qwen", http.StatusOK)
 	}
