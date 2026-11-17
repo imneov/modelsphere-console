@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Badge,
@@ -33,10 +33,12 @@ export function Customers() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [crediting, setCrediting] = useState<AdminCustomer | null>(null);
-  const window = useMemo(() => localDayWindow(), []);
   const query = useQuery({
-    queryKey: ["billing", "admin-customers", window],
-    queryFn: () => api.adminCustomers(window.from, window.until),
+    queryKey: ["billing", "admin-customers"],
+    queryFn: () => {
+      const window = localDayWindow();
+      return api.adminCustomers(window.from, window.until);
+    },
   });
   const items = query.data?.items ?? [];
   const currency = items[0]?.currency ?? "";
