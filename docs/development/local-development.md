@@ -71,6 +71,19 @@ curl -s localhost:8080/healthz              # {"status":"ok","version":"…"}
 
 Config lookup when `--config` is absent: `$CONSOLE_CONFIG`, `./console.yaml`, `~/.config/console/console.yaml`. Flags and env: `--addr` / `CONSOLE_ADDR`, `--log-level` / `CONSOLE_LOG_LEVEL`, `--web-dir` / `CONSOLE_WEB_DIR`, `CONSOLE_JWT_SECRET`. `go run ./cmd/console -h` lists them.
 
+## Billing workers
+
+The gateway binary only meters. Usage, settlement and replay are separate
+processes, one role each, run from the billing binary:
+
+```sh
+go run ./cmd/billing --config console.yaml --role usage
+go run ./cmd/billing --config console.yaml --role settlement   # lease-elected
+```
+
+The role comes from `--role` or `CONSOLE_BILLING_ROLE`. `console` refuses a
+non-gateway `billing.role`, and `billing` refuses `gateway`.
+
 ## Run the UI
 
 ```sh

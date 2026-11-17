@@ -6,12 +6,15 @@ import { inferencesModule } from "@/modules/inferences";
 import { playgroundModule } from "@/modules/playground";
 import { routerModule } from "@/modules/router";
 import { billingModule } from "@/modules/billing";
+import { systemModule } from "@/modules/system";
 
 export const modules: ConsoleModule[] = [
   inferencesModule,
   playgroundModule,
   routerModule,
   billingModule,
+  systemModule,
+  // Legacy /iam URLs redirect into /system and never appear in navigation.
   iamModule,
   docsModule,
 ];

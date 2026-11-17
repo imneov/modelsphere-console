@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -13,8 +14,8 @@ import (
 
 func (rt *Router) SetMetering(meter *billing.Meter) { rt.meter = meter }
 
-func (rt *Router) invoke(writer http.ResponseWriter, request *http.Request, key Key, model string, target *Target, source string) {
-	invocation, err := newInvocation(key, model, target, source)
+func (rt *Router) invoke(writer http.ResponseWriter, request *http.Request, key Key, model string, targets []*Target, source string) {
+	invocation, err := newInvocation(key, model, targets, source)
 	if err != nil {
 		rt.reject(writer, "identity_failed", http.StatusInternalServerError, "server_error", "request_identity_failed", "Request identity cannot be created")
 		return
@@ -24,7 +25,7 @@ func (rt *Router) invoke(writer http.ResponseWriter, request *http.Request, key 
 		return
 	}
 	if rt.meter != nil {
-		trace, err := rt.meter.StartRequest(request.Context(), invocation.info.Principal, model, target.URL.Host, invocation.info.RequestID, invocation.info.AttemptID)
+		trace, err := rt.meter.StartRequest(request.Context(), invocation.info.Principal, model, invocation.target.URL.Host, invocation.info.RequestID, invocation.info.AttemptID)
 		if err != nil {
 			rt.reject(writer, "metering_unavailable", http.StatusServiceUnavailable, "server_error", "metering_unavailable", "Usage metering is unavailable")
 			return
@@ -48,7 +49,7 @@ func (rt *Router) invoke(writer http.ResponseWriter, request *http.Request, key 
 	}
 }
 
-func newInvocation(key Key, model string, target *Target, source string) (*call, error) {
+func newInvocation(key Key, model string, targets []*Target, source string) (*call, error) {
 	requestID, err := uuid.NewRandom()
 	if err != nil {
 		return nil, err
@@ -57,7 +58,8 @@ func newInvocation(key Key, model string, target *Target, source string) (*call,
 	if err != nil {
 		return nil, err
 	}
-	return &call{target: target, info: RequestInfo{RequestID: requestID.String(), AttemptID: attemptID.String(), Principal: billing.Principal{OwnerUID: key.PrincipalUID, WalletID: key.WalletID, APIKeyID: key.ID, Source: source}, Model: model, Upstream: target.URL.Host}}, nil
+	target := targets[0]
+	return &call{target: target, targets: targets, info: RequestInfo{RequestID: requestID.String(), AttemptID: attemptID.String(), Principal: billing.Principal{OwnerUID: key.PrincipalUID, WalletID: key.WalletID, APIKeyID: key.ID, Source: source}, Model: model, Upstream: target.URL.Host}}, nil
 }
 
 func (rt *Router) preflight(writer http.ResponseWriter, request *http.Request, invocation *call) bool {
@@ -68,11 +70,43 @@ func (rt *Router) preflight(writer http.ResponseWriter, request *http.Request, i
 			return false
 		}
 	}
-	if !rt.circuit.allow(circuitKey(invocation.target), rt.pipeline) {
+	target, ok := rt.availableTarget(invocation.targets)
+	if !ok {
 		rt.reject(writer, "circuit_open", http.StatusServiceUnavailable, "server_error", "circuit_open", "Inference upstream circuit is open")
 		return false
 	}
+	invocation.target = target
+	invocation.info.Upstream = target.URL.Host
 	return true
+}
+
+// availableTarget is the first route whose upstream circuit allows a new
+// request, in preference order, or none when every route is open.
+func (rt *Router) availableTarget(targets []*Target) (*Target, bool) {
+	for _, target := range targets {
+		if rt.circuit.allow(circuitKey(target), rt.pipeline) {
+			return target, true
+		}
+	}
+	return nil, false
+}
+
+// nextTarget is where a replay goes: the next route in preference order whose
+// circuit allows it, wrapping around. With one route it replays where it failed,
+// which is still useful for a transient 429 or 503.
+func (rt *Router) nextTarget(invocation *call) (*Target, bool) {
+	targets := invocation.targets
+	current := slices.Index(targets, invocation.target)
+	if current < 0 {
+		current = 0
+	}
+	for offset := 1; offset <= len(targets); offset++ {
+		target := targets[(current+offset)%len(targets)]
+		if rt.circuit.allow(circuitKey(target), rt.pipeline) {
+			return target, true
+		}
+	}
+	return nil, false
 }
 
 func (rt *Router) finishInvocation(ctx context.Context, invocation *call, status *statusWriter, source string, key Key) {
@@ -137,5 +171,5 @@ func (rt *Router) ServeSession(writer http.ResponseWriter, request *http.Request
 		openAIError(writer, http.StatusBadRequest, "invalid_request_error", "missing_model", "The request names no model")
 		return
 	}
-	rt.invoke(writer, forwarded, Key{User: user, PrincipalKind: "User", PrincipalUID: uid, WalletID: uid}, model, target, "session")
+	rt.invoke(writer, forwarded, Key{User: user, PrincipalKind: "User", PrincipalUID: uid, WalletID: uid}, model, []*Target{target}, "session")
 }

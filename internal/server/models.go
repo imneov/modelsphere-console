@@ -221,6 +221,30 @@ func (c *catalog) routeFor(model string, t *backendTarget) (string, error) {
 	return route, nil
 }
 
+// routesFor lists every route serving model, preferred first: the route the
+// catalog picked, then the others in the order asked. A failed route can hand
+// the request to a second deployment of the same model.
+func (c *catalog) routesFor(model string, t *backendTarget) ([]string, error) {
+	if model == "" {
+		if len(t.routes) <= 1 {
+			return []string{first(t.routes)}, nil
+		}
+		return nil, router.ErrNoModel
+	}
+	preferred, ok := c.route[model]
+	if !ok {
+		return nil, router.ErrUnknownModel
+	}
+	routes := []string{preferred}
+	for _, rm := range c.routes {
+		if rm.Error != "" || !slices.Contains(rm.Models, model) || slices.Contains(routes, rm.Route) {
+			continue
+		}
+		routes = append(routes, rm.Route)
+	}
+	return routes, nil
+}
+
 func routeURL(t *backendTarget, route string) string {
 	u := strings.TrimSuffix(t.url.String(), "/")
 	if route == "" {

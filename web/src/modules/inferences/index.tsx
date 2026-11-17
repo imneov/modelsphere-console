@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Activity, Bot, Library, Server, SlidersHorizontal } from "lucide-react";
+import { Activity, Bot, Library, Server } from "lucide-react";
+import { Navigate } from "react-router";
 import type { ConsoleModule } from "@/shell";
 import { useT } from "@/modules/inferences/i18n";
 import { SwissScope } from "@/modules/inferences/components/SwissScope";
@@ -10,8 +11,6 @@ const CatalogPage = lazy(() => import("@/modules/inferences/CatalogPage").then((
 const ModelPage = lazy(() => import("@/modules/inferences/ModelPage").then((m) => ({ default: m.ModelPage })));
 const NodesPage = lazy(() => import("@/modules/inferences/NodesPage").then((m) => ({ default: m.NodesPage })));
 const RunsPage = lazy(() => import("@/modules/inferences/RunsPage").then((m) => ({ default: m.RunsPage })));
-const SiteProfilePage = lazy(() => import("@/modules/inferences/SiteProfilePage").then((m) => ({ default: m.SiteProfilePage })));
-const SetupPage = lazy(() => import("@/modules/inferences/SetupPage").then((m) => ({ default: m.SetupPage })));
 const InferenceDetail = lazy(() => import("@/modules/inferences/InferenceDetail").then((m) => ({ default: m.InferenceDetail })));
 
 function Loading() {
@@ -40,7 +39,7 @@ export const inferencesModule: ConsoleModule = {
     { path: "catalog/:name", element: page(<ModelPage />), permission: "swiss.view" },
     { path: "nodes", element: page(<NodesPage />), permission: "swiss.view", menu: { label: "节点", icon: Server } },
     { path: "runs", element: page(<RunsPage />), permission: "swiss.view", menu: { label: "操作记录", icon: Activity } },
-    { path: "site-profile", element: page(<SiteProfilePage />), permission: "swiss.view", menu: { label: "站点配置", icon: SlidersHorizontal } },
-    { path: "setup", element: page(<SetupPage />), permission: "swiss.view" },
+    { path: "site-profile", element: <Navigate to="/system/site-profile" replace /> },
+    { path: "setup", element: <Navigate to="/system/setup" replace /> },
   ],
 };

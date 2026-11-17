@@ -336,14 +336,13 @@ function WritableBadge() {
 
 function NoCatalog({ catalogs, writable, choose }: { catalogs: CatalogInfo[]; writable: string[]; choose: (name: string) => void }) {
   const t = useT();
-  const p = useModulePath();
   if (catalogs.length === 0) {
     return (
       <Empty>
         <EmptyHeader>
           <EmptyTitle>{t("catalog.noCatalog")}</EmptyTitle>
           <EmptyDescription>
-            <Link to={p("site-profile")} className="underline">
+            <Link to="/system/site-profile" className="underline">
               {t("catalog.noCatalogAction")}
             </Link>
           </EmptyDescription>

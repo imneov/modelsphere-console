@@ -2,11 +2,137 @@ package server
 
 import (
 	"net/http"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/modelsphere/console/internal/billing"
 	"github.com/modelsphere/console/internal/iam"
 )
+
+type billingCustomer struct {
+	Name         string `json:"name"`
+	DisplayName  string `json:"displayName,omitempty"`
+	OwnerUID     string `json:"ownerUserID"`
+	Currency     string `json:"currency"`
+	Balance      int64  `json:"balance,string"`
+	Revision     int64  `json:"revision"`
+	BillingState string `json:"billingState"`
+	Topups       int64  `json:"topups,string"`
+	Charges      int64  `json:"charges,string"`
+	Adjustments  int64  `json:"adjustments,string"`
+	Net          int64  `json:"net,string"`
+}
+
+func (s *Server) handleBillingCustomers(writer http.ResponseWriter, request *http.Request) {
+	if !s.authorize(writer, request, "list", "billingaccounts", "") {
+		return
+	}
+	from, until, ok := billingTimeWindow(writer, request)
+	if !ok {
+		return
+	}
+	wallets, err := s.billing.Store.CustomerWallets(request.Context(), from, until)
+	if err != nil {
+		s.billingError(writer, "list customer wallets", err)
+		return
+	}
+	users, err := s.store.ListUsers(request.Context())
+	if err != nil {
+		s.billingError(writer, "list billing users", err)
+		return
+	}
+	byOwner := make(map[string]billing.CustomerWallet, len(wallets))
+	for _, wallet := range wallets {
+		byOwner[wallet.OwnerUID] = wallet
+	}
+	items := make([]billingCustomer, 0, len(users)+len(wallets))
+	seen := make(map[string]bool, len(users))
+	for index := range users {
+		user := &users[index]
+		uid := iam.CanonicalUID(user)
+		if uid == "" || seen[uid] {
+			continue
+		}
+		seen[uid] = true
+		wallet, exists := byOwner[uid]
+		if !exists {
+			wallet = billing.CustomerWallet{
+				OwnerUID:     uid,
+				Currency:     s.billing.Currency,
+				BillingState: "blocked",
+			}
+		}
+		items = append(items, billingCustomer{
+			Name:         user.Name,
+			DisplayName:  user.Spec.DisplayName,
+			OwnerUID:     uid,
+			Currency:     wallet.Currency,
+			Balance:      wallet.Balance,
+			Revision:     wallet.Revision,
+			BillingState: wallet.BillingState,
+			Topups:       wallet.Topups,
+			Charges:      wallet.Charges,
+			Adjustments:  wallet.Adjustments,
+			Net:          wallet.Net,
+		})
+	}
+	for _, wallet := range wallets {
+		if seen[wallet.OwnerUID] {
+			continue
+		}
+		items = append(items, billingCustomer{
+			Name:         wallet.OwnerUID,
+			OwnerUID:     wallet.OwnerUID,
+			Currency:     wallet.Currency,
+			Balance:      wallet.Balance,
+			Revision:     wallet.Revision,
+			BillingState: wallet.BillingState,
+			Topups:       wallet.Topups,
+			Charges:      wallet.Charges,
+			Adjustments:  wallet.Adjustments,
+			Net:          wallet.Net,
+		})
+	}
+	sort.Slice(items, func(left, right int) bool {
+		leftName := items[left].DisplayName
+		if leftName == "" {
+			leftName = items[left].Name
+		}
+		rightName := items[right].DisplayName
+		if rightName == "" {
+			rightName = items[right].Name
+		}
+		if strings.EqualFold(leftName, rightName) {
+			return items[left].OwnerUID < items[right].OwnerUID
+		}
+		return strings.ToLower(leftName) < strings.ToLower(rightName)
+	})
+	writeJSON(writer, http.StatusOK, map[string]any{"items": items})
+}
+
+func billingTimeWindow(writer http.ResponseWriter, request *http.Request) (time.Time, time.Time, bool) {
+	now := time.Now().UTC()
+	from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	until := now
+	for name, target := range map[string]*time.Time{"from": &from, "until": &until} {
+		value := request.URL.Query().Get(name)
+		if value == "" {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			writeError(writer, http.StatusBadRequest, "invalid customer overview time window")
+			return time.Time{}, time.Time{}, false
+		}
+		*target = parsed
+	}
+	if !from.Before(until) {
+		writeError(writer, http.StatusBadRequest, "from must precede until")
+		return time.Time{}, time.Time{}, false
+	}
+	return from, until, true
+}
 
 func (s *Server) handleBillingCredit(writer http.ResponseWriter, request *http.Request) {
 	if !s.authorize(writer, request, "create", "billingcredits", "") {

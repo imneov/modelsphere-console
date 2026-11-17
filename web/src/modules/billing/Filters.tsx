@@ -1,9 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
-import { Button, DataSelect, Input, Label } from "@modelsphere/ui";
-import { api, type BillingFilters, type Owner } from "@/modules/billing/api";
-import { useT } from "@/modules/billing/i18n";
+import { useState, type FormEvent } from "react";
+import { Button, Input, Label } from "@modelsphere/ui";
+import { Search, SlidersHorizontal } from "lucide-react";
+import type { BillingFilters } from "./api";
+import { activeRange, rangePatch, type RangeKey } from "./filterState";
+import { useT } from "./i18n";
 
-type ChangeFilters = (patch: Partial<BillingFilters>) => void;
+type Props = {
+  filters: BillingFilters;
+  onChange: (patch: Partial<BillingFilters>) => void;
+  usage?: boolean;
+};
 type Field = "model" | "apiKeyID" | "requestID" | "from" | "until";
 const labels: Record<Field, string> = {
   model: "model",
@@ -12,115 +18,130 @@ const labels: Record<Field, string> = {
   from: "from",
   until: "until",
 };
+const ranges: RangeKey[] = ["1h", "24h", "7d", "30d"];
+const rangeLabels: Record<RangeKey, string> = {
+  "1h": "lastHour",
+  "24h": "lastDay",
+  "7d": "lastWeek",
+  "30d": "lastMonth",
+};
 
-export function BillingFiltersForm({
-  filters,
-  onChange,
-  admin,
-}: {
-  filters: BillingFilters;
-  onChange: ChangeFilters;
-  admin: boolean;
-}) {
-  const t = useT();
-  return (
-    <div className="flex flex-wrap items-end gap-3">
-      {admin && (
-        <OwnerFilter
-          value={filters.ownerUserID}
-          onChange={(ownerUserID) => onChange({ ownerUserID })}
-        />
-      )}
-      {(Object.keys(labels) as Field[]).map((field) => (
-        <FilterInput
-          key={field}
-          field={field}
-          value={filters[field]}
-          onChange={onChange}
-        />
-      ))}
-      <Button
-        variant="ghost"
-        onClick={() =>
-          onChange({
-            model: "",
-            apiKeyID: "",
-            requestID: "",
-            from: "",
-            until: "",
-          })
-        }
-      >
-        {t("clear")}
-      </Button>
-    </div>
-  );
+export function BillingFiltersForm(props: Props) {
+  const { page: _page, limit: _limit, ...criteria } = props.filters;
+  return <FilterFields key={JSON.stringify(criteria)} {...props} />;
 }
 
-function FilterInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: Field;
-  value: string;
-  onChange: ChangeFilters;
-}) {
+function FilterFields({ filters, onChange, usage }: Props) {
   const t = useT();
-  return (
-    <div className="w-48 space-y-1">
-      <Label htmlFor={`billing-${field}`}>{t(labels[field])}</Label>
+  const [draft, setDraft] = useState(filters);
+  const [advanced, setAdvanced] = useState(
+    Boolean(filters.apiKeyID || filters.requestID),
+  );
+  const [error, setError] = useState("");
+  const range = activeRange(filters);
+  // Clearing must empty the draft too: when the applied query is already blank,
+  // the criteria key stays the same and the fields would keep stale values.
+  const clear = () => {
+    const empty = {
+      model: "",
+      apiKeyID: "",
+      requestID: "",
+      from: "",
+      until: "",
+    };
+    setDraft({ ...draft, ...empty });
+    setError("");
+    onChange(empty);
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (
+      draft.from &&
+      draft.until &&
+      new Date(draft.from) >= new Date(draft.until)
+    )
+      return setError(t("invalidRange"));
+    setError("");
+    onChange({
+      model: draft.model.trim(),
+      apiKeyID: draft.apiKeyID.trim(),
+      requestID: draft.requestID.trim(),
+      from: draft.from,
+      until: draft.until,
+    });
+  };
+  const field = (name: Field) => (
+    <div key={name} className="min-w-0 space-y-1.5">
+      <Label htmlFor={`billing-${name}`}>{t(labels[name])}</Label>
       <Input
-        id={`billing-${field}`}
-        type={field === "from" || field === "until" ? "datetime-local" : "text"}
-        value={value}
-        onChange={(event) => onChange({ [field]: event.target.value })}
+        id={`billing-${name}`}
+        type={name === "from" || name === "until" ? "datetime-local" : "text"}
+        className="w-full"
+        value={draft[name]}
+        onChange={(event) => setDraft({ ...draft, [name]: event.target.value })}
       />
     </div>
   );
-}
-
-function OwnerFilter({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const t = useT();
-  const owners = useQuery({
-    queryKey: ["billing", "owners"],
-    queryFn: api.owners,
-  });
-  const options = [
-    { value: "self", label: t("self") },
-    ...(owners.data?.items ?? []).map(ownerOption),
-  ];
   return (
-    <div className="w-48 space-y-1">
-      <Label htmlFor="billing-owner">{t("owner")}</Label>
-      <DataSelect
-        id="billing-owner"
-        value={value || "self"}
-        onValueChange={(selected) =>
-          onChange(selected === "self" ? "" : selected)
-        }
-        options={options}
-      />
-      {owners.error && (
+    <form onSubmit={submit} className="space-y-3 rounded-lg border bg-card p-4">
+      {usage && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs text-muted-foreground">
+            {t("timeRange")}
+          </span>
+          {ranges.map((key) => (
+            <Button
+              key={key}
+              type="button"
+              size="sm"
+              variant={range === key ? "secondary" : "ghost"}
+              onClick={() => onChange(rangePatch(key))}
+            >
+              {t(rangeLabels[key])}
+            </Button>
+          ))}
+        </div>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {usage && field("model")}
+        {field("from")}
+        {field("until")}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" variant="outline">
+          <Search className="size-4" />
+          {t("search")}
+        </Button>
+        {usage && (
+          <Button
+            type="button"
+            variant="ghost"
+            aria-expanded={advanced}
+            aria-controls="billing-advanced"
+            onClick={() => setAdvanced(!advanced)}
+          >
+            <SlidersHorizontal className="size-4" />
+            {t("advanced")}
+          </Button>
+        )}
+        <Button type="button" variant="ghost" onClick={clear}>
+          {t("clear")}
+        </Button>
+      </div>
+      {usage && advanced && (
+        <div
+          id="billing-advanced"
+          className="grid gap-3 border-t pt-3 sm:grid-cols-2"
+        >
+          {field("apiKeyID")}
+          {field("requestID")}
+        </div>
+      )}
+      {error && (
         <p role="alert" className="text-sm text-destructive">
-          {owners.error.message}
+          {error}
         </p>
       )}
-    </div>
+    </form>
   );
-}
-
-function ownerOption(owner: Owner) {
-  return {
-    value: owner.uid,
-    label: owner.displayName
-      ? `${owner.displayName} (${owner.name})`
-      : owner.name,
-  };
 }

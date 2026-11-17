@@ -49,13 +49,21 @@ type PipelineOptions struct {
 	RepeatDeltaLimit        int
 	CircuitFailureThreshold int
 	CircuitResetAfter       time.Duration
-	Transport               http.RoundTripper
-	Plugins                 []Plugin
+	// FailoverStatuses are upstream answers that mean no completion was
+	// produced, so the request can be replayed on another route.
+	FailoverStatuses []int
+	Transport        http.RoundTripper
+	Plugins          []Plugin
 }
 
 func (rt *Router) ConfigurePipeline(options PipelineOptions) error {
 	if options.MaxAttempts < 1 || options.RetryBackoff < 0 || options.MaxSSEFrameBytes < 1 || options.MaxDuration < 0 || options.MaxResponseBytes < 0 || options.RepeatDeltaLimit < 0 || options.RepeatDeltaLimit == 1 || options.CircuitFailureThreshold < 0 || (options.CircuitFailureThreshold > 0 && options.CircuitResetAfter <= 0) {
 		return errors.New("invalid inference retry, circuit or generation protection configuration")
+	}
+	for _, status := range options.FailoverStatuses {
+		if status < 100 || status > 599 {
+			return fmt.Errorf("invalid inference failover status %d", status)
+		}
 	}
 	if options.Transport == nil {
 		options.Transport = http.DefaultTransport

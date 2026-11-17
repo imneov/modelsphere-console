@@ -23,9 +23,12 @@ type BillingStore interface {
 	Credit(context.Context, Credit) (Wallet, error)
 	Wallet(context.Context, string, string) (Wallet, error)
 	Reconcile(context.Context, string) (Wallet, error)
+	CustomerWallets(context.Context, time.Time, time.Time) ([]CustomerWallet, error)
 	RebuildWallet(context.Context, string) (Wallet, error)
 	Requests(context.Context, Filter) (Page[Request], error)
 	Ledger(context.Context, Filter) (Page[LedgerEntry], error)
+	SummarizeUsage(context.Context, Filter) (UsageSummary, error)
+	SummarizeLedger(context.Context, Filter) (LedgerSummary, error)
 	SavePrice(context.Context, Price) error
 	PriceHistory(context.Context, Filter) (Page[Price], error)
 	Ingest(context.Context, []Event, PriceLookup) error

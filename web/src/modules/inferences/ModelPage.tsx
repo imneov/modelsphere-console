@@ -158,7 +158,7 @@ export function ModelPage() {
           <TriangleAlert />
           <AlertDescription>
             {t("variantWrite.noToken")}{" "}
-            <Link to={p("site-profile")} className="underline">
+            <Link to="/system/site-profile" className="underline">
               {t("variantWrite.setToken")}
             </Link>
           </AlertDescription>

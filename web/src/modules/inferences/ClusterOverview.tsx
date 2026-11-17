@@ -3,7 +3,6 @@ import { Link } from "react-router";
 import { ArrowRight, Server } from "lucide-react";
 import { Badge, PropertyList, SectionCard } from "@modelsphere/ui";
 import type { ClusterInfo, NodesResponse } from "@swiss/lib/api";
-import { useModulePath } from "@/shell";
 import { useT } from "@/modules/inferences/i18n";
 
 export function ClusterOverview({
@@ -14,7 +13,6 @@ export function ClusterOverview({
   nodes: UseQueryResult<NodesResponse>;
 }) {
   const t = useT();
-  const p = useModulePath();
   const data = cluster.data;
   const inventory = nodes.error ? undefined : nodes.data;
   const versions = [...new Set((inventory?.nodes ?? []).map((n) => n.Kubelet).filter((v): v is string => !!v))].sort(
@@ -33,7 +31,7 @@ export function ClusterOverview({
         icon={<Server className="size-4" />}
         actions={
           <Link
-            to={p("site-profile")}
+            to="/system/site-profile"
             className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-primary hover:underline"
           >
             {label("config")} <ArrowRight className="size-4" />

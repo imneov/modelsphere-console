@@ -93,6 +93,16 @@ func (rb routerBackend) Models(ctx context.Context) ([]string, error) {
 }
 
 func (rb routerBackend) Target(ctx context.Context, model string) (*router.Target, error) {
+	targets, err := rb.Targets(ctx, model)
+	if err != nil {
+		return nil, err
+	}
+	return targets[0], nil
+}
+
+// Targets lists every route serving model, preferred first, so the router can
+// replay a request that a failed route did not answer.
+func (rb routerBackend) Targets(ctx context.Context, model string) ([]*router.Target, error) {
 	t, err := rb.resolve(ctx)
 	if err != nil {
 		return nil, err
@@ -101,13 +111,17 @@ func (rb routerBackend) Target(ctx context.Context, model string) (*router.Targe
 	if err != nil {
 		return nil, err
 	}
-	route, err := c.routeFor(model, t)
+	routes, err := c.routesFor(model, t)
 	if err != nil {
 		return nil, err
 	}
-	u, err := url.Parse(routeURL(t, route))
-	if err != nil {
-		return nil, err
+	targets := make([]*router.Target, 0, len(routes))
+	for _, route := range routes {
+		u, err := url.Parse(routeURL(t, route))
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, &router.Target{URL: *u, Header: t.header, Key: t.key})
 	}
-	return &router.Target{URL: *u, Header: t.header, Key: t.key}, nil
+	return targets, nil
 }

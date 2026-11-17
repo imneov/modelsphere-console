@@ -8,6 +8,7 @@
 |---|---|
 | Chart | `oci://ghcr.io/modelsphere/charts/console` |
 | 镜像 | `ghcr.io/modelsphere/console`（linux/amd64），tag 与 Chart 版本相同 |
+| Billing 镜像 | `ghcr.io/modelsphere/billing`（linux/amd64），`billing.workers` 使用的 worker 二进制 |
 
 ## 它不做什么
 
@@ -255,7 +256,7 @@ helm upgrade --install console oci://ghcr.io/modelsphere/charts/console \
 
 ```text
 ci:      go vet、go test、前端类型检查和测试、仓库 gate
-publish: 构建镜像 -> helm dependency build、lint --strict、打包 -> 推送镜像和 Chart
+publish: 构建 console 与 billing 镜像 -> helm dependency build、lint --strict、打包 -> 推送镜像和 Chart
 ```
 
 发布正式版：

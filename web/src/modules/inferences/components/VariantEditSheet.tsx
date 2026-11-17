@@ -18,7 +18,6 @@ import {
   Spinner,
 } from "@modelsphere/ui";
 import { CircleCheck, TriangleAlert } from "lucide-react";
-import { useModulePath } from "@/shell";
 import { useT } from "@/modules/inferences/i18n";
 import { CatalogWriteError, putVariant, readVariant, type WriteResult } from "@/modules/inferences/catalog-write-api";
 import { bumpVersion, freeId, idProblem, setTopLevel, topLevel, variantFrom, variantPath } from "@/modules/inferences/catalog-write-lib";
@@ -136,7 +135,6 @@ function Body({ target, onClose, onSaved }: { target: VariantEdit; onClose: () =
 // way to the site profile.
 export function WriteErrorAlert({ error, onReload }: { error: Error; onReload?: () => void }) {
   const t = useT();
-  const p = useModulePath();
   const w = error instanceof CatalogWriteError ? error : null;
   if (w?.tokenRejected) {
     return (
@@ -144,7 +142,7 @@ export function WriteErrorAlert({ error, onReload }: { error: Error; onReload?: 
         <TriangleAlert />
         <AlertDescription>
           {t("catalogWrite.tokenRejected")}{" "}
-          <Link to={p("site-profile")} className="underline">
+          <Link to="/system/site-profile" className="underline">
             {t("catalogWrite.setNewToken")}
           </Link>
         </AlertDescription>

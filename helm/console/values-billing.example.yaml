@@ -13,6 +13,8 @@ router:
     repeatDeltaLimit: 32
     circuitFailureThreshold: 5
     circuitResetAfter: 30s
+    # Upstream answers replayed on another route serving the same model.
+    failoverStatuses: [429, 500, 502, 503, 504]
 
 billing:
   enabled: true

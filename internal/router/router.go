@@ -33,6 +33,14 @@ type Backend interface {
 	Target(ctx context.Context, model string) (*Target, error)
 }
 
+// FailoverBackend is a Backend that can name every place a request for a model
+// may go, preferred first: two routes may serve one model, and a failed one can
+// hand its request to another without the caller seeing the failure.
+type FailoverBackend interface {
+	Backend
+	Targets(ctx context.Context, model string) ([]*Target, error)
+}
+
 var (
 	ErrUnknownModel = errors.New("model not served")
 	ErrNoModel      = errors.New("request names no model")
@@ -74,7 +82,14 @@ type call struct {
 	attempts       []billing.Attempt
 	trace          *billing.Trace
 	reason         string
-	target         *Target
+	// target is where the current attempt goes; targets are the routes serving
+	// the model, preferred first, so a retry can move to another one.
+	target  *Target
+	targets []*Target
+	// applied is the target whose URL and credential the outgoing request
+	// already carries; path is the client path the rewrite joined onto it.
+	applied *Target
+	path    string
 }
 
 type callKey struct{}
@@ -111,7 +126,7 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.reject(w, "model_not_allowed", http.StatusForbidden, "permission_error", "model_not_allowed", msg)
 		return
 	}
-	target, err := rt.backend.Target(r.Context(), model)
+	targets, err := rt.targets(r.Context(), model)
 	switch {
 	case errors.Is(err, ErrUnknownModel):
 		rt.reject(w, "unknown_model", http.StatusNotFound, "invalid_request_error", "model_not_found", fmt.Sprintf("The model %q does not exist", model))
@@ -125,7 +140,30 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rt.invoke(w, r, key, model, target, "sdk")
+	rt.invoke(w, r, key, model, targets, "sdk")
+}
+
+// targets is every route a request for model may use, preferred first. A backend
+// with one route per model answers with that one.
+func (rt *Router) targets(ctx context.Context, model string) ([]*Target, error) {
+	if backend, ok := rt.backend.(FailoverBackend); ok {
+		targets, err := backend.Targets(ctx, model)
+		if err != nil {
+			return nil, err
+		}
+		if len(targets) == 0 {
+			if model == "" {
+				return nil, ErrNoModel
+			}
+			return nil, ErrUnknownModel
+		}
+		return targets, nil
+	}
+	target, err := rt.backend.Target(ctx, model)
+	if err != nil {
+		return nil, err
+	}
+	return []*Target{target}, nil
 }
 
 func (rt *Router) verifyKey(w http.ResponseWriter, r *http.Request) (Key, bool) {
@@ -279,6 +317,7 @@ func (rt *Router) rewriteProxy(pr *httputil.ProxyRequest) {
 	c := callFrom(pr.In.Context())
 	if c != nil && c.target != nil {
 		target = c.target
+		c.path, c.applied = pr.In.URL.Path, target
 	}
 	pr.Out.URL.RawPath = ""
 	pr.SetURL(&target.URL)

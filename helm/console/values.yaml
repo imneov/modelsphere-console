@@ -175,6 +175,8 @@ router:
   keySource: secret
   # Enable staging only while Secret remains authoritative.
   migration: false
+  # Inference retry and failover limits; empty keeps one attempt with no replay.
+  # values-billing.example.yaml and docs/gateway-billing.md describe the rest.
   pipeline: {}
   # Largest /v1 request body accepted, in bytes. The body is read whole to check
   # which model it asks for. Empty means 16 MiB.
@@ -220,6 +222,13 @@ affinity: {}
 # Credentials remain in existing Secrets and never enter Helm release values.
 billing:
   enabled: false
+  # Workers run the billing binary: no SPA, no management API. The gateway keeps
+  # running `image` above. Published beside the console image at the same
+  # version by the release workflow.
+  image:
+    repository: ghcr.io/modelsphere/billing
+    tag: ""            # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
   credentials:
     secretName: ""
     dsnKey: postgres-dsn

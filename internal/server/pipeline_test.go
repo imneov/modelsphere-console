@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -70,6 +71,34 @@ func TestSafeDialRetryKeepsOneLogicalRequestAndDistinctAttempts(t *testing.T) {
 	}
 	if len(events) != 2 || events[0].RequestID != events[1].RequestID || len(events[1].Attempts) != 2 || !events[1].Usage.Complete {
 		t.Fatalf("logical metering events: %+v", events)
+	}
+}
+
+func TestTransportFailureBeforeWriteIsRetried(t *testing.T) {
+	server, journal := pipelineServer(t)
+	var count atomic.Int64
+	transport := inferenceTransport(func(request *http.Request) (*http.Response, error) {
+		if count.Add(1) == 1 {
+			return nil, errors.New("tls: handshake failure")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"usage":{"prompt_tokens":100,"completion_tokens":20}}`)), Request: request}, nil
+	})
+	if err := server.router.ConfigurePipeline(router.PipelineOptions{MaxAttempts: 2, MaxSSEFrameBytes: 1 << 20, Transport: transport}); err != nil {
+		t.Fatal(err)
+	}
+	handler := server.Handler()
+	admin := login(t, handler, "admin", "admin-pw")
+	key := createKey(t, handler, admin, `{"name":"pre-write","user":"bob"}`)
+	awaitKeyResponse(t, handler, key.Value, "qwen", http.StatusOK)
+	if count.Load() != 2 {
+		t.Fatalf("pre-write attempts: %d", count.Load())
+	}
+	events := []billing.Event{}
+	if err := journal.Replay(t.Context(), func(event billing.Event) error { events = append(events, event); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || len(events[1].Attempts) != 2 || events[1].Attempts[0].Reason != "connection_failed" || !events[1].Usage.Complete {
+		t.Fatalf("replayed attempt accounting: %+v", events)
 	}
 }
 

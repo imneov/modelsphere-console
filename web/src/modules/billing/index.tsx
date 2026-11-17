@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Receipt, Tags } from "lucide-react";
+import { Activity, FileText, Receipt } from "lucide-react";
 import type { ConsoleModule } from "@/shell";
 import { useT } from "@/modules/billing/i18n";
 const Account = lazy(() =>
@@ -7,10 +7,11 @@ const Account = lazy(() =>
     default: module.Account,
   })),
 );
-const Prices = lazy(() =>
-  import("@/modules/billing/Prices").then((module) => ({
-    default: module.Prices,
-  })),
+const Requests = lazy(() =>
+  import("./Requests").then((module) => ({ default: module.Requests })),
+);
+const Ledger = lazy(() =>
+  import("./Ledger").then((module) => ({ default: module.Ledger })),
 );
 function Loading() {
   const t = useT();
@@ -19,7 +20,7 @@ function Loading() {
 export const billingModule: ConsoleModule = {
   id: "billing",
   capability: "billing",
-  title: "账务",
+  title: "用量与计费",
   basePath: "/billing",
   frame: "flush",
   pages: [
@@ -30,17 +31,25 @@ export const billingModule: ConsoleModule = {
           <Account />
         </Suspense>
       ),
-      menu: { label: "用量与钱包", icon: Receipt },
+      menu: { label: "总览", icon: Receipt },
     },
     {
-      path: "prices",
+      path: "requests",
       element: (
         <Suspense fallback={<Loading />}>
-          <Prices />
+          <Requests />
         </Suspense>
       ),
-      permission: "billing.manage",
-      menu: { label: "模型价格", icon: Tags },
+      menu: { label: "用量统计", icon: Activity },
+    },
+    {
+      path: "ledger",
+      element: (
+        <Suspense fallback={<Loading />}>
+          <Ledger />
+        </Suspense>
+      ),
+      menu: { label: "账单中心", icon: FileText },
     },
   ],
 };

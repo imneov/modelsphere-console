@@ -30,8 +30,11 @@ func (s *Server) mountBilling(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/billing/wallet/rebuild", s.handleRebuildWallet)
 	mux.HandleFunc("GET /api/billing/wallet", s.handleBillingWallet)
 	mux.HandleFunc("GET /api/billing/wallet/reconciliation", s.handleBillingReconciliation)
+	mux.HandleFunc("GET /api/billing/admin/customers", s.handleBillingCustomers)
 	mux.HandleFunc("GET /api/billing/ledger", s.handleBillingLedger)
+	mux.HandleFunc("GET /api/billing/ledger/summary", s.handleLedgerSummary)
 	mux.HandleFunc("GET /api/billing/usage", s.handleBillingUsage)
+	mux.HandleFunc("GET /api/billing/usage/summary", s.handleUsageSummary)
 	mux.HandleFunc("GET /api/billing/usage/{id}", s.handleBillingUsage)
 	mux.HandleFunc("POST /api/billing/usage/{id}/reconcile", s.handleUsageReconciliation)
 	mux.HandleFunc("POST /api/billing/credits", s.handleBillingCredit)
@@ -83,9 +86,13 @@ func (s *Server) billingFilter(writer http.ResponseWriter, request *http.Request
 	if !ok {
 		return billing.Filter{}, false
 	}
-	filter := billing.Filter{OwnerUID: owner, Model: request.URL.Query().Get("model"), APIKeyID: request.URL.Query().Get("apiKeyID"), RequestID: request.URL.Query().Get("requestID"), Page: 1, Limit: 20}
+	filter := billing.Filter{OwnerUID: owner, Model: request.URL.Query().Get("model"), APIKeyID: request.URL.Query().Get("apiKeyID"), RequestID: request.URL.Query().Get("requestID"), State: request.URL.Query().Get("state"), Page: 1, Limit: 20}
 	if id := request.PathValue("id"); id != "" {
 		filter.RequestID = id
+	}
+	if !billing.ValidUsageState(filter.State) {
+		writeError(writer, http.StatusBadRequest, "invalid state filter")
+		return filter, false
 	}
 	for name, target := range map[string]*int{"page": &filter.Page, "limit": &filter.Limit} {
 		if value := request.URL.Query().Get(name); value != "" {
@@ -176,6 +183,32 @@ func (s *Server) handleBillingLedger(writer http.ResponseWriter, request *http.R
 		return
 	}
 	writeJSON(writer, http.StatusOK, page)
+}
+
+func (s *Server) handleUsageSummary(writer http.ResponseWriter, request *http.Request) {
+	filter, ok := s.billingFilter(writer, request)
+	if !ok {
+		return
+	}
+	summary, err := s.billing.Store.SummarizeUsage(request.Context(), filter)
+	if err != nil {
+		s.billingError(writer, "summarize usage", err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, summary)
+}
+
+func (s *Server) handleLedgerSummary(writer http.ResponseWriter, request *http.Request) {
+	filter, ok := s.billingFilter(writer, request)
+	if !ok {
+		return
+	}
+	summary, err := s.billing.Store.SummarizeLedger(request.Context(), filter)
+	if err != nil {
+		s.billingError(writer, "summarize ledger", err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, summary)
 }
 
 func (s *Server) billingError(writer http.ResponseWriter, action string, err error) {

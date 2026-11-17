@@ -2,12 +2,13 @@
 
 [中文](README.zh-CN.md)
 
-**The package that installs ModelSphere Console into Kubernetes.** CI publishes the image and the chart to GHCR at the same version; both can be pulled without logging in:
+**The package that installs ModelSphere Console into Kubernetes.** CI publishes the images and the chart to GHCR at the same version; all can be pulled without logging in:
 
 | Artifact | Location |
 |---|---|
 | Chart | `oci://ghcr.io/modelsphere/charts/console` |
 | Image | `ghcr.io/modelsphere/console` (linux/amd64), tagged with the chart version |
+| Billing image | `ghcr.io/modelsphere/billing` (linux/amd64), the worker binary for `billing.workers` |
 
 ## What it does not do
 
@@ -248,13 +249,13 @@ Two workflows, [`ci`](https://github.com/modelsphere/console/actions/workflows/c
 
 | Trigger | Version | Pushed |
 |---|---|---|
-| push to `main` | `<appVersion>-git<sha7>` | image and chart |
-| a pushed tag `X.Y.Z` (must equal `appVersion` in `Chart.yaml`) | `X.Y.Z` | image (also tagged `latest`) and chart |
+| push to `main` | `<appVersion>-git<sha7>` | images and chart |
+| a pushed tag `X.Y.Z` (must equal `appVersion` in `Chart.yaml`) | `X.Y.Z` | images (also tagged `latest`) and chart |
 | pull request | `<appVersion>-git<sha7>` | nothing: tests, build and package only |
 
 ```text
 ci:      go vet, go test, web typecheck and tests, repository gate
-publish: build the image -> helm dependency build, lint --strict, package -> push image and chart
+publish: build the console and billing images -> helm dependency build, lint --strict, package -> push images and chart
 ```
 
 To release:

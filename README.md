@@ -93,7 +93,8 @@ The design, with the reasoning behind each decision, is in [`docs/console-design
 
 | Path | What it contains |
 |---|---|
-| `cmd/console` | the server binary |
+| `cmd/console` | the server binary: gateway, management API, embedded UI |
+| `cmd/billing` | the billing worker binary: usage, settlement or replay, one role per process |
 | `internal/iam` | identity: CRD types, password login, authorization |
 | `internal/server` | HTTP server: OAuth2, auth middleware, backend proxy, embedded UI |
 | `internal/router` | `/v1`: API keys, model scope, metrics |

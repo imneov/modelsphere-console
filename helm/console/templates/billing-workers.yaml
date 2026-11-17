@@ -39,8 +39,8 @@ spec:
       {{- end }}
       containers:
         - name: worker
-          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag | default $.Chart.AppVersion }}"
-          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          image: "{{ $.Values.billing.image.repository }}:{{ $.Values.billing.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.billing.image.pullPolicy }}
           args: ["--config", "/etc/console/console.yaml", "--role", {{ $role | quote }}]
           env:
             {{- include "console.billing.env" $ | nindent 12 }}

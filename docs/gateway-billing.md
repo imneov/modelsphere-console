@@ -49,6 +49,19 @@ SDK Key / Playground -> cached identity + admission -> model route
 - A top-up only restores billing admission. Manual disable, user inactivity, expiry and model restrictions remain independent.
 - Informer updates are asynchronous. Admission changes take effect once observed; in-flight generations finish.
 
+### Upstream failover
+
+One model may be served by several routes of the same gateway. A failed attempt is replayed on another route only while the upstream cannot have consumed it:
+
+| Outcome | Replayed |
+|---|---|
+| transport failure before the request was written (dial, DNS, TLS, refused) | yes, next route |
+| answer in `router.pipeline.failoverStatuses` (default 429, 500, 502, 503, 504) | yes, next route |
+| transport failure after the request was written | no: consumption is uncertain |
+| any other answer, 4xx included | no: it is the caller's answer |
+
+`maxAttempts` bounds the total; each attempt carries its own ID. A failed attempt counts against its own route's circuit, and a route whose circuit is open is skipped both for the first attempt and for failover.
+
 ## Verification
 
 Use the specification's public seams: Console HTTP handlers with controlled upstreams, plus journal/Redis/PostgreSQL/SQLite adapter contracts. PostgreSQL concurrency and fencing require PostgreSQL, not SQLite substitution. The review baseline is `11d80b68b8daf412c44d2569601402f871b311bb`.
@@ -85,13 +98,13 @@ Inference session checks use cached User and platform-role informers as well as 
 | `GET /api/billing/prices`, `PUT /api/billing/prices` | Inspect/publish current PriceRules; publishing archives the immutable version first |
 | `POST /api/billing/usage/{id}/reconcile` | Authorized recovery through a trusted upstream usage reader |
 | `GET /api/billing/runtime` | Authorized metering and queue recovery status |
-| Process roles | Gateway, usage worker, settlement worker, journal replay |
+| Process roles | Gateway (`console`); usage worker, settlement worker, journal replay (`billing`) — one role per process |
 
 Money is represented as signed integer currency nanounits, serialized as decimal strings. Prices specify nanounits per `unitTokens`; the combined exact request charge rounds up once to a nanounit. Database DSNs and Redis credentials come from environment variables named by configuration, populated from existing Secrets in Helm.
 
 ## Deployment and recovery contract
 
-- `billing.enabled` selects separate usage and settlement Deployments and a gateway StatefulSet. Gateway ordinals retain their own journal PVCs on deletion and scale-down. `fsGroup` grants the nonroot process access to newly provisioned claims.
+- `billing.enabled` selects separate usage and settlement Deployments and a gateway StatefulSet. Workers run `billing.image` (the billing binary, without the SPA or the management API) and receive their role as `--role`; the gateway keeps `image`. Gateway ordinals retain their own journal PVCs on deletion and scale-down. `fsGroup` grants the nonroot process access to newly provisioned claims.
 - `billing.journal.replayRetained` is an explicit recovery switch accepted only with the `replay` process role. It durably rewinds delivery to the first retained frame before publishing original event IDs again. It can replay only facts actually present in backups. Normal successful Redis events are not journaled, so this cannot recover arbitrary Redis data loss; Redis/database durability and backups must protect those events. This historical recovery switch is outside phase-one acceptance.
 - External Redis must persist acknowledged stream writes; its partition count is immutable for a queue prefix. The adapter uses one Redis primary endpoint and atomic scripts, not Redis Cluster slots. PostgreSQL is required for distributed workers. SQLite is for a single local process set sharing one database file.
 - Workers expose `/healthz`, `/readyz`, and `/metrics` on the configured metrics listener. Gateway readiness is independent of PostgreSQL initialization; local Key and wallet Informers govern inference.

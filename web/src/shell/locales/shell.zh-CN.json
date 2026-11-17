@@ -56,6 +56,12 @@
     "number": "包含数字",
     "special": "包含特殊字符"
   },
+  "error": {
+    "title": "页面渲染出错",
+    "description": "控制台遇到意外错误。可以重试，或重新加载页面。",
+    "retry": "重试",
+    "reload": "重新加载页面"
+  },
   "preferences": {
     "title": "偏好设置",
     "description": "外观与语言偏好保存在本机浏览器，仅影响当前设备。",

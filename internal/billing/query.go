@@ -46,10 +46,29 @@ type Filter struct {
 	Model     string     `json:"model,omitempty"`
 	APIKeyID  string     `json:"apiKeyID,omitempty"`
 	RequestID string     `json:"requestID,omitempty"`
+	State     string     `json:"state,omitempty"`
 	From      *time.Time `json:"from,omitempty"`
 	Until     *time.Time `json:"until,omitempty"`
 	Page      int        `json:"page"`
 	Limit     int        `json:"limit"`
+}
+
+// States a usage filter can select. They mirror what the request row shows:
+// a charge's state when there is one, otherwise started (no terminal time) or
+// failed (terminated without a charge).
+var usageStates = map[string]bool{"": true, "settled": true, "pending": true, "started": true, "failed": true}
+
+// ValidUsageState reports whether a request filter can select that state.
+func ValidUsageState(state string) bool {
+	return usageStates[state]
+}
+
+func chargeExists(state string) string {
+	query := "EXISTS (SELECT 1 FROM billing_charges sc WHERE sc.request_id=r.request_id AND sc.charge_revision=1"
+	if state != "" {
+		query += " AND sc.state='" + state + "'"
+	}
+	return query + ")"
 }
 
 type Page[T any] struct {
@@ -61,8 +80,17 @@ type Page[T any] struct {
 }
 
 func (filter Filter) where() (string, []any, error) {
+	return filter.whereWithState(true)
+}
+
+// whereWithState builds the request predicates. Summaries need the same scope
+// without the selected state so every tab still gets a count.
+func (filter Filter) whereWithState(withState bool) (string, []any, error) {
 	if filter.OwnerUID == "" || filter.Page < 1 || filter.Limit < 1 || filter.Limit > 200 || filter.Page > 10000000 {
 		return "", nil, errors.New("owner, positive page and limit between 1 and 200 are required")
+	}
+	if !usageStates[filter.State] {
+		return "", nil, fmt.Errorf("unsupported state %q", filter.State)
 	}
 	clauses := []string{"r.owner_uid=?"}
 	arguments := []any{filter.OwnerUID}
@@ -70,6 +98,16 @@ func (filter Filter) where() (string, []any, error) {
 		if field.value != "" {
 			clauses = append(clauses, field.column+"=?")
 			arguments = append(arguments, field.value)
+		}
+	}
+	if withState && filter.State != "" {
+		switch filter.State {
+		case "settled", "pending":
+			clauses = append(clauses, chargeExists(filter.State))
+		case "started":
+			clauses = append(clauses, "NOT "+chargeExists("")+" AND r.terminal_at IS NULL")
+		case "failed":
+			clauses = append(clauses, "NOT "+chargeExists("")+" AND r.terminal_at IS NOT NULL")
 		}
 	}
 	if filter.From != nil {

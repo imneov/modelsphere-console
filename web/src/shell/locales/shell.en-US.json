@@ -59,6 +59,12 @@
     "number": "A digit",
     "special": "A special character"
   },
+  "error": {
+    "title": "This page failed to render",
+    "description": "The console hit an unexpected error. Retry, or reload the page.",
+    "retry": "Try again",
+    "reload": "Reload page"
+  },
   "preferences": {
     "title": "Preferences",
     "description": "Appearance and language preferences are stored in this browser and only affect this device.",

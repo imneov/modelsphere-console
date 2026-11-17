@@ -1,0 +1,13 @@
+{
+  "group": {
+    "系统管理": "System administration"
+  },
+  "menu": {
+    "users": "Users",
+    "roles": "Roles",
+    "loginHistory": "Login history",
+    "siteProfile": "Site settings",
+    "customers": "Customer billing",
+    "prices": "Model prices"
+  }
+}

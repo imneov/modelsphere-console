@@ -1,21 +1,25 @@
 name: publish
 
-# The console image and chart, at one version. The image goes to Docker Hub
-# (4pdosc/console) and GHCR (ghcr.io/<owner>/console); the chart goes to the GHCR OCI
-# registry, packaged pointing at the GHCR image pushed beside it (image.repository,
-# appVersion).
+# The console and billing images and the chart, at one version. The images go to
+# Docker Hub (4pdosc/console, 4pdosc/billing) and GHCR
+# (ghcr.io/<owner>/console, ghcr.io/<owner>/billing); the chart goes to the GHCR
+# OCI registry, packaged pointing at the GHCR images pushed beside it
+# (image.repository, billing.image.repository, appVersion).
+#
+# `billing` is the same source built as a worker-only binary: no SPA, no
+# management API.
 #
 #   push to main     <appVersion>-git<sha7>
-#   tag <X>          <X>, which must be Chart.yaml's appVersion (hack/bump.sh --tag); the image is also latest
+#   tag <X>          <X>, which must be Chart.yaml's appVersion (hack/bump.sh --tag); the images are also latest
 #   pull request     build, lint and package; nothing pushed
 #
 # Two distribution channels, each self-consistent:
 #
-#   OCI (this workflow)   oci://ghcr.io/<owner>/charts, pointing at the GHCR image
-#   helm repo             modelsphere/helm-charts, a copy pointing at 4pdosc/console
+#   OCI (this workflow)   oci://ghcr.io/<owner>/charts, pointing at the GHCR images
+#   helm repo             modelsphere/helm-charts, a copy pointing at 4pdosc images
 #
-# The Docker Hub image is pushed here for the second channel. It needs the
-# DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets; without them the run publishes to
+# The Docker Hub images are pushed here for the second channel. They need the
+# DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets; without them the run publishes
 # GHCR only and says so. GHCR authenticates with the workflow's GITHUB_TOKEN.
 on:
   push:
@@ -35,6 +39,7 @@ concurrency:
 
 env:
   HUB_IMAGE: 4pdosc/console
+  HUB_BILLING_IMAGE: 4pdosc/billing
 
 jobs:
   publish:
@@ -55,6 +60,7 @@ jobs:
           owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
           app=$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/p' helm/console/Chart.yaml)
           image="ghcr.io/$owner/console"
+          billing_image="ghcr.io/$owner/billing"
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             version=${GITHUB_REF#refs/tags/}
             if [ "$version" != "$app" ]; then
@@ -62,20 +68,26 @@ jobs:
               exit 1
             fi
             tags="$image:$version,$image:latest"
+            billing_tags="$billing_image:$version,$billing_image:latest"
             [ "$DOCKERHUB" = true ] && tags="$tags,$HUB_IMAGE:$version,$HUB_IMAGE:latest"
+            [ "$DOCKERHUB" = true ] && billing_tags="$billing_tags,$HUB_BILLING_IMAGE:$version,$HUB_BILLING_IMAGE:latest"
           else
             version="$app-git${GITHUB_SHA:0:7}"
             tags="$image:$version"
+            billing_tags="$billing_image:$version"
             [ "$DOCKERHUB" = true ] && tags="$tags,$HUB_IMAGE:$version"
+            [ "$DOCKERHUB" = true ] && billing_tags="$billing_tags,$HUB_BILLING_IMAGE:$version"
           fi
           {
             echo "version=$version"
             echo "image=$image"
+            echo "billing_image=$billing_image"
             echo "tags=$tags"
+            echo "billing_tags=$billing_tags"
             echo "charts=oci://ghcr.io/$owner/charts"
           } >>"$GITHUB_OUTPUT"
           if [ "$PUSH" = true ] && [ "$DOCKERHUB" != true ]; then
-            echo "::notice::DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set; $HUB_IMAGE not pushed, GHCR only"
+            echo "::notice::DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set; $HUB_IMAGE and $HUB_BILLING_IMAGE not pushed, GHCR only"
           fi
 
       - name: Set up Buildx
@@ -110,6 +122,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and push the billing image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: billing
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.v.outputs.billing_tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.v.outputs.version }}
+          cache-from: type=gha,scope=billing
+          cache-to: type=gha,mode=max,scope=billing
+
       - name: Set up Helm
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
@@ -119,12 +146,17 @@ jobs:
         env:
           VERSION: ${{ steps.v.outputs.version }}
           IMAGE: ${{ steps.v.outputs.image }}
+          BILLING_IMAGE: ${{ steps.v.outputs.billing_image }}
         run: |
           set -eu
           sed "s|^  repository: .*/console\$|  repository: $IMAGE|" helm/console/values.yaml >values.tmp
           mv values.tmp helm/console/values.yaml
+          sed "s|^    repository: .*/billing\$|    repository: $BILLING_IMAGE|" helm/console/values.yaml >values.tmp
+          mv values.tmp helm/console/values.yaml
           grep -q "^  repository: $IMAGE\$" helm/console/values.yaml \
             || { echo "image.repository in helm/console/values.yaml was not repointed at $IMAGE" >&2; exit 1; }
+          grep -q "^    repository: $BILLING_IMAGE\$" helm/console/values.yaml \
+            || { echo "billing.image.repository in helm/console/values.yaml was not repointed at $BILLING_IMAGE" >&2; exit 1; }
           # The swiss subchart is fetched into charts/; helm will not lint or package without it.
           helm dependency build helm/console
           helm lint --strict helm/console

@@ -1,22 +1,18 @@
-import { History, ShieldCheck, Users as UsersIcon } from "lucide-react";
+import { Navigate } from "react-router";
 import type { ConsoleModule } from "@/shell";
-import { Users } from "@/modules/iam/Users";
-import { Roles } from "@/modules/iam/Roles";
-import { LoginHistory } from "@/modules/iam/LoginHistory";
 
+// Keep bookmarked /iam links working after administration moved to /system.
 export const iamModule: ConsoleModule = {
   id: "iam",
   title: "访问控制",
   basePath: "/iam",
   frame: "flush",
   pages: [
-    { path: "users", element: <Users />, permission: "users.view", menu: { label: "用户", icon: UsersIcon } },
+    { path: "users", element: <Navigate to="/system/users" replace /> },
+    { path: "roles", element: <Navigate to="/system/roles" replace /> },
     {
       path: "login-history",
-      element: <LoginHistory />,
-      permission: "loginrecords.view",
-      menu: { label: "登录历史", icon: History },
+      element: <Navigate to="/system/login-history" replace />,
     },
-    { path: "roles", element: <Roles />, permission: "roles.view", menu: { label: "角色", icon: ShieldCheck } },
   ],
 };

@@ -14,7 +14,7 @@ ModelSphere Console 是推理平台的统一入口：在这里部署模型、试
 | 查看部署进度 | [模型服务 → 推理服务](/inferences) | [部署模型](/help/docs/deploy) |
 | 在线对话 | [Playground → 对话](/playground) | [Playground](/help/docs/playground) |
 | 发放密钥 | [路由 → API 密钥](/router/api-keys) | [调用 API](/help/docs/api) |
-| 管理用户和角色 | [访问控制 → 用户](/iam/users) | [访问控制](/help/docs/access-control) |
+| 管理用户和角色 | [系统管理 → 用户管理](/system/users) | [访问控制](/help/docs/access-control) |
 
 ## 登录
 

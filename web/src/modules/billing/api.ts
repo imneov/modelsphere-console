@@ -72,10 +72,32 @@ export interface BillingFilters {
   model: string;
   apiKeyID: string;
   requestID: string;
+  state: UsageState | "";
   from: string;
   until: string;
   page: number;
   limit: number;
+}
+/** Settlement filters the requests endpoint understands, mirroring `requestState`. */
+export type UsageState = "settled" | "pending" | "started" | "failed";
+export interface UsageStates {
+  settled: number;
+  pending: number;
+  started: number;
+  failed: number;
+}
+export interface UsageSummary {
+  requests: number;
+  inputTokens: number;
+  cacheTokens: number;
+  outputTokens: number;
+  states: UsageStates;
+}
+export interface LedgerSummary {
+  topups: string;
+  charges: string;
+  adjustments: string;
+  net: string;
 }
 export interface Page<T> {
   items: T[];
@@ -88,6 +110,17 @@ export interface Owner {
   name: string;
   uid: string;
   displayName?: string;
+}
+export interface AdminCustomer extends Owner {
+  ownerUserID: string;
+  currency: string;
+  balance: string;
+  revision: number;
+  billingState: "allowed" | "blocked";
+  topups: string;
+  charges: string;
+  adjustments: string;
+  net: string;
 }
 export interface PriceRule {
   metadata: { name: string };
@@ -103,18 +136,37 @@ export interface Credit {
   kind: "topup" | "adjustment";
 }
 
+/** Settlement label shared by the request table and the request detail view. */
+export function requestState(request: BillingRequest) {
+  return (
+    request.charge?.state ??
+    (!request.terminalAt
+      ? "started"
+      : request.usage.complete
+        ? "unpriced"
+        : "incomplete")
+  );
+}
+
 function parameters(filters: Partial<BillingFilters>): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
     if (value === "" || value === undefined) continue;
-    query.set(
-      key,
-      key === "from" || key === "until"
-        ? new Date(String(value)).toISOString()
-        : String(value),
-    );
+    if (key === "from" || key === "until") {
+      const date = new Date(String(value));
+      if (Number.isNaN(date.getTime())) continue;
+      query.set(key, date.toISOString());
+      continue;
+    }
+    query.set(key, String(value));
   }
   return `?${query}`;
+}
+
+/** Wallet movements have no settlement state; sending one would filter them out. */
+function ledgerFilters(filters: Partial<BillingFilters>) {
+  const { state: _state, ...scope } = filters;
+  return parameters(scope);
 }
 
 export const api = {
@@ -130,10 +182,25 @@ export const api = {
       "GET",
       `/api/billing/usage${parameters(filters)}`,
     ),
+  usageSummary: (filters: BillingFilters) =>
+    request<UsageSummary>(
+      "GET",
+      `/api/billing/usage/summary${parameters(filters)}`,
+    ),
   ledger: (filters: BillingFilters) =>
     request<Page<LedgerEntry>>(
       "GET",
-      `/api/billing/ledger${parameters(filters)}`,
+      `/api/billing/ledger${ledgerFilters(filters)}`,
+    ),
+  ledgerSummary: (filters: BillingFilters) =>
+    request<LedgerSummary>(
+      "GET",
+      `/api/billing/ledger/summary${ledgerFilters(filters)}`,
+    ),
+  adminCustomers: (from: string, until: string) =>
+    request<{ items: AdminCustomer[] }>(
+      "GET",
+      `/api/billing/admin/customers${parameters({ from, until })}`,
     ),
   owners: () => request<{ items: Owner[] }>("GET", "/api/billing/users"),
   credit: (input: Credit) =>

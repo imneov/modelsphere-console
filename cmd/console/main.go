@@ -31,7 +31,6 @@ func main() {
 		logLevel   = flag.String("log-level", envOr("CONSOLE_LOG_LEVEL", "info"), "debug|info|warn|error")
 		webDir     = flag.String("web-dir", os.Getenv("CONSOLE_WEB_DIR"), "serve the UI from this directory instead of the embedded build")
 		showVer    = flag.Bool("version", false, "print version and exit")
-		role       = flag.String("role", os.Getenv("CONSOLE_BILLING_ROLE"), "gateway|usage|settlement|replay (overrides billing.role)")
 	)
 	flag.Parse()
 
@@ -39,18 +38,26 @@ func main() {
 		fmt.Println(version.Version)
 		return
 	}
-	if err := run(*configPath, *addr, *logLevel, *webDir, *role); err != nil {
+	if err := run(*configPath, *addr, *logLevel, *webDir); err != nil {
 		fmt.Fprintln(os.Stderr, "console: "+err.Error())
 		os.Exit(1)
 	}
 }
 
-func run(configPath, addr, logLevel, webDir, role string) error {
+func run(configPath, addr, logLevel, webDir string) error {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: parseLevel(logLevel)}))
 
-	cfg, err := loadRuntimeConfig(configPath, addr, role)
+	cfg, err := loadRuntimeConfig(configPath, addr)
 	if err != nil {
 		return err
+	}
+	// A worker role is a different binary, whether or not billing is on: without
+	// this, a config naming one would serve a gateway that meters nothing.
+	if cfg.Billing.Role != "gateway" {
+		if !cfg.Billing.Enabled {
+			return fmt.Errorf("billing must be enabled for a worker role")
+		}
+		return fmt.Errorf("billing role %q runs in the billing binary, not console", cfg.Billing.Role)
 	}
 
 	kube, err := cluster.NewKube(cfg.Cluster.Kubeconfig, cfg.Cluster.Context, cluster.ClientLimits{QPS: cfg.Cluster.ClientQPS, Burst: cfg.Cluster.ClientBurst})
@@ -60,12 +67,6 @@ func run(configPath, addr, logLevel, webDir, role string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if cfg.Billing.Role != "gateway" {
-		if !cfg.Billing.Enabled {
-			return fmt.Errorf("billing must be enabled for a worker role")
-		}
-		return runBillingWorker(ctx, cfg, kube, log)
-	}
 
 	srv := server.New(cfg, kube, log, version.Version)
 
@@ -105,7 +106,7 @@ func serveGateway(ctx context.Context, cfg *config.Config, kube *cluster.Kube, s
 		if err != nil {
 			return err
 		}
-		return errors.Join(srv.Run(ctx), runtime.close())
+		return errors.Join(srv.Run(ctx), runtime.Close())
 	}
 	return srv.Run(ctx)
 }
@@ -125,7 +126,7 @@ func envOr(key, def string) string {
 	return def
 }
 
-func loadRuntimeConfig(configPath, addr, role string) (*config.Config, error) {
+func loadRuntimeConfig(configPath, addr string) (*config.Config, error) {
 	path := config.Find(configPath)
 	if path == "" {
 		return nil, fmt.Errorf("no config file: pass --config, or set CONSOLE_CONFIG")
@@ -136,9 +137,6 @@ func loadRuntimeConfig(configPath, addr, role string) (*config.Config, error) {
 	}
 	if addr != "" {
 		cfg.Server.Addr = addr
-	}
-	if role != "" {
-		cfg.Billing.Role = role
 	}
 	// The signing key comes from a Secret via env in a cluster, keeping it out
 	// of the ConfigMap-rendered config.

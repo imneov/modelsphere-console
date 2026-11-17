@@ -14,7 +14,7 @@ pick a model -> deploy an inference service -> wait until ready -> try it in the
 | Watch the rollout | [Model Serving → Inference Services](/inferences) | [Deploying models](/help/docs/deploy) |
 | Chat with a model | [Playground → Chat](/playground) | [Playground](/help/docs/playground) |
 | Issue keys | [Router → API Keys](/router/api-keys) | [Calling the API](/help/docs/api) |
-| Manage users and roles | [Access Control → Users](/iam/users) | [Access control](/help/docs/access-control) |
+| Manage users and roles | [System administration → Users](/system/users) | [Access control](/help/docs/access-control) |
 
 ## Signing in
 
