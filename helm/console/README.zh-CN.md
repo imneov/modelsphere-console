@@ -10,9 +10,13 @@
 | 镜像 | `ghcr.io/modelsphere/console`（linux/amd64），tag 与 Chart 版本相同 |
 | Billing 镜像 | `ghcr.io/modelsphere/billing`（linux/amd64），`billing.workers` 使用的 worker 二进制 |
 
+## Higress 接入
+
+显式设置 `higress.enabled` 时，Higress 替代自研推理代理，Console 保留管理 API 与 Key 管理。当前为非计费 P1，不能用于升级现有付费安装；官方 Higress 单独安装。见 [接入与验收](../../docs/higress-operations.md) 和 [示例 values](values-higress.example.yaml)。
+
 ## 它不做什么
 
-- **不安装、不修改已有的 Swiss 和推理网关** —— 只读取它们的 ConfigMap / Secret。
+- **不安装已有的 Swiss 或推理网关** —— 默认只读取其 ConfigMap / Secret；可选 Higress 模式会声明本安装的 Ingress 与授权插件配置，不安装 Higress 本身。
 - **不需要 `install.sh`** —— 它是源码仓库里的可选辅助脚本（自动发现 Swiss 和网关、生成 values、安装后做端到端验证），不在 Chart 包内，本文流程不使用它。用法见 `./install.sh --help`。
 
 ## 快速上手

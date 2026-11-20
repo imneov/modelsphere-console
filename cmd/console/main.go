@@ -31,6 +31,7 @@ func main() {
 		logLevel   = flag.String("log-level", envOr("CONSOLE_LOG_LEVEL", "info"), "debug|info|warn|error")
 		webDir     = flag.String("web-dir", os.Getenv("CONSOLE_WEB_DIR"), "serve the UI from this directory instead of the embedded build")
 		showVer    = flag.Bool("version", false, "print version and exit")
+		role       = flag.String("role", "console", "console|gateway-auth")
 	)
 	flag.Parse()
 
@@ -38,13 +39,20 @@ func main() {
 		fmt.Println(version.Version)
 		return
 	}
-	if err := run(*configPath, *addr, *logLevel, *webDir); err != nil {
+	if err := runRole(*configPath, *addr, *logLevel, *webDir, *role); err != nil {
 		fmt.Fprintln(os.Stderr, "console: "+err.Error())
 		os.Exit(1)
 	}
 }
 
 func run(configPath, addr, logLevel, webDir string) error {
+	return runRole(configPath, addr, logLevel, webDir, "console")
+}
+
+func runRole(configPath, addr, logLevel, webDir, role string) error {
+	if role != "console" && role != "gateway-auth" {
+		return fmt.Errorf("unknown role %q: expected console or gateway-auth", role)
+	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: parseLevel(logLevel)}))
 
 	cfg, err := loadRuntimeConfig(configPath, addr)
@@ -67,7 +75,13 @@ func run(configPath, addr, logLevel, webDir string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if role == "gateway-auth" {
+		return serveGatewayAuth(ctx, cfg, kube, log)
+	}
+	return serveConsole(ctx, cfg, kube, log, webDir)
+}
 
+func serveConsole(ctx context.Context, cfg *config.Config, kube *cluster.Kube, log *slog.Logger, webDir string) error {
 	srv := server.New(cfg, kube, log, version.Version)
 
 	// Identity kernel: users and roles live as CRDs, tokens are HS256, both

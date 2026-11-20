@@ -1,0 +1,110 @@
+{{- if .Values.higress.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "console.fullname" . }}-gateway-auth
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "console.fullname" . }}-gateway-auth
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.higress.auth.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: console-gateway-auth
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: console-gateway-auth
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "console.fullname" . }}-gateway-auth
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: console-gateway-auth
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      containers:
+        - name: gateway-auth
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["--config", "/etc/console/console.yaml", "--role=gateway-auth"]
+          env:
+            - name: CONSOLE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "console.fullname" . }}
+                  key: jwtSecret
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+          resources: {{- toYaml .Values.higress.auth.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/console
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "console.fullname" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "console.fullname" . }}-gateway-auth
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: console-gateway-auth
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- if gt (int .Values.higress.auth.replicaCount) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "console.fullname" . }}-gateway-auth
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: console-gateway-auth
+      app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+{{- end }}

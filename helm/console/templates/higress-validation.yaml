@@ -1,0 +1,18 @@
+{{- if .Values.higress.enabled -}}
+{{- if .Values.billing.enabled }}{{ fail "higress paid traffic is not enabled: metering integration must pass acceptance first" }}{{ end -}}
+{{- if .Values.auth.disabled }}{{ fail "higress requires authentication" }}{{ end -}}
+{{- if or (not .Values.router.enabled) (ne .Values.router.keySource "crd") .Values.router.migration }}{{ fail "higress requires the router with CRD key authority and no active migration" }}{{ end -}}
+{{- $_ := required "higress.host is required" .Values.higress.host -}}
+{{- $_ := required "higress.sessionOrigin is required" .Values.higress.sessionOrigin -}}
+{{- $origin := urlParse .Values.higress.sessionOrigin -}}
+{{- if or (not (has $origin.scheme (list "http" "https"))) $origin.path $origin.query $origin.fragment $origin.userinfo }}{{ fail "higress.sessionOrigin must be an exact http(s) origin without a path" }}{{ end -}}
+{{- if ne (regexReplaceAll ":[0-9]+$" $origin.host "") .Values.higress.host }}{{ fail "higress.sessionOrigin host must match higress.host" }}{{ end -}}
+{{- $_ := required "higress.route is required" .Values.higress.route -}}
+{{- $_ := required "higress.models must not be empty" .Values.higress.models -}}
+{{- $_ := required "higress.upstream.serviceName is required" .Values.higress.upstream.serviceName -}}
+{{- if eq .Values.higress.upstream.serviceName (include "console.fullname" .) }}{{ fail "higress upstream must be a model Service, not Console" }}{{ end -}}
+{{- if not (regexMatch "^oci://[^[:space:]]+@sha256:[0-9a-f]{64}$" .Values.higress.extAuth.image) }}{{ fail "higress.extAuth.image must be an immutable oci:// reference with a sha256 digest" }}{{ end -}}
+{{- if lt (int .Values.higress.auth.replicaCount) 1 }}{{ fail "higress.auth.replicaCount must be positive" }}{{ end -}}
+{{- if or (lt (int .Values.higress.upstream.port) 1) (gt (int .Values.higress.upstream.port) 65535) }}{{ fail "higress.upstream.port must be a valid port" }}{{ end -}}
+{{- if lt (int .Values.higress.extAuth.timeoutMilliseconds) 1 }}{{ fail "higress.extAuth.timeoutMilliseconds must be positive" }}{{ end -}}
+{{- end -}}

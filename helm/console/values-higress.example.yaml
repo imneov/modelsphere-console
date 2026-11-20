@@ -1,0 +1,18 @@
+# Controlled unbilled P1 installation. Do NOT use to upgrade a paid installation.
+# Install official Higress v2.2.6 separately, then set an audited ext-auth digest:
+#   --set-string higress.extAuth.image=oci://<registry>/<ext-auth>@sha256:<digest>
+# The upstream must be a direct OpenAI-compatible model Service, without a key.
+service:
+  type: ClusterIP
+router:
+  enabled: true
+  keySource: crd
+higress:
+  enabled: true
+  host: console.example.test
+  sessionOrigin: https://console.example.test
+  models: [example-model]
+  route: example-model
+  upstream:
+    serviceName: example-model
+    port: 8000

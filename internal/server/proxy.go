@@ -59,6 +59,11 @@ func (s *Server) mountBackends(mux *http.ServeMux) {
 	targets := s.backendTargets()
 	catalogMounted := false
 	for _, b := range s.cfg.Backends {
+		if s.cfg.Higress.Enabled && (b.Name == s.cfg.Router.Backend || b.Gateway != nil) {
+			mux.HandleFunc(strings.TrimSuffix(b.Prefix, "/")+"/", s.inferenceMoved)
+			catalogMounted = catalogMounted || b.Prefix == "/api/llm"
+			continue
+		}
 		resolve, ok := targets[b.Name]
 		if !ok {
 			continue
@@ -75,6 +80,10 @@ func (s *Server) mountBackends(mux *http.ServeMux) {
 		mux.HandleFunc(prefix+"/", s.proxyBackend(b, resolve))
 	}
 	if !catalogMounted {
+		if s.cfg.Higress.Enabled {
+			mux.HandleFunc("/api/llm/", s.inferenceMoved)
+			return
+		}
 		mux.HandleFunc("/api/llm/route-options", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet {
 				w.Header().Set("Allow", "GET")
@@ -121,6 +130,9 @@ func (s *Server) backendTargets() map[string]targetResolver {
 	s.targetsOnce.Do(func() {
 		s.targets = map[string]targetResolver{}
 		for _, b := range s.cfg.Backends {
+			if s.cfg.Higress.Enabled && (b.Name == s.cfg.Router.Backend || b.Gateway != nil) {
+				continue
+			}
 			resolve, err := s.targetFunc(b)
 			if err != nil {
 				s.log.Error("backend skipped", "backend", b.Name, "err", err)

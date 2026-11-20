@@ -18,12 +18,18 @@ func (rt *Router) SessionAuthorizer() *iam.Authorizer {
 }
 
 func (rt *Router) SessionUser(ctx context.Context, name string) (*iam.User, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
 	store := rt.identityStore()
 	if store == nil {
 		return nil, ErrUnavailable
+	}
+	return store.SessionUser(ctx, name)
+}
+
+func (store *CRDStore) Authorizer() *iam.Authorizer { return store.authorizer }
+
+func (store *CRDStore) SessionUser(ctx context.Context, name string) (*iam.User, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	value, found, err := store.users.GetStore().GetByKey(name)
 	if err != nil {

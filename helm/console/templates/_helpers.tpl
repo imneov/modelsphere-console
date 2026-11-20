@@ -82,7 +82,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{- /* The router needs somewhere to send /v1: a gateway. */ -}}
 {{- define "console.router.enabled" -}}
-{{- if and .Values.router.enabled (include "console.gateway" .) -}}true{{- end -}}
+{{- if and .Values.router.enabled (or .Values.higress.enabled (include "console.gateway" .)) -}}true{{- end -}}
 {{- end -}}
 
 {{- define "console.router.secret" -}}

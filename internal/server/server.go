@@ -75,8 +75,11 @@ func (s *Server) SetIAM(store *iam.Store, signer *iam.Signer, authn *iam.Authent
 // EnableRouter serves /v1 with the keys in store, forwarding to the backend the
 // config's router section names, and /api/router for managing the keys.
 func (s *Server) EnableRouter(store router.KeyStore) error {
-	resolve := s.backendTargets()[s.cfg.Router.Backend]
-	if resolve == nil {
+	var resolve targetResolver
+	if !s.cfg.Higress.Enabled {
+		resolve = s.backendTargets()[s.cfg.Router.Backend]
+	}
+	if resolve == nil && !s.cfg.Higress.Enabled {
 		s.log.Error("router has no backend: it was skipped at startup", "backend", s.cfg.Router.Backend)
 	}
 	maxBody := s.cfg.Router.MaxBodyBytes

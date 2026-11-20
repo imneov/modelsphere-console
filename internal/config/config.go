@@ -27,6 +27,7 @@ type Config struct {
 	Backends []Backend `yaml:"backends,omitempty"`
 	Router   Router    `yaml:"router,omitempty"`
 	Billing  Billing   `yaml:"billing,omitempty"`
+	Higress  Higress   `yaml:"higress,omitempty"`
 
 	Origin string `yaml:"-"`
 }
@@ -235,6 +236,9 @@ func (c *Config) origin() string {
 
 // Validate covers what console needs to serve.
 func (c *Config) Validate() error {
+	if err := c.validateHigress(); err != nil {
+		return fmt.Errorf("%s: %w", c.origin(), err)
+	}
 	if math.IsNaN(float64(c.Cluster.ClientQPS)) || math.IsInf(float64(c.Cluster.ClientQPS), 0) || c.Cluster.ClientQPS < 0 || c.Cluster.ClientBurst < 0 || (c.Cluster.ClientQPS == 0) != (c.Cluster.ClientBurst == 0) {
 		return fmt.Errorf("cluster clientQPS and clientBurst must both be zero or positive")
 	}
@@ -272,7 +276,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("%s: router.namespace is required for CRD keys", c.origin())
 		case a.KeySource != "crd" && !refRE.MatchString(a.Secret):
 			return fmt.Errorf("%s: router.secret %q must be namespace/name", c.origin(), a.Secret)
-		case !names[a.Backend]:
+		case !c.Higress.Enabled && !names[a.Backend]:
 			return fmt.Errorf("%s: router.backend %q is not a configured backend; /v1 would have nowhere to go", c.origin(), a.Backend)
 		case a.MaxBodyBytes < 0:
 			return fmt.Errorf("%s: router.maxBodyBytes must not be negative", c.origin())

@@ -137,3 +137,19 @@ func (s *Store) CheckAuthority(ctx context.Context) error {
 	}
 	return nil
 }
+
+// RequireCRDAuthority checks the management process's activation marker without changing it.
+func (s *Store) RequireCRDAuthority(ctx context.Context) error {
+	data, _, err := s.b.SecretVersioned(ctx, s.namespace, s.name)
+	if err != nil {
+		return fmt.Errorf("read CRD authority marker: %w", err)
+	}
+	marker, err := decodeMarker(data[migrationEntry])
+	if err != nil {
+		return err
+	}
+	if marker.Phase != migrationActive {
+		return fmt.Errorf("%w: CRD authority has not been activated by Console", ErrMigrationConflict)
+	}
+	return nil
+}

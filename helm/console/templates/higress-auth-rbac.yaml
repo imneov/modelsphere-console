@@ -1,0 +1,57 @@
+{{- if and .Values.higress.enabled .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "console.fullname" . }}-gateway-auth
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["gateway.modelsphere.io"]
+    resources: ["apikeys", "walletadmissions"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ include "console.router.secret" . | quote }}]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "console.fullname" . }}-gateway-auth
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "console.fullname" . }}-gateway-auth
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "console.fullname" . }}-gateway-auth
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "console.fullname" . }}-gateway-auth-{{ .Release.Namespace }}
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["iam.theriseunion.io"]
+    resources: ["users", "iamroles", "iamrolebindings"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "console.fullname" . }}-gateway-auth-{{ .Release.Namespace }}
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "console.fullname" . }}-gateway-auth-{{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "console.fullname" . }}-gateway-auth
+    namespace: {{ .Release.Namespace }}
+{{- end }}

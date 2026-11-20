@@ -28,7 +28,11 @@ func (s *Server) mountRouter(mux *http.ServeMux) {
 			s.router.ImportKeys(w, r)
 		}
 	})
-	mux.Handle("/v1/", s.router)
+	if !s.cfg.Higress.Enabled {
+		mux.Handle("/v1/", s.router)
+	} else {
+		mux.HandleFunc("/v1/", s.inferenceMoved)
+	}
 	mux.HandleFunc("GET /api/router/apikeys", func(w http.ResponseWriter, r *http.Request) {
 		if s.authorize(w, r, "list", keysResource, "") {
 			s.router.ListKeys(w, r)
@@ -45,6 +49,14 @@ func (s *Server) mountRouter(mux *http.ServeMux) {
 			s.router.DeleteKey(w, r, id, identityFrom(r.Context()).Name)
 		}
 	})
+}
+
+func (s *Server) inferenceMoved(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet && r.URL.Path == "/api/llm/route-options" {
+		writeError(w, http.StatusNotFound, "Higress does not expose the legacy route directive catalog")
+		return
+	}
+	writeError(w, http.StatusServiceUnavailable, "inference is served by Higress, not the Console management service")
 }
 
 func (s *Server) handleKeyOwners(w http.ResponseWriter, r *http.Request) {

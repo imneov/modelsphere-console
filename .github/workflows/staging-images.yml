@@ -53,6 +53,8 @@ jobs:
             target: billing
           - image: console-upstream-fixture
             dockerfile: tools/billing/Dockerfile.upstream
+          - image: console-higress-fixture
+            dockerfile: tools/higress/Dockerfile.upstream
           - image: console-vllm-bench
             dockerfile: tools/billing/Dockerfile.bench
           - image: console-queue-bench

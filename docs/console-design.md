@@ -1,5 +1,9 @@
 # console — design
 
+## Architecture direction: Higress (2026-11-20)
+
+The target inference data plane is Higress, not Console's self-built Router. Console retains identity, management APIs, model configuration and billing administration; metering and settlement remain separate from inference forwarding. See [Console with Higress](architecture/console-higress.md) for boundaries, migration and acceptance. The sections below describe existing components, not a completed gateway migration.
+
 ## What this is
 
 The ModelSphere community portal. A full-stack BFF that **owns identity** and

@@ -10,9 +10,13 @@
 | Image | `ghcr.io/modelsphere/console` (linux/amd64), tagged with the chart version |
 | Billing image | `ghcr.io/modelsphere/billing` (linux/amd64), the worker binary for `billing.workers` |
 
+## Higress integration
+
+Opt-in `higress.enabled` replaces the inference data plane while retaining management APIs and API Key management. This P1 is unbilled only, not an upgrade path for an existing paid installation. Install official Higress separately. See the [integration and acceptance guide](../../docs/higress-operations.md) and [example values](values-higress.example.yaml).
+
 ## What it does not do
 
-- **It does not install or modify an existing Swiss or inference gateway** — it only reads their ConfigMaps and Secrets.
+- **It does not install an existing Swiss or inference gateway** — the default integration only reads their ConfigMaps and Secrets. Opt-in Higress mode declares this installation's Ingress and authorization plugin configuration, not Higress itself.
 - **It does not need `install.sh`** — that is an optional helper in the source repository (discovers Swiss and the gateway, generates values, runs an end-to-end check after install). It is not in the chart package and this guide does not use it. See `./install.sh --help`.
 
 ## Quick start

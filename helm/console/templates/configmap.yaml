@@ -48,7 +48,7 @@ data:
         {{- end }}
       {{- end }}
       {{- $gw := .Values.playground.gateway }}
-      {{- if include "console.gateway" . }}
+      {{- if and (not .Values.higress.enabled) (include "console.gateway" .) }}
       # Resolved from the cluster at startup: see the gateway section of values.
       - name: llm
         prefix: /api/llm
@@ -85,6 +85,14 @@ data:
       {{- with .Values.router.maxBodyBytes }}
       maxBodyBytes: {{ . | int64 }}
       {{- end }}
+    {{- end }}
+
+    {{- if .Values.higress.enabled }}
+    higress:
+      enabled: true
+      models: {{ .Values.higress.models | toJson }}
+      route: {{ .Values.higress.route | quote }}
+      sessionOrigin: {{ .Values.higress.sessionOrigin | quote }}
     {{- end }}
 
     {{- if .Values.billing.enabled }}

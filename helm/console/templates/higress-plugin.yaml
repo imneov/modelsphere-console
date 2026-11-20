@@ -1,0 +1,48 @@
+{{- if .Values.higress.enabled }}
+apiVersion: extensions.higress.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: {{ include "console.fullname" . }}-ext-auth
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+spec:
+  url: {{ .Values.higress.extAuth.image | quote }}
+  phase: AUTHN
+  priority: 360
+  failStrategy: FAIL_CLOSE
+  defaultConfigDisable: true
+  matchRules:
+    - ingress:
+        - {{ include "console.fullname" . }}-inference-sdk
+        - {{ include "console.fullname" . }}-inference-session
+      config:
+        failure_mode_allow: false
+        status_on_error: 503
+        http_service:
+          endpoint_mode: envoy
+          endpoint:
+            service_name: {{ include "console.fullname" . }}-gateway-auth.{{ .Release.Namespace }}.svc.cluster.local
+            service_port: 8080
+            path_prefix: /authorize
+          timeout: {{ .Values.higress.extAuth.timeoutMilliseconds }}
+          authorization_request:
+            with_request_body: true
+            max_request_body_bytes: {{ .Values.router.maxBodyBytes | default 16777216 | int64 }}
+            allowed_headers:
+              - exact: content-type
+              - exact: cookie
+              - exact: origin
+              - exact: x-modelsphere-route
+          authorization_response:
+            allowed_upstream_headers:
+              - exact: x-console-principal-uid
+              - exact: x-console-user
+              - exact: x-console-source
+              - exact: x-console-api-key-id
+              - exact: x-console-model
+              - exact: x-console-wallet-revision
+              - exact: x-console-request-id
+            allowed_client_headers:
+              - exact: content-type
+              - exact: cache-control
+{{- end }}

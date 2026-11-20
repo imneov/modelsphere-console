@@ -1,5 +1,7 @@
 # Gateway billing implementation contract
 
+Architecture direction updated on 2026-11-20: [Console with Higress](architecture/console-higress.md) replaces the self-built inference gateway in the target design. This document describes the current implementation; its Router, journal and admission wiring are not claims about an already deployed Higress integration.
+
 Implementation follows [the billing specification](https://github.com/imneov/Neov-Research/issues/8) and its tasks #9–#18. The Key storage decision was refined during implementation: CRDs are authoritative; Informers supply local authentication and admission data.
 
 ## Identity and credentials

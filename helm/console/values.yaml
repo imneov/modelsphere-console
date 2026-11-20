@@ -76,6 +76,33 @@ admin:
 # swissd (model deployment) is not listed here: see swiss and externalSwiss.
 backends: []
 
+# Higress replaces the inference data plane, not the Console management BFF.
+# Install the official Higress release separately; see values-higress.example.yaml.
+# Phase 1 is for controlled, unbilled OpenAI-compatible upstreams only.
+higress:
+  enabled: false
+  ingressClassName: higress
+  host: ""
+  # Exact browser origin, including scheme and optional port, without a path.
+  sessionOrigin: ""
+  models: []
+  route: ""
+  upstream:
+    # A direct model Service in this release's namespace, NOT the old gateway.
+    serviceName: ""
+    port: 8000
+  extAuth:
+    # Required immutable oci://...@sha256:... reference; no floating plugin tags.
+    image: ""
+    timeoutMilliseconds: 1000
+  auth:
+    replicaCount: 2
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits: { memory: 512Mi }
+  # Existing TLS Secret for this host. Empty is suitable only for isolated HTTP tests.
+  tlsSecretName: ""
+
 # swissd, the model deployment backend. Pick one:
 #
 #   swiss.enabled: true   install it with this release, from the swiss chart

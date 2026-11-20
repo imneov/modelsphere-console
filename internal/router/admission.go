@@ -57,5 +57,9 @@ func (rt *Router) WalletAdmission(ownerUID string) (string, int64) {
 	if !ok {
 		return "unknown", 0
 	}
+	return store.WalletAdmission(ownerUID)
+}
+
+func (store *CRDStore) WalletAdmission(ownerUID string) (string, int64) {
 	return store.walletAdmission(ownerUID)
 }

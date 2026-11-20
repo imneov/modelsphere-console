@@ -1,0 +1,91 @@
+{{- if .Values.higress.enabled }}
+{{- $root := . }}
+{{- $full := include "console.fullname" . }}
+{{- range $source := list "sdk" "session" }}
+{{- $path := ternary "/v1/chat/completions" "/api/llm/v1/chat/completions" (eq $source "sdk") }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $full }}-inference-{{ $source }}
+  labels:
+    {{- include "console.labels" $root | nindent 4 }}
+  annotations:
+    higress.io/proxy-next-upstream: "off"
+    higress.io/proxy-next-upstream-tries: "0"
+    higress.io/request-header-control-remove: "Authorization,Cookie,X-Remote-User,X-Remote-Group,X-Remote-Uid,X-ModelSphere-Route"
+    {{- if eq $source "session" }}
+    higress.io/rewrite-target: /v1/chat/completions
+    {{- end }}
+spec:
+  ingressClassName: {{ $root.Values.higress.ingressClassName | quote }}
+  {{- with $root.Values.higress.tlsSecretName }}
+  tls:
+    - hosts: [{{ $root.Values.higress.host | quote }}]
+      secretName: {{ . | quote }}
+  {{- end }}
+  rules:
+    - host: {{ $root.Values.higress.host | quote }}
+      http:
+        paths:
+          - path: {{ $path }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $root.Values.higress.upstream.serviceName | quote }}
+                port:
+                  number: {{ $root.Values.higress.upstream.port }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $full }}-inference-catalog
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.higress.ingressClassName | quote }}
+  {{- with .Values.higress.tlsSecretName }}
+  tls:
+    - hosts: [{{ $root.Values.higress.host | quote }}]
+      secretName: {{ . | quote }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.higress.host | quote }}
+      http:
+        paths:
+          {{- range $path := list "/v1/models" "/api/llm/v1/models" "/api/llm/routes" }}
+          - path: {{ $path }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $full }}-gateway-auth
+                port:
+                  number: 8080
+          {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $full }}-management
+  labels:
+    {{- include "console.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.higress.ingressClassName | quote }}
+  {{- with .Values.higress.tlsSecretName }}
+  tls:
+    - hosts: [{{ $root.Values.higress.host | quote }}]
+      secretName: {{ . | quote }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.higress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $full }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

@@ -10,7 +10,7 @@ therefore per namespace and read-only, which is the narrowest thing that still
 follows the profile.
 */ -}}
 {{- $gw := .Values.playground.gateway -}}
-{{- if and .Values.rbac.create (include "console.gateway" .) -}}
+{{- if and .Values.rbac.create (not .Values.higress.enabled) (include "console.gateway" .) -}}
 {{- $namespaces := dict -}}
 {{- range $ref := list (include "console.gateway.profile" .) $gw.configMap $gw.service $gw.secretRef -}}
 {{-   if $ref -}}
